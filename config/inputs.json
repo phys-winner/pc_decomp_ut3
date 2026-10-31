@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "source_root": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Unreal Tournament 3",
+  "main_module": "Binaries/UT3.exe",
+  "modules": [
+    {
+      "path": "Binaries/binkw32.dll",
+      "size": 171088,
+      "sha256": "da1ffb274a040290a96c757793ac44ae1e5a56b1051054221716aeeaf0119404",
+      "machine": "0x014c",
+      "image_base": "0x18000000",
+      "entry_point": "0x18001d70",
+      "image_size": 208896
+    },
+    {
+      "path": "Binaries/ConsoleInterface.dll",
+      "size": 42576,
+      "sha256": "731fa1b2302461cf738dbdf1cf9b5b4d4f9a2d9579c9867b9760bf6b7699eea4",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10002928",
+      "image_size": 53248
+    },
+    {
+      "path": "Binaries/CookerSync.exe",
+      "size": 52304,
+      "sha256": "c4a16ba5c1136080b9e52eaac9f9e8aad856d35e43e02f64dcbb0de9f6b34a5f",
+      "machine": "0x014c",
+      "image_base": "0x11000000",
+      "entry_point": "0x11004cde",
+      "image_size": 65536
+    },
+    {
+      "path": "Binaries/CookerTools.dll",
+      "size": 40016,
+      "sha256": "cd4be8f6a3ff38850f4ae08c9a084b7ec02c771753143df240ce8371241dcd87",
+      "machine": "0x014c",
+      "image_base": "0x11000000",
+      "entry_point": "0x1100749e",
+      "image_size": 49152
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleFr.dll",
+      "size": 130128,
+      "sha256": "9184ba0078790dafa55ebaa8bcb7f7d13d294a266eab1759dbb59334fc932c9c",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 126976
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleGr.dll",
+      "size": 494672,
+      "sha256": "01c1ee173eb8bdde5645483427755742377e9193f607c48adb178a68cd07dcbd",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 491520
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleIt.dll",
+      "size": 257104,
+      "sha256": "896859307ef8ea1ae281306a5faf0d1a7ccbd8cc7bc74fd9b429fd6680bbed8e",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 253952
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleLa.dll",
+      "size": 72784,
+      "sha256": "972aa80efedbff66742a40f6c85551b732a81a28f0ccd1440f26d75dc9b5c40d",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 69632
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleSp.dll",
+      "size": 76880,
+      "sha256": "1b8220b01596d22793d992d028b23ab917c4089e673c840123bb26467a1abb9a",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 73728
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleUk.dll",
+      "size": 552016,
+      "sha256": "7ee78076cd8a855d6e6da25073446fb9a7f4faf4bf42b51aa45060227fb6a381",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 548864
+    },
+    {
+      "path": "Binaries/FonixTtsDtSimpleUs.dll",
+      "size": 470096,
+      "sha256": "7fb6ad28422488b7774fc70e43559b4cf1d5bcf3e6102743dc6b5dc51d2a7bac",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000133c",
+      "image_size": 466944
+    },
+    {
+      "path": "Binaries/FxGraphLayout.dll",
+      "size": 556112,
+      "sha256": "af9e13fdb47b407e3c76f84c938e13c0f2abb8840da70db6c260a20c4e57f0a8",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10048466",
+      "image_size": 638976
+    },
+    {
+      "path": "Binaries/ISCopyFiles.exe",
+      "size": 19536,
+      "sha256": "840fa6fe5a8ef3fc0b7cbee69958c45f3c7c25e332d7b8ec277dc78ec833cd7f",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x00402c8e",
+      "image_size": 32768
+    },
+    {
+      "path": "Binaries/libresample.dll",
+      "size": 68688,
+      "sha256": "c5e3575917cd281902103fa8062882e5134ce1c5d00796c0404c79a3c990b00f",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x100024b3",
+      "image_size": 73728
+    },
+    {
+      "path": "Binaries/NxCharacter.dll",
+      "size": 121936,
+      "sha256": "4fc10e9f65e580441e14eaded8a6ec70d62cc1361b2d1498336f4718bdbaa6b1",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x100093a3",
+      "image_size": 126976
+    },
+    {
+      "path": "Binaries/NxCooking.dll",
+      "size": 388176,
+      "sha256": "b07c6882deb3a008a63a23a797697ff07599b2753ea1e16f870e192468d4b8d4",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10036625",
+      "image_size": 405504
+    },
+    {
+      "path": "Binaries/ogg.dll",
+      "size": 18512,
+      "sha256": "3594cae23b2324b407abbcf8098b2a21b1f7dfb33c3ef18e394a1fdeff11a148",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10002b87",
+      "image_size": 32768
+    },
+    {
+      "path": "Binaries/OpenAL32.dll",
+      "size": 115432,
+      "sha256": "2b098eab63649cf554d27b0e0c3ee933b5f5a7c5d601a780268324842e7f215c",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10006b04",
+      "image_size": 118784
+    },
+    {
+      "path": "Binaries/PhysXCore.dll",
+      "size": 2817104,
+      "sha256": "73ef565a0b31711b91e8682a6bf412dda7f3399b7e960bed340a11a102775dc6",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10240667",
+      "image_size": 2838528
+    },
+    {
+      "path": "Binaries/PhysXLocal/PhysXLoader.dll",
+      "size": 68688,
+      "sha256": "f71a986c117be145c724c0c7ba6b6a52a7da581ea3e0c131c2899525567121df",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x100019aa",
+      "image_size": 73728
+    },
+    {
+      "path": "Binaries/PS3/PS3Tools.dll",
+      "size": 69632,
+      "sha256": "839ab3c9042ddec0ccfc5892c5b809f50274e7c869da01adab083b6693d03bbc",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10007d9e",
+      "image_size": 73728
+    },
+    {
+      "path": "Binaries/steam_api.dll",
+      "size": 87288,
+      "sha256": "7ac1090d725dcbd3580909d05258944aa98a6c13ba4fd3a17bd0e67e54252d06",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x100040f3",
+      "image_size": 86016
+    },
+    {
+      "path": "Binaries/steamclient.dll",
+      "size": 2968048,
+      "sha256": "2a5078b01d2a3df54b1109e7d33f3cb03810fd3f8db243df220935feab69d132",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1017b244",
+      "image_size": 3117056
+    },
+    {
+      "path": "Binaries/testapp.com",
+      "size": 14416,
+      "sha256": "5ce76b6930408724d44756d39b588f816efa28beb4125490e73307ad4bebabbb",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x00401d15",
+      "image_size": 24576
+    },
+    {
+      "path": "Binaries/testapp.exe",
+      "size": 28250112,
+      "sha256": "a763e427876d78177d4f58aef2248607d11ca87364c966412ab26324a7f4aa1e",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x01fdc443",
+      "image_size": 29220864
+    },
+    {
+      "path": "Binaries/tier0_s.dll",
+      "size": 263416,
+      "sha256": "6aed87a279ec4558186b043b9bb42e13cac422e3d1be3281e34e9218f378b425",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1001b40a",
+      "image_size": 679936
+    },
+    {
+      "path": "Binaries/ueScriptProfiler.exe",
+      "size": 142416,
+      "sha256": "44919f9a6244a073ce4e40e9da2408de204a1dfccde67360c66aed8a93c2d402",
+      "machine": "0x014c",
+      "image_base": "0x11000000",
+      "entry_point": "0x1102033e",
+      "image_size": 155648
+    },
+    {
+      "path": "Binaries/UnrealConsole.exe",
+      "size": 117840,
+      "sha256": "a954ecb32705319a4062c8b28b9574ed104bc6a17cbc7e4014bfc1beba36917e",
+      "machine": "0x014c",
+      "image_base": "0x11000000",
+      "entry_point": "0x1101497e",
+      "image_size": 131072
+    },
+    {
+      "path": "Binaries/UnrealFrontend.exe",
+      "size": 117840,
+      "sha256": "a064e1939f98f7d01594eaa14e10ae1713df249c155675ac72b17ad1736889e3",
+      "machine": "0x014c",
+      "image_base": "0x11000000",
+      "entry_point": "0x1101947e",
+      "image_size": 122880
+    },
+    {
+      "path": "Binaries/UT3.com",
+      "size": 14416,
+      "sha256": "5ce76b6930408724d44756d39b588f816efa28beb4125490e73307ad4bebabbb",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x00401d15",
+      "image_size": 24576
+    },
+    {
+      "path": "Binaries/UT3.exe",
+      "size": 28505368,
+      "sha256": "097518615da0fe4ed73f104186121a58cd69ff30be1007e770fa2df0473cd70f",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x0128959a",
+      "image_size": 29478912
+    },
+    {
+      "path": "Binaries/UT3OSHelper.exe",
+      "size": 24576,
+      "sha256": "a7bdf43a9ada453df798c5c9898b046083c864b59403197fb5237efefe7c692b",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x00401fe5",
+      "image_size": 24576
+    },
+    {
+      "path": "Binaries/vorbis.dll",
+      "size": 318544,
+      "sha256": "c705d0d7530f64f39e82e6833c5c70fedb64b746801c7050b3187a550424363d",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x100259d8",
+      "image_size": 331776
+    },
+    {
+      "path": "Binaries/vorbisenc.dll",
+      "size": 986192,
+      "sha256": "268f23e04dfb7afc611b9916e9380cc50a026bea544fa3a9aea47cd864dc3e0e",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000329e",
+      "image_size": 991232
+    },
+    {
+      "path": "Binaries/vorbisfile.dll",
+      "size": 23632,
+      "sha256": "3168c4092ad98fb4de1b6a82abae12a5afcdb46ec0a7de127aa83dbd9acee036",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x10003d5e",
+      "image_size": 32768
+    },
+    {
+      "path": "Binaries/vstdlib_s.dll",
+      "size": 369912,
+      "sha256": "3e552bd8f0b282618e02a3fed8c96bead77b7b3352f5941b1f6d019039723f72",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1001e2d1",
+      "image_size": 442368
+    },
+    {
+      "path": "Binaries/Windows/UE3Redist.exe",
+      "size": 67508130,
+      "sha256": "f1ca1c908a61a4ae245c76ff3b910b46e12954640146954b2746100468d7149d",
+      "machine": "0x014c",
+      "image_base": "0x00400000",
+      "entry_point": "0x0042996c",
+      "image_size": 348160
+    },
+    {
+      "path": "Binaries/Windows/WindowsTools.dll",
+      "size": 126976,
+      "sha256": "d404e752ebb65e5f135b808843d11b0a18122320294739c128b02f191e6495d8",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000a1f8",
+      "image_size": 135168
+    },
+    {
+      "path": "Binaries/wrap_oal.dll",
+      "size": 418480,
+      "sha256": "f09de0f22f66ad53c94ae9c94ef39d82a2116d882a4f14d92f06e63b18a40d71",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1003770f",
+      "image_size": 2228224
+    },
+    {
+      "path": "Binaries/wxdockitu.dll",
+      "size": 199760,
+      "sha256": "6ac804a529480fb4a2964b05b7c232584c6e66a95adf7d6b04dff67919f60a61",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x1000f621",
+      "image_size": 196608
+    },
+    {
+      "path": "Binaries/wxmsw262u.dll",
+      "size": 3824720,
+      "sha256": "2c4cb1fa57745fb2a587276c1e5f2e81e93d795fb950ab0d408f43b4573bf095",
+      "machine": "0x014c",
+      "image_base": "0x10000000",
+      "entry_point": "0x101c99d2",
+      "image_size": 3997696
+    }
+  ]
+}

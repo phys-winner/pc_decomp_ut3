@@ -1,0 +1,63 @@
+{
+  "recorded_at": "2026-10-15T13:19:58.004523+00:00",
+  "publisher_repository": "https://github.com/K11MCH1/AdrenoToolsDrivers",
+  "release_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/tag/v26.0.0-rc08",
+  "release_tag": "v26.0.0-rc08",
+  "release_published_at": "2026-01-08T01:03:08Z",
+  "asset_url": "https://github.com/K11MCH1/AdrenoToolsDrivers/releases/download/v26.0.0-rc08/Turnip_v26.0.0_R8.zip",
+  "asset_filename": "Turnip_v26.0.0_R8.zip",
+  "asset_size": 3478359,
+  "asset_sha256": "e634db0f929e2205e95511c769071817d0390180ec72c8e690bc76375e813715",
+  "github_release_api_digest_matched": true,
+  "variant": "Standard regular R8; not A8xx, Gmem, Sysmem, Autotuner or PowerMax variant",
+  "base_commit_as_reported_by_release": "e9a83d530cce",
+  "base_commit_independently_verified": false,
+  "package_metadata": {
+    "schemaVersion": 1,
+    "name": "Mesa Turnip driver v26.0.0 - R8",
+    "description": "Compiled from Source + unsupported gpu hacks",
+    "author": "KIMCHI",
+    "packageVersion": "1",
+    "vendor": "Mesa",
+    "driverVersion": "Vulkan 1.4.335",
+    "minApi": 27,
+    "libraryName": "vulkan.ad07xx.so"
+  },
+  "driver_filename": "vulkan.ad07xx.so",
+  "driver_size": 17159433,
+  "driver_sha256": "fdd378520022f88b0363dd1f77f6989332730271712621523075fe4eb4de2a09",
+  "driver_elf": "ELF64 little-endian AArch64 ET_DYN, Android Bionic symbol versions (LIBC), HMI export",
+  "driver_needed": [
+    "libcutils.so",
+    "libhardware.so",
+    "liblog.so",
+    "libnativewindow.so",
+    "libsync.so",
+    "libm.so",
+    "libz.so",
+    "libdl.so",
+    "libc.so"
+  ],
+  "driver_direct_icd_gipa_export": false,
+  "driver_android_hal_HMI_export": true,
+  "actual_query_receipt": "research/turnip-vulkan-probe.json",
+  "actual_device_api_version": "1.3.335",
+  "package_advertised_api_version": "1.4.335",
+  "actual_query_bc3_gate_passed": true,
+  "license_sources": {
+    "mesa": "https://docs.mesa3d.org/license.html",
+    "adrenotools": "https://github.com/bylaws/libadrenotools/blob/master/LICENSE",
+    "adrenotools_api": "https://github.com/bylaws/libadrenotools/blob/master/include/adrenotools/driver.h",
+    "mesa_android_build": "https://docs.mesa3d.org/android.html"
+  },
+  "license_facts": {
+    "mesa_core": "MIT; individual Mesa components/files can have other licenses according to upstream docs.",
+    "adrenotools_upstream": "BSD-2-Clause (upstream driver.h, priv.h and driver.cpp SPDX identifiers).",
+    "downloaded_zip_contains_license_file": false,
+    "downloaded_driver_complete_license_manifest_verified": false,
+    "existing_winlator_helper_binary_source_revision_verified": false,
+    "existing_winlator_helper_use": "Only existing native ARM64 helper exports loaded for an isolated diagnostic; no helper binary copied into a distributed APK."
+  },
+  "scope": "Driver feature/image-format query only. No VkDevice, shaders, rendering, game boot, FPS, system driver replacement, APK installation, GUI, Wine/Box64 CPU runtime, or turbo.",
+  "reproduction_dependency": "Current diagnostic dynamically loads installed Winlator 11.2 native GPU helper/hook libraries by exact hashes in the receipt. A standalone game APK would need its own correctly licensed adrenotools/hooks build and packaging; this diagnostic is not that APK."
+}

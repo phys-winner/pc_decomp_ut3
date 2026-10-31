@@ -1,0 +1,21 @@
+* text=auto
+*.py text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.inc text eol=lf
+*.java text eol=lf
+*.xml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.uc text eol=lf
+*.ini text eol=lf
+*.yml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+LICENSE text eol=lf
+*.so binary
+# Vendored third-party files are pinned by SHA-256 (dependencies-*.json): stored and checked out byte for byte.
+/reference/** -text
+# Its SHA-256 pins the prebuilt DXVK (dependencies-dxvk.json, prebuilt.wsi_sha256): byte for byte.
+/android/dxvk/wsi_android.cpp -text

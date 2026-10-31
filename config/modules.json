@@ -1,0 +1,1175 @@
+{
+  "modules": [
+    {
+      "name": "ut3",
+      "file": "UT3.exe",
+      "path": "Binaries/UT3.exe",
+      "sha256": "097518615da0fe4ed73f104186121a58cd69ff30be1007e770fa2df0473cd70f",
+      "base": "0x400000",
+      "exe": true,
+      "jump_tables": [
+        {
+          "address": "0x0157e608",
+          "first_index": 0,
+          "count": 768,
+          "sha256": "3cac0562c56708b459e26dc80ff3078a785d96667e36214699aaff2f8824e1b2",
+          "owner": "0x01579230"
+        }
+      ]
+    },
+    {
+      "name": "msvcr80",
+      "file": "msvcr80.dll",
+      "path": "Windows/WinSxS/x86_microsoft.vc80.crt_1fc8b3b9a1e18e3b_8.0.50727.9680_none_d090cb7c44278b28/msvcr80.dll",
+      "sha256": "a74e18c475e7853d6158ae668dcc3f6c30c7b9eb7bb2360a8b58d945c1e81fbb",
+      "base": "0x10000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x10015038",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "57ef07816669651a7e63fb331421a6313715b2098f977f40366f07e73b6d2f6d",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x100150b8",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "1b17b4c8268e6f01c8ea1f308739fb6176616f58786ae44e6c75ae452068daee",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x10015124",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "2fb00811291adbada98fc8340c0b73de175633e871a7a4934a8605b5ff03d616",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x10015134",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "2fb00811291adbada98fc8340c0b73de175633e871a7a4934a8605b5ff03d616",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x100151c4",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "02051b957d1bfefd897202700336c45c109a967c023116484255d686cc0bd032",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x10015270",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "4a93269bb36ca4fd499feb5898c6d521d6d7e8b85477507af095573a01c3fade",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x100152c0",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "52c80451459627a029abc5ed238d8c3bc014b635339a8df75f411603bb9c7163",
+          "owner": "0x10014fb0"
+        },
+        {
+          "address": "0x100153a8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "1a2c81aef178deb751270caf3e803bb807549b34a35e04dcb16a819b1bdbe050",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x10015428",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "d8b8587e6017e3f7778e3ba5a2b871bd9b0e146b9c7a4159c4d10338f2b393b0",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x10015494",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "301c994d460c2fe5c557ca5ca2d65530a542cd00c4c9fd0300e37a6c741c3661",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x100154a4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "301c994d460c2fe5c557ca5ca2d65530a542cd00c4c9fd0300e37a6c741c3661",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x10015534",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "530a1ac1523a31e191d9dd9d1f060cb92f881bd63c6432f457367d4838bbdde4",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x100155e0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "611f9d4415ccc2e23610c88735c41962bc7a5cf15fea640165367d855b4e3b08",
+          "owner": "0x10015320"
+        },
+        {
+          "address": "0x10015630",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "1ccaf531d3259808053e1e44df3e2a0a4b3c7bb806693dbaaf3cbdaa0b51f8c6",
+          "owner": "0x10015320"
+        }
+      ],
+      "source": "C:\\Windows\\WinSxS\\x86_microsoft.vc80.crt_1fc8b3b9a1e18e3b_8.0.50727.9680_none_d090cb7c44278b28\\msvcr80.dll"
+    },
+    {
+      "name": "msvcp80",
+      "file": "msvcp80.dll",
+      "path": "Windows/WinSxS/x86_microsoft.vc80.crt_1fc8b3b9a1e18e3b_8.0.50727.9680_none_d090cb7c44278b28/msvcp80.dll",
+      "sha256": "ba5b61eb652f28cda1a80e2ee6839bd0bb043a098d0748f4817fb006b6887949",
+      "base": "0x11000000",
+      "exe": false,
+      "source": "C:\\Windows\\WinSxS\\x86_microsoft.vc80.crt_1fc8b3b9a1e18e3b_8.0.50727.9680_none_d090cb7c44278b28\\msvcp80.dll"
+    },
+    {
+      "name": "wxmsw262u",
+      "file": "wxmsw262u.dll",
+      "path": "Binaries/wxmsw262u.dll",
+      "sha256": "2c4cb1fa57745fb2a587276c1e5f2e81e93d795fb950ab0d408f43b4573bf095",
+      "base": "0x12000000",
+      "exe": false
+    },
+    {
+      "name": "wxdockitu",
+      "file": "wxdockitu.dll",
+      "path": "Binaries/wxdockitu.dll",
+      "sha256": "6ac804a529480fb4a2964b05b7c232584c6e66a95adf7d6b04dff67919f60a61",
+      "base": "0x13000000",
+      "exe": false
+    },
+    {
+      "name": "fxgraphlayout",
+      "file": "FxGraphLayout.dll",
+      "path": "Binaries/FxGraphLayout.dll",
+      "sha256": "af9e13fdb47b407e3c76f84c938e13c0f2abb8840da70db6c260a20c4e57f0a8",
+      "base": "0x14000000",
+      "exe": false
+    },
+    {
+      "name": "libresample",
+      "file": "libresample.dll",
+      "path": "Binaries/libresample.dll",
+      "sha256": "c5e3575917cd281902103fa8062882e5134ce1c5d00796c0404c79a3c990b00f",
+      "base": "0x15000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x15005dd0",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "b564d204796512403978b6790c1add321be04f1f5252e4b657d8cec5f55d2b40",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15005e50",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "bd2551e4803f62edffbbb2fdf23fa295c5d48f6f7af3dfaadb87e7f0b5cb2f19",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15005ebc",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "268faead2e2159b4a134cbc48844d7daba3de51642832b8d26252270f21801ee",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15005ecc",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "268faead2e2159b4a134cbc48844d7daba3de51642832b8d26252270f21801ee",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15005f5c",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "a15f11c4032bfbb5c69010a5f115dceea502ffa8135fb81382ddfeaffea70364",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15006008",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "fcbe1a63b171ec9a6067344b0feaee64e76a2f63565b17e9be0817bda0334249",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15006058",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "ae1d722cc3a106324fa23bf60335ed10fb75c9844f352c3ba3ecc9e007e17209",
+          "owner": "0x15005d70"
+        },
+        {
+          "address": "0x15008160",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "5fbddb75cb7ca409f5499c96ce87214c0153792857838d3097343011cc825b13",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x150081e0",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "27bb601ddbef59d7b3c2da3bccdd32d23aba191658331fa39c42333bbf41f7c1",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x1500824c",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "f668872398b6098681fbd8390538bb888ae4a4392feed0e9b4839a56c9525af4",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x1500825c",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "f668872398b6098681fbd8390538bb888ae4a4392feed0e9b4839a56c9525af4",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x150082ec",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "8a75eaeb9c203adefc892fedc31386e13277730e56ce14752a4da1ddd589ca40",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x15008398",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "d635c2cb59b19b47343934a84ead23eeb9a9e920b0e18b6c642442bc093c2d7f",
+          "owner": "0x15008100"
+        },
+        {
+          "address": "0x150083e8",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "971c356970f42ac2907dda4e711aa819d30c446ef3a2314a344c3b0e23abb5da",
+          "owner": "0x15008100"
+        }
+      ]
+    },
+    {
+      "name": "ogg",
+      "file": "ogg.dll",
+      "path": "Binaries/ogg.dll",
+      "sha256": "3594cae23b2324b407abbcf8098b2a21b1f7dfb33c3ef18e394a1fdeff11a148",
+      "base": "0x16000000",
+      "exe": false
+    },
+    {
+      "name": "vorbis",
+      "file": "vorbis.dll",
+      "path": "Binaries/vorbis.dll",
+      "sha256": "c705d0d7530f64f39e82e6833c5c70fedb64b746801c7050b3187a550424363d",
+      "base": "0x17000000",
+      "exe": false
+    },
+    {
+      "name": "vorbisenc",
+      "file": "vorbisenc.dll",
+      "path": "Binaries/vorbisenc.dll",
+      "sha256": "268f23e04dfb7afc611b9916e9380cc50a026bea544fa3a9aea47cd864dc3e0e",
+      "base": "0x18000000",
+      "exe": false
+    },
+    {
+      "name": "vorbisfile",
+      "file": "vorbisfile.dll",
+      "path": "Binaries/vorbisfile.dll",
+      "sha256": "3168c4092ad98fb4de1b6a82abae12a5afcdb46ec0a7de127aa83dbd9acee036",
+      "base": "0x19000000",
+      "exe": false
+    },
+    {
+      "name": "binkw32",
+      "file": "binkw32.dll",
+      "path": "Binaries/binkw32.dll",
+      "sha256": "da1ffb274a040290a96c757793ac44ae1e5a56b1051054221716aeeaf0119404",
+      "base": "0x1a000000",
+      "exe": false
+    },
+    {
+      "name": "nxcooking",
+      "file": "NxCooking.dll",
+      "path": "Binaries/NxCooking.dll",
+      "sha256": "b07c6882deb3a008a63a23a797697ff07599b2753ea1e16f870e192468d4b8d4",
+      "base": "0x1b000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x1b034988",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "acf5aeb2d3f0225286aefce40e857e8001eb0fbe86b08b44140b6fa6da269cf1",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034a08",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "3bca38fe75d3e72408e8b5c689bd4656d8a8b0760f6d69a7c9dff9afa5a800e4",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034a74",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d68d1c3d08d009b0d065964ee2d347faf9a7486e03c6d4aa83e4aab06fc5ca26",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034a84",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "d68d1c3d08d009b0d065964ee2d347faf9a7486e03c6d4aa83e4aab06fc5ca26",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034b14",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "8d344408ec5a2799589d7aad0e043857e235497caecc9eff04429d4f0d707b1d",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034bc0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "29ed51eda4899890472a196a5ea2f5b6a9d9bd795b735605594a7f65629c5111",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034c10",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "fc7af172449f259c72b50299b0431e0f69083e274eacf3d31f6aafcc0c96ee72",
+          "owner": "0x1b034900"
+        },
+        {
+          "address": "0x1b034cf8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "2ec13446d05bcaf8b525dd93f253db567c53cfb1a70cefc16c38f5da3bdf850e",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034d78",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "018ae505f3dd6d3458dc33eb102f362998b78a76f23673424d5c52481caae47b",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034de4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "27d22c8bb6d5ec36ec3fb1202d5ff5e1875d85b3c43e4ac846b08e6b38106746",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034df4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "27d22c8bb6d5ec36ec3fb1202d5ff5e1875d85b3c43e4ac846b08e6b38106746",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034e84",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "ccd4c8b5bba782658facc1a7ae065381e5fe427007d8542f0b5d317de84b8452",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034f30",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "ae2b545e8dcef58c9c52ce9d6b7167de449b7f20be03c01ced456cd92da9c80d",
+          "owner": "0x1b034c70"
+        },
+        {
+          "address": "0x1b034f80",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "3a4674cfcbaa4dff7ac6fcdd1341480b68e35b5108be949aedf1740a34454512",
+          "owner": "0x1b034c70"
+        }
+      ]
+    },
+    {
+      "name": "nxcharacter",
+      "file": "NxCharacter.dll",
+      "path": "Binaries/NxCharacter.dll",
+      "sha256": "4fc10e9f65e580441e14eaded8a6ec70d62cc1361b2d1498336f4718bdbaa6b1",
+      "base": "0x1c000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x1c00dcd8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "31a59b0f980854825c1ae6b2a266cdd876072a4648a885cdb713a78d86c5007d",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00dd58",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "e25f5e5d693593a5333788ea24d37889dc5e289faa54293d14b6a6902bc3cbc9",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00ddc4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d033b25595608fc792f828fcc32eb14f679bb224bbb5a370085ee6f7ee4f8641",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00ddd4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "d033b25595608fc792f828fcc32eb14f679bb224bbb5a370085ee6f7ee4f8641",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00de64",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "cdd79424bfc908bac29b531075314472e0f3fe676e66c585824e1c22ff7631ab",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00df10",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "cf43eb7b09e62638d14340166739f9a8015830ad0edde1edcd720b901d551de4",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00df60",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d4236a021b8eb1f5cb200940db53dc7357b988e4163fc4ac39dcfb9ebafa9c19",
+          "owner": "0x1c00dc50"
+        },
+        {
+          "address": "0x1c00fda8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "8f48078c56df8af1c3a669a50333a1c4fecd3f31c31d518647b653df158edb61",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c00fe28",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "a1b96985e8fedb9aa17cfee19e117217edcf91d268ffb9d56d906816d29589de",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c00fe94",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "46943f031613285f97cf00c2920dfacd11b75601287d7fd2e791a4c40d5b65dc",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c00fea4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "46943f031613285f97cf00c2920dfacd11b75601287d7fd2e791a4c40d5b65dc",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c00ff34",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "7a0ede7611369dbaba398c21619009be8ec9aa73e362faf595dc0902604fc870",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c00ffe0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "5abd0294f837f91102ff4b7baf4899a2b662b6fef1414fc442eaf1e89bf6027d",
+          "owner": "0x1c00fd20"
+        },
+        {
+          "address": "0x1c010030",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "017e1acb315e64f6281842cd71fded8cf82c5eac63d762f09ec4a8b6424c22b4",
+          "owner": "0x1c00fd20"
+        }
+      ]
+    },
+    {
+      "name": "physxloader",
+      "file": "PhysXLoader.dll",
+      "path": "Binaries/PhysXLocal/PhysXLoader.dll",
+      "sha256": "f71a986c117be145c724c0c7ba6b6a52a7da581ea3e0c131c2899525567121df",
+      "base": "0x1d000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x1d007218",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "fe0c58a407910f0fb67bc87596dd649f790b72dfdb2d057f06cfcfa27e54e5f9",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d007298",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "752b31bcf7757e099fcae2163feef36ee2c05b69b8495dcbcd9ca86521dda373",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d007304",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d08f0da827af8ba381953e38c4e8cea6203c5c20c196bda0fae8870f2791a8b3",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d007314",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "d08f0da827af8ba381953e38c4e8cea6203c5c20c196bda0fae8870f2791a8b3",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d0073a4",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "a3c7de8206cb56a798544b339c8b3ec6d9012ac35e265f2e9c7ba9165b90b567",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d007450",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "12f34c450d13ce1250abd7cef219ddfff7e8bdc764fe19d3abc6c212e6f3dee2",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d0074a0",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "53ddfbe55a165cec7e5c5cdfa08f7ad8012c38d6929b452fb4f04fe0cbe606ef",
+          "owner": "0x1d007190"
+        },
+        {
+          "address": "0x1d008d98",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "f54397c59d90a9781e6fefd47f1d40d7d2a58fc406c3d455a248821239c485f9",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d008e18",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "897bd8f5bf6acecfd1b4b22f374e78857b0ec8f36b9aacfb9de42f18db38f0b9",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d008e84",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "a2b765a4f26898b226e992ce0200ef7908c0e1975572c438ec90c0b341d65314",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d008e94",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "a2b765a4f26898b226e992ce0200ef7908c0e1975572c438ec90c0b341d65314",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d008f24",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "927553516e38fc8c313137bed0cd16b34c9a325999362cdd914ec595df7c5d29",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d008fd0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "9ae13ce107f241e8fc2f6c1474465ed56a541e55ba9db822c81157c01d77912c",
+          "owner": "0x1d008d10"
+        },
+        {
+          "address": "0x1d009020",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d2acf78313f1ea433ab756dc9e9221329e1ca46c19230d7c7e39752889cfe3dc",
+          "owner": "0x1d008d10"
+        }
+      ]
+    },
+    {
+      "name": "physxcore",
+      "file": "PhysXCore.dll",
+      "path": "Binaries/PhysXCore.dll",
+      "sha256": "73ef565a0b31711b91e8682a6bf412dda7f3399b7e960bed340a11a102775dc6",
+      "base": "0x1e000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x1e23e8f8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "1eeb75e5376f7f3b685eac9de5c9f0419de0f52e58ec72070fe1f4401db18ee4",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23e978",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "5fcc449056fbc4a0968ef0f3c9d8f21df8cf1f3f39b7faba1124987b36ee3aad",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23e9e4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "9d54b8c7f2e2088049ba8646a7770fc6ef75cc3deb4470486ee828ebc72ef1d0",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23e9f4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "9d54b8c7f2e2088049ba8646a7770fc6ef75cc3deb4470486ee828ebc72ef1d0",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23ea84",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "6efbda70b38ced4396f8ac8c6b0f429f7b684fb2fc623bbcd1328abc4288e0c5",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23eb30",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "61e02fe26155c7e8447bad335efe94a31e02c6da69708f79e336c1598c9a98fd",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23eb80",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "9db87f537905ed60148fdd176c08c5185dd922bc5a3be3f7947c3bab90a7ea91",
+          "owner": "0x1e23e870"
+        },
+        {
+          "address": "0x1e23fa08",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "eafe35ab26fdcc03077ac94e3ca902fafce77036c095d257dbcec9d80aa8ec70",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23fa88",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "887e389f8b907ec8de9b9d67ec4b6de0c3492f24894e5c1f5dcab133d4bc49cc",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23faf4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "ef54c5eadd0a249e7b5b1ddf70230a5107b0537ecce17674e53495f1234f8dd2",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23fb04",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "ef54c5eadd0a249e7b5b1ddf70230a5107b0537ecce17674e53495f1234f8dd2",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23fb94",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "1a5de713117498437eed51f80568bb57929197f6ee62edd0a9fa29a4429429cb",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23fc40",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "fb279db490996acdd0c62c6f35566e8797ee5f7a473ca7c3960bc231481f63db",
+          "owner": "0x1e23f980"
+        },
+        {
+          "address": "0x1e23fc90",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "882965949749b87eacbe133229ddbb7e7bbc585141aa3592deaaa8337a5a13f7",
+          "owner": "0x1e23f980"
+        }
+      ]
+    },
+    {
+      "name": "steam_api",
+      "file": "steam_api.dll",
+      "path": "Binaries/steam_api.dll",
+      "sha256": "7ac1090d725dcbd3580909d05258944aa98a6c13ba4fd3a17bd0e67e54252d06",
+      "base": "0x1f000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x1f0042b8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "e920aebdc0c6ec1161c897c89767bcbaadd8576618a3ae503dd9fb5e9da75d44",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f004338",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "16c0beabf33f88ffc93fe8e4a19602455990d2d4f0fcf20484cd56280f79a52e",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f0043a4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "2f396ebb34c0162514f6a70778daa6247fcf527d13915075f435cacfe180bdee",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f0043b4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "2f396ebb34c0162514f6a70778daa6247fcf527d13915075f435cacfe180bdee",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f004444",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "5796d30783bdd4349d7c245f6543e08a6326d2bc67430e960ac4a4372f546d37",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f0044f0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "216115d3aec7ad9b1eb9d4aec014f0a5aa9a83d42ecfdd2ba8051368c03011d5",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f004540",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "f7a5ec85c1604ce2942d58274a6701e84735801f4adba9effa9c93d070322a16",
+          "owner": "0x1f004230"
+        },
+        {
+          "address": "0x1f004678",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "5c14a0c34fcdcc3b9f18741b269c75839a6bf5901d8c407e27ea92bb80f20c48",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f0046f8",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "50c8ccc8c2e0687626fc227a0eccce9da15cd0cbf1aa354650a4fded64b52481",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f004764",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "780d1d6f50acd95879d59b4bfc53ed9d90d87089cfe029e5d834b51048ee6e39",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f004774",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "780d1d6f50acd95879d59b4bfc53ed9d90d87089cfe029e5d834b51048ee6e39",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f004804",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "a14743b5932b09dbf4bf2ead4a01d384486f6d8eaa8fa773cef8cc9b8c2aaf81",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f0048b0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "dfae1e8ad0ee15fa238f52e5d144defb9931126a5252e580eda981c2971f4204",
+          "owner": "0x1f0045f0"
+        },
+        {
+          "address": "0x1f004900",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d1c7a52a0e3a8574cb3674e66fc80f587475b52804645643eb637e1107ba6c2b",
+          "owner": "0x1f0045f0"
+        }
+      ]
+    },
+    {
+      "name": "steamclient",
+      "file": "steamclient.dll",
+      "path": "Binaries/steamclient.dll",
+      "sha256": "2a5078b01d2a3df54b1109e7d33f3cb03810fd3f8db243df220935feab69d132",
+      "base": "0x20000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x20176418",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "6e24ce1405393c9da64ba7f8dff3e2b2f158fd80b9b8facbef372296b81a5457",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x20176498",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "326402a542cb33645f40b1c50ccf08735043462d6dad675c72779393d4e09753",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x20176504",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "6d4acc7394583589229151dc8f498b4f453351b4229fa4f1e5122a3630865738",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x20176514",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "6d4acc7394583589229151dc8f498b4f453351b4229fa4f1e5122a3630865738",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x201765a4",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "a6cb8301a48f4a6fc5da5d2c001561df9b247ceb27db73e5828390f16e1066c5",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x20176650",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "f49d08c9a7e76d89938de5fa7ac44111d049dde30561572e0be95a024ebcb13d",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x201766a0",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "7b3ca1b24430c0561e5f7dc7edafb7f5a34d370f4713271f427c9256f08688b7",
+          "owner": "0x20176390"
+        },
+        {
+          "address": "0x20176b78",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "c5fc0aa63f630408823af2aa67eda1e5ef403770a0a486d42ecb09bad17a33fb",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176bf8",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "5369b5d2f634b777647be69b1f05e278605fede91ee7f5716053c2052f07a29f",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176c64",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "c0c583be15c20251770acdac9e5e9d1bda5d77fbc724324211dda83c542a07df",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176c74",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "c0c583be15c20251770acdac9e5e9d1bda5d77fbc724324211dda83c542a07df",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176d04",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "bf6f065d7f9c6738da80d13942d6c00d08f9b239539c9d2f9ac82d9c94085553",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176db0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "d7ad9dd4b0c432889a7541f415f4cd0b3ddae6963b864e4b537dc92a953de5c3",
+          "owner": "0x20176af0"
+        },
+        {
+          "address": "0x20176e00",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "ecc2753a344640e0ec777bc7f7d5ac14900982fca4d6f34166fab608ec80e42b",
+          "owner": "0x20176af0"
+        }
+      ]
+    },
+    {
+      "name": "tier0_s",
+      "file": "tier0_s.dll",
+      "path": "Binaries/tier0_s.dll",
+      "sha256": "6aed87a279ec4558186b043b9bb42e13cac422e3d1be3281e34e9218f378b425",
+      "base": "0x21000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x21018378",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "6cf958ad7fa05676b845bb1b796c28b55ff484ed0180508a9605a00fb795a981",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x210183f8",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "1f1c598955b893420924e6b2f05890c88bf9f50214840745cb99155151cb2533",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x21018464",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "a33f2bd4ccf00063fda69265d7527a9907f3f170032b8166cc24476d49bb04b1",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x21018474",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "a33f2bd4ccf00063fda69265d7527a9907f3f170032b8166cc24476d49bb04b1",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x21018504",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "9ac35a393307ca01377c0cf82c3e7cc79aa058bdc5d2c0587faa5f86281fcf94",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x210185b0",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "555cd81cbaf6efe1b31006c780aa0a99fe263f55665935909b7a3692081e81cf",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x21018600",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "62851d14c78da18e8b26ad9fa8404685dd79f291a911c5c7937b087e60b213f5",
+          "owner": "0x210182f0"
+        },
+        {
+          "address": "0x21019338",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "769ddfbc3bc073867f6bcf4122ccfcd39ab34495d690f931339fe861f87e04ef",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x210193b8",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "78c575dcaf922ef787778aeedc9313655b636fc8bc3af120b53012e634299644",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x21019424",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "e2993dce4b15f36a4796ae49a2f81da5adbea692bc3586840ade08497ec18e47",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x21019434",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "e2993dce4b15f36a4796ae49a2f81da5adbea692bc3586840ade08497ec18e47",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x210194c4",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "eb0d2333edc8cdcc8866f2f20c31f5d0507a0f88c34a86d5a01dd9133de07760",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x21019570",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "1e4be9788277f608af28f8be9eccb5bc8a5e560ea343961b799e31259598b1ad",
+          "owner": "0x210192b0"
+        },
+        {
+          "address": "0x210195c0",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "6fc22f427a6bea2142604b8f092ef57c05aaaffb9ce7e5d987b378c77a53c024",
+          "owner": "0x210192b0"
+        }
+      ]
+    },
+    {
+      "name": "vstdlib_s",
+      "file": "vstdlib_s.dll",
+      "path": "Binaries/vstdlib_s.dll",
+      "sha256": "3e552bd8f0b282618e02a3fed8c96bead77b7b3352f5941b1f6d019039723f72",
+      "base": "0x22000000",
+      "exe": false,
+      "jump_tables": [
+        {
+          "address": "0x2201b6f8",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "cee8eb54dd86538125e09064ddb3fe8e6fb75437caa46cc7a0aefadd9b676f15",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b778",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "5f582e679cb4e3fae3e18753c47593e4c9cf89f0e0a45489ac31fbc98027b4ce",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b7e4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "bb5bcbb16b269fc51acea81fc897f900b82df1b384778842f21cc1dd5df83315",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b7f4",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "bb5bcbb16b269fc51acea81fc897f900b82df1b384778842f21cc1dd5df83315",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b884",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "657cde27703e9046c0c038353dc643732783d203a1da63f4c67f54570aa7d204",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b930",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "7c04eec115a13e7adfb2667c4805d6515dbc1ece3df5d23497a601fdd8f74bac",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2201b980",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "1cb4e6d7bf8f76a5d2aa484b85663e42aa16a57a4f26ce3c85472415337bd8b9",
+          "owner": "0x2201b670"
+        },
+        {
+          "address": "0x2202bd08",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "a110fe7a35ac62d281eb22fcb6cb9a79adb9a3551799aee1380c0b413f909c7e",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202bd88",
+          "first_index": 0,
+          "count": 8,
+          "sha256": "2c87b4eb6e3627a359140d3d350be5cfcfb11b6c90655f8f93a68adf3ca7586d",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202bdf4",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "d534d19b9222690209f0d0cf56256f912d4fac62f46cbec0f51d5811247432df",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202be04",
+          "first_index": -4,
+          "count": 4,
+          "sha256": "d534d19b9222690209f0d0cf56256f912d4fac62f46cbec0f51d5811247432df",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202be94",
+          "first_index": 1,
+          "count": 3,
+          "sha256": "fbf41fe3c1c81207d296edff68cf10702de426ea6c481d579f109e247c8bb3d9",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202bf40",
+          "first_index": -7,
+          "count": 8,
+          "sha256": "f2e0c015fa2ce7e0748073c62620c278ca6064be10d9198b63803d9eda6bc8ba",
+          "owner": "0x2202bc80"
+        },
+        {
+          "address": "0x2202bf90",
+          "first_index": 0,
+          "count": 4,
+          "sha256": "c3746fac6b7857cd5e13a8b6bf647d558ff21e2a45c56b5c6372adabbc1ec721",
+          "owner": "0x2202bc80"
+        }
+      ]
+    }
+  ]
+}

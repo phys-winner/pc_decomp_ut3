@@ -1,0 +1,58 @@
+# Copy to .github/workflows/update-manifest.yml of a game repository, next to tools/update_manifest.py
+# (from the launcher submodule). On every release change it rebuilds update.json from the releases
+# that are not pre-releases (each APK is read once; versions.json caches what was read) and attaches
+# both files to GitHub's latest release. The launcher reads
+#   https://github.com/OWNER/NAME/releases/latest/download/update.json
+name: Update manifest
+
+on:
+  release:
+    types: [published, edited, deleted, released, unpublished]
+  schedule:
+    - cron: "17 */6 * * *"      # also catches an APK attached after the release was published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-manifest
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure aapt2 and apksigner
+        run: |
+          if ! ls "$ANDROID_HOME"/build-tools/*/aapt2 >/dev/null 2>&1; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;37.0.0" >/dev/null
+          fi
+
+      - name: Build update.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          script=tools/update_manifest.py
+          [ -f "$script" ] || script=android/launcher/tools/update_manifest.py
+          python3 "$script" --repo "$GITHUB_REPOSITORY" --state-from-releases \
+            --out "$RUNNER_TEMP/update.json" --state "$RUNNER_TEMP/versions.json"
+
+      - name: Attach to the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -z "$tag" ]; then
+            echo "No release is marked latest yet (only drafts or pre-releases)"
+            exit 0
+          fi
+          if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern update.json --dir "$RUNNER_TEMP/current" 2>/dev/null \
+             && cmp -s "$RUNNER_TEMP/current/update.json" "$RUNNER_TEMP/update.json"; then
+            echo "update.json of $tag is current"
+            exit 0
+          fi
+          gh release upload "$tag" "$RUNNER_TEMP/update.json" "$RUNNER_TEMP/versions.json" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "update.json attached to $tag"

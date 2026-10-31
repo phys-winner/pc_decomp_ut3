@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon: the monochrome shape, cropped to fill 24 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="64" android:viewportHeight="64">
+  <group android:translateX="-22" android:translateY="-22">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M54,24 L79.98,39 L79.98,69 L54,84 L28.02,69 L28.02,39 Z M54,29.5 L75.22,41.75 L75.22,66.25 L54,78.5 L32.78,66.25 L32.78,41.75 Z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M52,35 h4 v11 h-4 z M52,62 h4 v11 h-4 z M35,52 h11 v4 h-11 z M62,52 h11 v4 h-11 z M51,54 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+  </group>
+</vector>

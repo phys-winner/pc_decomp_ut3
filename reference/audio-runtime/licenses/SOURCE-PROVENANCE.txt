@@ -1,0 +1,5 @@
+OpenAL Soft1.25.2 b2c48f7718ef3fcf67921a8b6534c4914e328970
+https://github.com/kcat/openal-soft/releases/tag/1.25.2
+Oboe1.11.0 b115f47593969fd67a21e9f63640ffef749b5067
+https://github.com/google/oboe/releases/tag/1.11.0
+Original source archives, private overlay changes, and exact build recipe are retained in this project's reference/openal-soft, reference/oboe, and tools/build_native_audio.py.

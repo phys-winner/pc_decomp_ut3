@@ -1,0 +1,18 @@
+This folder contains an unmodified public driver asset downloaded for isolated
+local capability research. Exact URL, digest, ABI and query receipt are recorded
+in provenance.json. The ZIP itself contains only meta.json and vulkan.ad07xx.so;
+it does not contain a complete license manifest.
+
+Mesa upstream says its core and most code use the MIT license, with different
+licenses for some individual files/components. The exact full license manifest
+of this community binary was not reconstructed:
+https://docs.mesa3d.org/license.html
+
+The upstream adrenotools API used by the diagnostic is BSD-2-Clause:
+https://github.com/bylaws/libadrenotools/blob/master/LICENSE
+https://github.com/bylaws/libadrenotools/blob/master/include/adrenotools/driver.h
+
+The diagnostic loads already installed native GPU helpers by their exact hashes;
+it does not copy Winlator helper libraries into a distributed APK. The helpers'
+exact source revision and combined component license manifest were not verified.
+A standalone game package needs its own reproducible adrenotools/hooks build.

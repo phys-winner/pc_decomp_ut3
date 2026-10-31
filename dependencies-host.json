@@ -1,0 +1,996 @@
+{
+  "schema_version": 1,
+  "host": {
+    "source": "local Heroes V compatibility host, itself adapted from The Void",
+    "source_directory": "the Heroes V port (sibling project)",
+    "source_git_head": "d1734c8c62df74ab2874bc8ef83560bd1ca06c17",
+    "source_license": "GPL-3.0-or-later, upstream-derived portions retain their licenses",
+    "license_file": "reference/homm5/LICENSE",
+    "note": "Exact source and adapted snapshot hashes are below; source checkout had local changes. H5 game addresses, touch patches and zlib overrides were removed.",
+    "files": [
+      {
+        "path": "android/host/adpf.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "e0ecb0d351926fa7cd8557e87b560e546d92f308e2f00b0843d8145db6877d03"
+      },
+      {
+        "path": "android/host/android_main.c",
+        "sha256": "a269ed42df23aed0d3490c584b83c24d2d70e3f0e4d07e9e6280361353b73f50",
+        "source_sha256": "e79bf642a7ec0bdff209e680f585bb09df36707699ced1b752c093730d219f25"
+      },
+      {
+        "path": "android/host/argv.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "2191129a8d20e205726956445bf340a8b1f887dcc51d125b79bd0b0d12078a60"
+      },
+      {
+        "path": "android/host/bstr.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "3d117e7e017c7be31e24c3f1c214a6deedc91685e35d624f6a0f1d90bda68a3b"
+      },
+      {
+        "path": "android/host/com.c",
+        "sha256": "c3d246dfc1b329b8789941272b0d84334bfe9646ecad14a15ceaa32740ec64f1",
+        "source_sha256": "c3d246dfc1b329b8789941272b0d84334bfe9646ecad14a15ceaa32740ec64f1"
+      },
+      {
+        "path": "android/host/com.h",
+        "sha256": "5dd311a15284b58c9669ce8308f0efe8675199a3c02542ce5b909cf06b7ddc68",
+        "source_sha256": "5dd311a15284b58c9669ce8308f0efe8675199a3c02542ce5b909cf06b7ddc68"
+      },
+      {
+        "path": "android/host/compat.c",
+        "sha256": "be78d65138c5d8b6d83d138722fd0537dccfe8f693d8f74710a6c04eb58afcc9",
+        "source_sha256": "0d3614a189ada781ea8220dee6a04ea33ce46e226f23183dc51d691be17862d5"
+      },
+      {
+        "path": "android/host/core.c",
+        "sha256": "783145207fb1c07d1e5df0d83380df151a19f3c5018441d29a3eda736647cd2c",
+        "source_sha256": "33282dac5b3ded3e07d44ef77b11e92d29fdd7e83f1e0de76230ac803d691391"
+      },
+      {
+        "path": "android/host/crt_compat.c",
+        "sha256": "a6fe7a0165c4761ca0317d882a6279527cd81a4a26899243785842121913dfc0"
+      },
+      {
+        "path": "android/host/d3d9_device.c",
+        "sha256": "8fe4d18a9ca4afaefd1c9625b47b16db81a63b35684f18f41975c9ba7ebfcef3",
+        "source_sha256": "0af4cd8fb65ebd77bf9ed690e0fa6fa0f7497b0df38ca8a00ec55c4bb2c81e80"
+      },
+      {
+        "path": "android/host/d3d9_dxvk.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "0951ef481f624e80ec7642fa3e143d27a0f0a1521dabbc25f27ff892f573d719"
+      },
+      {
+        "path": "android/host/d3d9_ff.c",
+        "sha256": "831d4031dfff1dfa9f415b1b6b29d006fb0ce417ff2e080086c37e11e9e81979",
+        "source_sha256": "831d4031dfff1dfa9f415b1b6b29d006fb0ce417ff2e080086c37e11e9e81979"
+      },
+      {
+        "path": "android/host/d3d9_format.c",
+        "sha256": "065c9f48807726e7ae38a1ab027de5632eb6bad8b564dc42116150002a339ed4",
+        "source_sha256": "7d8276a3d7f1a83300b7a7b84ce90eeab3d528313e792e10b3b9ce20c472a963"
+      },
+      {
+        "path": "android/host/d3d9_gl.c",
+        "sha256": "6ae73ae1aba1f264506a4242985fd030a35da70faabb108878bd7d677ad46e17",
+        "source_sha256": "ce0ad4fa0aadf368ffff631d85b0f21a96f69e465ea80679831b2cdbcea94d52"
+      },
+      {
+        "path": "android/host/d3d9_internal.h",
+        "sha256": "301e78915e5df7fdbac5f5629dd47dc5eec46d08be9d4ef88e4faa0304c287c6",
+        "source_sha256": "bf9b2d7d5f502bd93456877b5968bf2229421606b7995854bd0f888fc17f3700"
+      },
+      {
+        "path": "android/host/d3d9_resource.c",
+        "sha256": "61181aeb8492e56b0c2a34506020e7b1e0c0318e9d49d752092450575b94280d",
+        "source_sha256": "7f2e5ac093dd5bdb9bf9cd5f2feadd68bdd5fe9110322b5f1da40af760d6d8dd"
+      },
+      {
+        "path": "android/host/d3d9_shader.c",
+        "sha256": "342369a1d27fc913d3661b65b4cdb5c037f3cafd1da4c5abe19c177a7de536b5",
+        "source_sha256": "4ec147c619260cef76af1c2c92d51252956c6d584a3e507f053db2830e1e1c29"
+      },
+      {
+        "path": "android/host/d3d9_texel.c",
+        "sha256": "caae299d8ade7175a7eb292beda6a32dec0e830864d09967ba84f8d632e24c8c",
+        "source_sha256": "caae299d8ade7175a7eb292beda6a32dec0e830864d09967ba84f8d632e24c8c"
+      },
+      {
+        "path": "android/host/d3dx9.c",
+        "sha256": "10c6774e680a9b79a0211a6af5c2c73b6185edfacd77ccaced844b6c507b616b",
+        "source_sha256": "439940795d424798478cddc3325abfe8bc34ef201c38813a6888b93166434999"
+      },
+      {
+        "path": "android/host/d3dx_math.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "307bb969ef05638d502af324177d1357e83a00a4013fd5792b8617cb17f26000"
+      },
+      {
+        "path": "android/host/dinput8.c",
+        "sha256": "782e0e964295520a6ce2373d58c9a0506f03aa5c52fbe6cb907c389a8a98bab6",
+        "source_sha256": "782e0e964295520a6ce2373d58c9a0506f03aa5c52fbe6cb907c389a8a98bab6"
+      },
+      {
+        "path": "android/host/dsound.c",
+        "sha256": "8b6bb44c8d6bbc0d377eb205a17f25e5bd5e8b59915134197ee7c88c2fffdfd2",
+        "source_sha256": "74e1b6579e9a2f3dda6105f304d4b8edfeaf05d873fc2e15064565490ab4e394"
+      },
+      {
+        "path": "android/host/eh.c",
+        "sha256": "6e95229ca14da21b814e86e869a85f73d756f37a0333b4d116f9ab36eab29859",
+        "source_sha256": "9bcbde30642cdf8b1e91283c2e04ae902f37dec5d414ba1c3e57c99a621f865f"
+      },
+      {
+        "path": "android/host/files.c",
+        "sha256": "320462be105e984677208d6925e91823248becca1a65ad4b347ebdc1f6786d01",
+        "source_sha256": "66b0e5d3b1b97326a2832447a505f489f6c6625f9fe4eb9c1c0c01f6b11fe2b1"
+      },
+      {
+        "path": "android/host/guest_mem.c",
+        "sha256": "73dc33b2cc117811a5497a6fd2521bf0d04e3c310eb4d97b33547d4e34f6bfdb",
+        "source_sha256": "4ff0c7f2e5ff45d51c4a3af1e8d2fa013cf3cac8f53d762338c4dc2b6ed32583"
+      },
+      {
+        "path": "android/host/hooks.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "32805b6285fb3e954f3322d53d214d4f2119fc9e0ccc52ab08bee8ac9d367754"
+      },
+      {
+        "path": "android/host/host.h",
+        "sha256": "92292e062a133da2ea88c4b6e1f6e0b42947c3b8e1442ed8b02266b90a936ab8",
+        "source_sha256": "f5a8791f4ee3bb3b3634bb389e0285eb74ce8b0b28a9a2bcc1d1b6c8c2584cf8"
+      },
+      {
+        "path": "android/host/imm32.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "4f459158b85edf7a9195b995b23dcbbc220425376fc5f0d7ac85c14dde9b291e"
+      },
+      {
+        "path": "android/host/input.c",
+        "sha256": "1a8741f47fbf5c2215243cbcff0d07c8981cb5084c0073aee5df3f51a8b9ce6b",
+        "source_sha256": "cfb8c0221ca1a62624eaafab5e6cfacc70f5df9977f7dd5a5b3ba38014931ffa"
+      },
+      {
+        "path": "android/host/input.h",
+        "sha256": "0295a49c63149f675f5e777802e23d04fc390f181971bac27d49447681aa325f",
+        "source_sha256": "0295a49c63149f675f5e777802e23d04fc390f181971bac27d49447681aa325f"
+      },
+      {
+        "path": "android/host/kernel32.c",
+        "sha256": "62ba44d83d7757198d7bf45f691f6f29573d55f10db8c10eeba67340dfcfab86",
+        "source_sha256": "1cafba59ed9ef82484b3b3d207963bc3f5195cec9b63d5a6e17da1306184571d"
+      },
+      {
+        "path": "android/host/main.c",
+        "sha256": "7c47c817aab5550a081fd410921e8b2d4088d505bddd99bee3496c42aa13b0b6",
+        "source_sha256": "cfd35f574ba985acd609a9ea6b5009afc13d8bc85e1ccd843f050560d95c6d0e"
+      },
+      {
+        "path": "android/host/memory.c",
+        "sha256": "8e7d33434285f2cc1d541168f3c6aec0b20365ee8e6926c89737186b3ba0ef75",
+        "source_sha256": "8e999121aaee7e2b39f071f2aab36bdc9fd0ca541993b37489d3dd4715e9adb6"
+      },
+      {
+        "path": "android/host/network.c",
+        "sha256": "645124a5d9258d701c8e9c10d98cd67fb9bd236e3c6fadde2be6b70024655416",
+        "source_sha256": "2a1a827e9df2387c32b1c90b43ca9a72b151cc3747cc46762399de6d9c25ee76"
+      },
+      {
+        "path": "android/host/openal.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "d3a70cd55d62f812844f4e67d111d54eac4c193f0742ee63f0e4e1e26b99b558"
+      },
+      {
+        "path": "android/host/pe.c",
+        "sha256": "7ec5a71e322f8a04477a79520b8cf368324f695057f6b620051c810cd1857fdf",
+        "source_sha256": "a6d4b8932a0f9ab6625e2e648452ab93d633898be53584fc78993ccaadbc312a"
+      },
+      {
+        "path": "android/host/pe_resources.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "b3c24ad5012b1512012e4ae533012abb7cc58e9846406617457803a6cb0ee154"
+      },
+      {
+        "path": "android/host/perf.c",
+        "sha256": "2662a4f000b3f4cb9e261d5dd6469be62f55bae6d45ad7ae867a2d231b088505",
+        "source_sha256": "c30958d87efe16db3979035572f68eceed3be12fde7ea7508dc91121a5f10e11"
+      },
+      {
+        "path": "android/host/power.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "4929dc828a06cd3db0b361b775ef761fda17d663d4c5dd8683d2636ce6dd092d"
+      },
+      {
+        "path": "android/host/rpc.c",
+        "sha256": "92641966765b039fd08c13dd2e15c1417de4ef5216e79d87f21e3946362e1dda",
+        "source_sha256": "92641966765b039fd08c13dd2e15c1417de4ef5216e79d87f21e3946362e1dda"
+      },
+      {
+        "path": "android/host/setupapi.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "0c81a4ad7499b07c1f2c79c484e582ca3de2e57bb57747a37012e81185ebb919"
+      },
+      {
+        "path": "android/host/strings.c",
+        "sha256": "8b73132a72ade1668d565fc1afe576b7545e3eed81b56f60e628cc48d072c711",
+        "source_sha256": "12b5e30b98df805223b7b44bd6d883f1fb07a8fa000813e5593fef56d05612eb"
+      },
+      {
+        "path": "android/host/system.c",
+        "sha256": "b35cd668289a49a57e31f8f463065aaeb3c2a90970577e60ff2cb4d9d89125ae",
+        "source_sha256": "66c044da59155f09a873da880d53f0e9a5200eef64b6eb72588f11b55c1079c4"
+      },
+      {
+        "path": "android/host/system_parameters.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "a7b65d352b0ca0b3038130e440ca5fc709dbfe5aa729ef34e9e044415e1c0546"
+      },
+      {
+        "path": "android/host/threads.c",
+        "sha256": "d9608cfc8b060afca647bd9db98c817f5fe191b2263378eaf5dc3e20ac747acc",
+        "source_sha256": "88251c9c2ef893b1f3340cb26bd93454006dc669f3ffa6c0888405d191bc9372"
+      },
+      {
+        "path": "android/host/user32.c",
+        "sha256": "09afd2128001016d443c08f19c6b978651a660c4f539b4d2bffa69f0e12ef521",
+        "source_sha256": "1d928ae4bc0b118b9c1d86d1a17db85c687a884212799fb4565ff7e3d1b04dbd"
+      },
+      {
+        "path": "android/host/xinput.c",
+        "origin": "UT3 compatibility implementation",
+        "sha256": "3c9052daef8e8b77f709dfd993a8a755449d107051834805790b73f0d1fff5c3"
+      }
+    ]
+  },
+  "runtime": {
+    "source": "private H5 ARM64 pcrecomp runtime adaptation",
+    "pcrecomp_revision": "904ac3129d0c9d05efbeec19a1dce6abbe7f5d26",
+    "upstream_license": "MIT",
+    "x87_window": {
+      "url": "https://github.com/codepdbh/nfsu2-recompiled/blob/62a1d3a17fc7619b9d32df182b4b47d1a4f2e959/patches/pcrecomp/0014-recomp_types-RECOMP_X87_WINDOW-sliding-window-FPU-st.patch",
+      "revision": "62a1d3a17fc7619b9d32df182b4b47d1a4f2e959",
+      "patch_commit": "486a9a1898f4720b62436b6edc475be513f34419",
+      "author": "sistemas3cecasem <paukarvv@gmail.com>",
+      "sha256": "740560cd6d8eadd132ddc180c963388b92a4316040e2023b4c0ee4ee4c2db518",
+      "directory": "reference/homm5/x87-attribution",
+      "license": "MIT",
+      "note": "Adapted sliding x87 window in the private H5 runtime. Retains array sizeof, all eight logical values and exact shadows, zero-on-pop, existing fallback shift helpers, and per-thread/callback snapshots. The original patch is retained for attribution; it is not applied to the pinned vendor tree."
+    },
+    "files": [
+      {
+        "path": "android/runtime/guest_state_prefix.h",
+        "origin": "UT3 compiler profile implementation",
+        "sha256": "fed0ece3ed0d0307d0740e0d81f5b2b71f85d63f70599542a26aa221725febe8"
+      },
+      {
+        "path": "android/runtime/mojoshader_version.h",
+        "sha256": "dba9b21fea0a5a529bef337455bd49a84f8eb026e0469e9eda02994c73ce2a8c",
+        "source_sha256": "dba9b21fea0a5a529bef337455bd49a84f8eb026e0469e9eda02994c73ce2a8c"
+      },
+      {
+        "path": "android/runtime/recomp_types.h",
+        "sha256": "4c7aaec14a389af9a1f66b5f0bb5a51b7aa611af4381d39c49695234a6a60d00",
+        "source_sha256": "3a99de0422e1fd4aa004554bb3272405dc327710c639ee8c9c856979b09c52b9"
+      }
+    ]
+  },
+  "mojoshader": {
+    "url": "https://github.com/icculus/mojoshader.git",
+    "revision": "cf2661bcb55d9a8732e86f79922592d7efdf5383",
+    "directory": "reference/mojoshader",
+    "license": "zlib",
+    "note": "Last revision with assembler/preprocessor (removed in 7c3fbde). Marked local extensions implement PS1.1/1.4 TEXCRD/TEXLD, PS1.4 implicit sampler metadata, scalar legacy VS fog, and explicit-DCL input semantics for SM1 BGRA swizzles. The vendored snapshot includes the marked local changes; upstream checkout alone is insufficient.",
+    "files": [
+      {
+        "path": "reference/mojoshader/.hgignore",
+        "sha256": "2df6f0fdc4e153c11a7d58e10b27641dbd1144ec67c8d466e9efb76469bab5fd",
+        "source_sha256": "2df6f0fdc4e153c11a7d58e10b27641dbd1144ec67c8d466e9efb76469bab5fd"
+      },
+      {
+        "path": "reference/mojoshader/CMakeLists.txt",
+        "sha256": "99a6f0493141fc8f0905b026d84ac2e3dd59a165f8d95c01ae7e487fe97dc7fb",
+        "source_sha256": "99a6f0493141fc8f0905b026d84ac2e3dd59a165f8d95c01ae7e487fe97dc7fb"
+      },
+      {
+        "path": "reference/mojoshader/counts.sh",
+        "sha256": "143dfd1d701e26d834487069ed747abecabcc0137e34dbd385224cc55eb05c7a",
+        "source_sha256": "143dfd1d701e26d834487069ed747abecabcc0137e34dbd385224cc55eb05c7a"
+      },
+      {
+        "path": "reference/mojoshader/GL/gl.h",
+        "sha256": "63a01226d589f03ed604daa2ad1d782d1c2e92f9bbddc6abb869567e780093de",
+        "source_sha256": "63a01226d589f03ed604daa2ad1d782d1c2e92f9bbddc6abb869567e780093de"
+      },
+      {
+        "path": "reference/mojoshader/GL/glext.h",
+        "sha256": "7cc784b6079b7d3e4b76e35436128e0382353b95dd91c8452e79c1e5f8b4bbe8",
+        "source_sha256": "7cc784b6079b7d3e4b76e35436128e0382353b95dd91c8452e79c1e5f8b4bbe8"
+      },
+      {
+        "path": "reference/mojoshader/LICENSE.txt",
+        "sha256": "84850ae1d2eb35d696e7dd41559514aad540ffaa4cd14708540e5bcdef63b345",
+        "source_sha256": "84850ae1d2eb35d696e7dd41559514aad540ffaa4cd14708540e5bcdef63b345"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader.c",
+        "sha256": "95f93bcb80ff20d1e930d917f5e53596fe635fec0c1e31017815e0f9937444af",
+        "source_sha256": "95f93bcb80ff20d1e930d917f5e53596fe635fec0c1e31017815e0f9937444af"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader.h",
+        "sha256": "d5df8a2f23146802b5c6ab7d9584c6b15db09be2ee6b73f2e77e96c9a668ca04",
+        "source_sha256": "d5df8a2f23146802b5c6ab7d9584c6b15db09be2ee6b73f2e77e96c9a668ca04"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_assembler.c",
+        "sha256": "f1faf79ea24ee0588022bd17cf2c59c9c02ec9d974a3819225d06d81771fa478",
+        "source_sha256": "f1faf79ea24ee0588022bd17cf2c59c9c02ec9d974a3819225d06d81771fa478"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_common.c",
+        "sha256": "7d5fbfc2538608ceba0fed1750b426fafb076139e33b29b368241b52c320b007",
+        "source_sha256": "7d5fbfc2538608ceba0fed1750b426fafb076139e33b29b368241b52c320b007"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_compiler.c",
+        "sha256": "e79258e981447805d7c4564b2309ed2b6f6bb1d09ec4111b90f76a8f6d441ebb",
+        "source_sha256": "e79258e981447805d7c4564b2309ed2b6f6bb1d09ec4111b90f76a8f6d441ebb"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_d3d11.c",
+        "sha256": "e51e3da38d608760660c7e60546be01fd5cec353b1afc2e4e20cc7e18cb25e3e",
+        "source_sha256": "e51e3da38d608760660c7e60546be01fd5cec353b1afc2e4e20cc7e18cb25e3e"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_effects.c",
+        "sha256": "d0adf6a52e78a4399435f214e9056dc36ed60baa05de07124b234f7237f9cb5e",
+        "source_sha256": "d0adf6a52e78a4399435f214e9056dc36ed60baa05de07124b234f7237f9cb5e"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_effects.h",
+        "sha256": "2a747735480086441e558e335ca176858c9f418f6515692fce81ba66d73777fc",
+        "source_sha256": "2a747735480086441e558e335ca176858c9f418f6515692fce81ba66d73777fc"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_internal.h",
+        "sha256": "149e0a087498793bddf8a656c0babda15df0e3df7c799f4dbe04bebc1d0cb110",
+        "source_sha256": "149e0a087498793bddf8a656c0babda15df0e3df7c799f4dbe04bebc1d0cb110"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_lexer.c",
+        "sha256": "6231f53be3e96f27fdbf9767ddb3d48858fcd8fdf57a8fe626e2a370dbe60cbb",
+        "source_sha256": "6231f53be3e96f27fdbf9767ddb3d48858fcd8fdf57a8fe626e2a370dbe60cbb"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_lexer.re",
+        "sha256": "07ed3c2f6100195a7aef826d6184bb07fa92baa4c264bd930e80537bd3433009",
+        "source_sha256": "07ed3c2f6100195a7aef826d6184bb07fa92baa4c264bd930e80537bd3433009"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_opengl.c",
+        "sha256": "1420da7458473b3b1a4138435ee895e3c43e7581c57dd4bb779a89a56e928d0c",
+        "source_sha256": "1420da7458473b3b1a4138435ee895e3c43e7581c57dd4bb779a89a56e928d0c"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_parser_hlsl.lemon",
+        "sha256": "9b2a3700ecadb643af24937b7980891ebc88565724dba9dd8fde495878bb8bd8",
+        "source_sha256": "9b2a3700ecadb643af24937b7980891ebc88565724dba9dd8fde495878bb8bd8"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_preprocessor.c",
+        "sha256": "5fb0844daf6e6b361caea9f372f846f26cb038e106989ff094612db451e96239",
+        "source_sha256": "5fb0844daf6e6b361caea9f372f846f26cb038e106989ff094612db451e96239"
+      },
+      {
+        "path": "reference/mojoshader/mojoshader_sdlgpu.c",
+        "sha256": "47624c4ced4f0a7bf91c6d4929fd711efd1ba152da6aa9377cb93cfe6e3c08ec",
+        "source_sha256": "47624c4ced4f0a7bf91c6d4929fd711efd1ba152da6aa9377cb93cfe6e3c08ec"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile.h",
+        "sha256": "dc65b228b7446d07ef3280577a1ba8e5e580578cb75ccb008a9ea8430cf39090",
+        "source_sha256": "dc65b228b7446d07ef3280577a1ba8e5e580578cb75ccb008a9ea8430cf39090"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_arb1.c",
+        "sha256": "371cb8b46629fdff22efc0caff4a3c99cb5262688c8631bc995ce0f2dfcdfb73",
+        "source_sha256": "371cb8b46629fdff22efc0caff4a3c99cb5262688c8631bc995ce0f2dfcdfb73"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_bytecode.c",
+        "sha256": "67ab6980210d2394bf0a139ef1168ed98f4a8a21447b5e5ef5cb5d67b7ac2da5",
+        "source_sha256": "67ab6980210d2394bf0a139ef1168ed98f4a8a21447b5e5ef5cb5d67b7ac2da5"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_common.c",
+        "sha256": "4c3cf7294674231110d9388fc2463b359e521a38477c7ff110e4cefcc1c8f306",
+        "source_sha256": "4c3cf7294674231110d9388fc2463b359e521a38477c7ff110e4cefcc1c8f306"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_d3d.c",
+        "sha256": "dd8ab500edad918f01d7a4151c39a171181c2a99b233c91629d6fbf35a46b4b7",
+        "source_sha256": "dd8ab500edad918f01d7a4151c39a171181c2a99b233c91629d6fbf35a46b4b7"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_glsl.c",
+        "sha256": "0657199e368542552790ce6d2b239d74f5db1e3a51031f3efb209f06fe348302",
+        "source_sha256": "0657199e368542552790ce6d2b239d74f5db1e3a51031f3efb209f06fe348302"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_hlsl.c",
+        "sha256": "9c25b36cae0b7ecac4d48bc40b069500d203c826e705ec786b2cf2d2a0489fc1",
+        "source_sha256": "9c25b36cae0b7ecac4d48bc40b069500d203c826e705ec786b2cf2d2a0489fc1"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_metal.c",
+        "sha256": "a7424a5f89569b8585af8851a712def558bd8f396aa6704722236a36585a41fe",
+        "source_sha256": "a7424a5f89569b8585af8851a712def558bd8f396aa6704722236a36585a41fe"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_spirv.c",
+        "sha256": "0104059bc0a7d8da2f760c942e028622f12098d64df2dfe11cbb2c2189eb395d",
+        "source_sha256": "0104059bc0a7d8da2f760c942e028622f12098d64df2dfe11cbb2c2189eb395d"
+      },
+      {
+        "path": "reference/mojoshader/profiles/mojoshader_profile_spirv.h",
+        "sha256": "bd18ec619971ad423f4d03dfc98f3ec607cedad37250dd28e2cb7b8f104ff8fd",
+        "source_sha256": "bd18ec619971ad423f4d03dfc98f3ec607cedad37250dd28e2cb7b8f104ff8fd"
+      },
+      {
+        "path": "reference/mojoshader/README.md",
+        "sha256": "9450b24146847c61364693f08f40859d8285725b96dc2f0e60c585cfd275252f",
+        "source_sha256": "9450b24146847c61364693f08f40859d8285725b96dc2f0e60c585cfd275252f"
+      },
+      {
+        "path": "reference/mojoshader/spirv/GLSL.std.450.h",
+        "sha256": "dd2c031438be28af92247c87e5676c78947e883eb3ccc07d84357c4af84928a3",
+        "source_sha256": "dd2c031438be28af92247c87e5676c78947e883eb3ccc07d84357c4af84928a3"
+      },
+      {
+        "path": "reference/mojoshader/spirv/spirv.h",
+        "sha256": "5df110adfd10885fc6b8d27c9958cd0b71ab9494eaf1f9097e303600a13089b6",
+        "source_sha256": "5df110adfd10885fc6b8d27c9958cd0b71ab9494eaf1f9097e303600a13089b6"
+      },
+      {
+        "path": "reference/mojoshader/spirv/spirv_cross_c.h",
+        "sha256": "3562881042e721cef3900a5b2cd80c01f8ca6d83ed0d0559b7a1e240601f35a4",
+        "source_sha256": "3562881042e721cef3900a5b2cd80c01f8ca6d83ed0d0559b7a1e240601f35a4"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition",
+        "sha256": "c8207a3b6131081027e3a8345a50982fae1e157e74b17447c7a86c724cfd34d1",
+        "source_sha256": "c8207a3b6131081027e3a8345a50982fae1e157e74b17447c7a86c724cfd34d1"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition-file",
+        "sha256": "9ea6662403fb66b734bc881d7dea4afd76b77c1a12f84b15af101b0c4ecd75cc",
+        "source_sha256": "9ea6662403fb66b734bc881d7dea4afd76b77c1a12f84b15af101b0c4ecd75cc"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition-file.correct",
+        "sha256": "c5cec1fa3640dfdfc1ae29f0efff5ccb7c70c7405e838f03c927bd8137fbeda9",
+        "source_sha256": "c5cec1fa3640dfdfc1ae29f0efff5ccb7c70c7405e838f03c927bd8137fbeda9"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition-line",
+        "sha256": "eee34ec875cbc9a9803727c16cb2b0f535e654e9b74418e14b293130d881926a",
+        "source_sha256": "eee34ec875cbc9a9803727c16cb2b0f535e654e9b74418e14b293130d881926a"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition-line.correct",
+        "sha256": "7d2e693aa2ca1f1d87bcc1829bcc4c90ac925b5273f0ed37b755a4bd78b390c6",
+        "source_sha256": "7d2e693aa2ca1f1d87bcc1829bcc4c90ac925b5273f0ed37b755a4bd78b390c6"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/redefinition.correct",
+        "sha256": "d05f41937e90beb2761b5a8cd756a09a5fc883d47c81f66d9d4e49c3eb3e518d",
+        "source_sha256": "d05f41937e90beb2761b5a8cd756a09a5fc883d47c81f66d9d4e49c3eb3e518d"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/too-many-macro-args",
+        "sha256": "09a50c8bf1fd0938989b5e43746cb01821f761b43d36a1a89c5003f893d7ea40",
+        "source_sha256": "09a50c8bf1fd0938989b5e43746cb01821f761b43d36a1a89c5003f893d7ea40"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/too-many-macro-args.correct",
+        "sha256": "90dacc56ebbba68c074e5925ed7eff1cb6f7574bca70ed56eb2183d7de6ce5f4",
+        "source_sha256": "90dacc56ebbba68c074e5925ed7eff1cb6f7574bca70ed56eb2183d7de6ce5f4"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-file",
+        "sha256": "5e9d16861ffb2320934eb95329baaa16535e3e69cf268cc3fc05173f6ea12275",
+        "source_sha256": "5e9d16861ffb2320934eb95329baaa16535e3e69cf268cc3fc05173f6ea12275"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-file-twice",
+        "sha256": "ee50446ddcf4bd6e0d672248463c7d68420826ffd43eeda972a39cc82983aecc",
+        "source_sha256": "ee50446ddcf4bd6e0d672248463c7d68420826ffd43eeda972a39cc82983aecc"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-file-twice.correct",
+        "sha256": "532b6d55f3b41ef8447401dac4ec8418a088c2f90324958d03e6360d59353469",
+        "source_sha256": "532b6d55f3b41ef8447401dac4ec8418a088c2f90324958d03e6360d59353469"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-file.correct",
+        "sha256": "fdff0f12e325701616e25c4167502e35b98c46a6e251b9bd602cf00badb582cc",
+        "source_sha256": "fdff0f12e325701616e25c4167502e35b98c46a6e251b9bd602cf00badb582cc"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-line",
+        "sha256": "1c2736df1bc749423b1988c5fa71aa7191c6b9240c78b95d80c57d98fc9c3efa",
+        "source_sha256": "1c2736df1bc749423b1988c5fa71aa7191c6b9240c78b95d80c57d98fc9c3efa"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-line-twice",
+        "sha256": "02f7eba7baaad72cb967dddfad8ba2e017ce1aa32981a4cc9d6e4c041f147462",
+        "source_sha256": "02f7eba7baaad72cb967dddfad8ba2e017ce1aa32981a4cc9d6e4c041f147462"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-line-twice.correct",
+        "sha256": "cca88e62fd520f05b9d3e452586d665dcfc6cd38470365ba166acb20d15b9744",
+        "source_sha256": "cca88e62fd520f05b9d3e452586d665dcfc6cd38470365ba166acb20d15b9744"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/errors/undef-line.correct",
+        "sha256": "6001b572ba7e5aea69e14eab390ac82a6ba8c7831beeaa6ad9b141349fbc5fa4",
+        "source_sha256": "6001b572ba7e5aea69e14eab390ac82a6ba8c7831beeaa6ad9b141349fbc5fa4"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/basic-sanity",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/basic-sanity.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/comment-before-preprocessor-directive",
+        "sha256": "134639bdc44d09f533c6c91b855f9c2f9d0bb3bc0ab12ecb16332d85ca6ecef7",
+        "source_sha256": "134639bdc44d09f533c6c91b855f9c2f9d0bb3bc0ab12ecb16332d85ca6ecef7"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/comment-before-preprocessor-directive.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-basic",
+        "sha256": "59e09c14696ba7d0128fcf451df0495b458ac21d72917f1957fcc352e9031544",
+        "source_sha256": "59e09c14696ba7d0128fcf451df0495b458ac21d72917f1957fcc352e9031544"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-basic.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-define-override",
+        "sha256": "95e5064ddc70d7f52a94df4bccbf7964b23ccb1a9217d2a70d8f1ad14eb2a32a",
+        "source_sha256": "95e5064ddc70d7f52a94df4bccbf7964b23ccb1a9217d2a70d8f1ad14eb2a32a"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-define-override.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-ignore-non-args",
+        "sha256": "be97b80dbf2f54f164b0bcab8c25607f8d21d197c6e84b665fad3082af425c75",
+        "source_sha256": "be97b80dbf2f54f164b0bcab8c25607f8d21d197c6e84b665fad3082af425c75"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-ignore-non-args.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-multiple",
+        "sha256": "1b88212b6b9fee7b3eefb5b8eff1aab6d391c1d76a64b22f0f38995bd3898069",
+        "source_sha256": "1b88212b6b9fee7b3eefb5b8eff1aab6d391c1d76a64b22f0f38995bd3898069"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-multiple.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-stacked-override",
+        "sha256": "2095bedeef90c190aa7d340f42978972f602cff4b00ed555554aad67bc94665d",
+        "source_sha256": "2095bedeef90c190aa7d340f42978972f602cff4b00ed555554aad67bc94665d"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-stacked-override.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-two-macros-with-args",
+        "sha256": "709597ac3d78ae9cfb2d81a9709a988446cc427b039dcfeb46c4ba48b8a64c30",
+        "source_sha256": "709597ac3d78ae9cfb2d81a9709a988446cc427b039dcfeb46c4ba48b8a64c30"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/concat-operator-two-macros-with-args.correct",
+        "sha256": "f0e41ea9b48cd3f281e2a2f46c7f92a4bb89b5cd60942521b4c2ccef7cd57ad1",
+        "source_sha256": "f0e41ea9b48cd3f281e2a2f46c7f92a4bb89b5cd60942521b4c2ccef7cd57ad1"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/elif-after-macro",
+        "sha256": "3f10662d641e585d8bd29506370a7079be78a38639048f566e8dd6c038042e8c",
+        "source_sha256": "3f10662d641e585d8bd29506370a7079be78a38639048f566e8dd6c038042e8c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/elif-after-macro-with-args",
+        "sha256": "787d831d6fd016d93e534d137110741d7be0500dc821a52caae76ab38f6013f2",
+        "source_sha256": "787d831d6fd016d93e534d137110741d7be0500dc821a52caae76ab38f6013f2"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/elif-after-macro-with-args.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/elif-after-macro.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/empty-file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/empty-file.correct",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/empty-macro-with-arg",
+        "sha256": "467d7701673a73604e8cbf99689a933762a5b8454713d8fdbe9d522dece2d5e1",
+        "source_sha256": "467d7701673a73604e8cbf99689a933762a5b8454713d8fdbe9d522dece2d5e1"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/empty-macro-with-arg.correct",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/file-macro",
+        "sha256": "b864f7399837b791874bb17dff6e6b1da26b7e1ccf0f3acd5d2df36017bd0ca8",
+        "source_sha256": "b864f7399837b791874bb17dff6e6b1da26b7e1ccf0f3acd5d2df36017bd0ca8"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/file-macro.correct",
+        "sha256": "d5c0ab875ea58d54434446222abbce9660eaf6f9755af05d78d1312328156983",
+        "source_sha256": "d5c0ab875ea58d54434446222abbce9660eaf6f9755af05d78d1312328156983"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/float-half-suffix",
+        "sha256": "aafc950062b37923ee017687cb7ea31ff1a1d1c751fb946aea42fe9b798bc8dc",
+        "source_sha256": "aafc950062b37923ee017687cb7ea31ff1a1d1c751fb946aea42fe9b798bc8dc"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/float-half-suffix.correct",
+        "sha256": "de4026aa3d5be466cf6efbd8c380b914cd5a7ea5490f015be40c63b6be64cdf6",
+        "source_sha256": "de4026aa3d5be466cf6efbd8c380b914cd5a7ea5490f015be40c63b6be64cdf6"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/if-with-embedded-parens",
+        "sha256": "f2ef0ee07363af31db205a61f26df2238de3d61073b18b112b9bac7d21b269bb",
+        "source_sha256": "f2ef0ee07363af31db205a61f26df2238de3d61073b18b112b9bac7d21b269bb"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/if-with-embedded-parens.correct",
+        "sha256": "fa4ba99a0d2e897274e12eaa54642c7b55828be171028b499b36cb02e848914d",
+        "source_sha256": "fa4ba99a0d2e897274e12eaa54642c7b55828be171028b499b36cb02e848914d"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/just-a-comment",
+        "sha256": "cdf692fc6075e206d199ff0d348c1c860811adbe4c68e5485493594544fd9f76",
+        "source_sha256": "cdf692fc6075e206d199ff0d348c1c860811adbe4c68e5485493594544fd9f76"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/just-a-comment.correct",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-filename",
+        "sha256": "340190b0425b796d8a3bcb65f94c2eb62654ff84a45910381f11b7c212a197fe",
+        "source_sha256": "340190b0425b796d8a3bcb65f94c2eb62654ff84a45910381f11b7c212a197fe"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-filename.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-no-filename",
+        "sha256": "5ba61fd342637f5ee4a196cfdae3085b5b116b7a36201cdcb26624f0cca88cc7",
+        "source_sha256": "5ba61fd342637f5ee4a196cfdae3085b5b116b7a36201cdcb26624f0cca88cc7"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-no-filename.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-whitespace-filename",
+        "sha256": "b565c556b32371c1c9d8527d6101b6efab2ca07039c3ed5d77fc696b9b0fdb97",
+        "source_sha256": "b565c556b32371c1c9d8527d6101b6efab2ca07039c3ed5d77fc696b9b0fdb97"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-directive-whitespace-filename.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-macro",
+        "sha256": "32bb674deeb7595cfcf41e215eada1cf2593ecb8d7574f5eaea4a5ab3efc1ce8",
+        "source_sha256": "32bb674deeb7595cfcf41e215eada1cf2593ecb8d7574f5eaea4a5ab3efc1ce8"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/line-macro.correct",
+        "sha256": "2a4576ed60c0f34e1cdda1d627584ca36e9436261b65c1c7aa11745d11189f31",
+        "source_sha256": "2a4576ed60c0f34e1cdda1d627584ca36e9436261b65c1c7aa11745d11189f31"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-1-arg-accepts-void",
+        "sha256": "8b8713064a2d11f18408e670aabc3816e25fe5539d37afe0e8b644e50edc607c",
+        "source_sha256": "8b8713064a2d11f18408e670aabc3816e25fe5539d37afe0e8b644e50edc607c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-1-arg-accepts-void.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-arg",
+        "sha256": "dabbb758059ac4120b83114e5c9c603f9f870b497f00b194b2c954cfb8316f89",
+        "source_sha256": "dabbb758059ac4120b83114e5c9c603f9f870b497f00b194b2c954cfb8316f89"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-arg-overrides-define",
+        "sha256": "4881d25d0e22046133043a1f26f6cc01408fd4fa073405a8dad7b30014754b64",
+        "source_sha256": "4881d25d0e22046133043a1f26f6cc01408fd4fa073405a8dad7b30014754b64"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-arg-overrides-define.correct",
+        "sha256": "552285297e089881f717fa2d0bcdc95594418b5b9929e71ed56eaae39b8a44f4",
+        "source_sha256": "552285297e089881f717fa2d0bcdc95594418b5b9929e71ed56eaae39b8a44f4"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-arg.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-args",
+        "sha256": "cf6f069740ce88d4d585f6b667c030a7b77e402681ca9c82923071424b335a36",
+        "source_sha256": "cf6f069740ce88d4d585f6b667c030a7b77e402681ca9c82923071424b335a36"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-args-with-whitespace",
+        "sha256": "88fd9288101d0e3f9f3d720a765463afcdaac3fb2c673f8b68b83667e7f44d8e",
+        "source_sha256": "88fd9288101d0e3f9f3d720a765463afcdaac3fb2c673f8b68b83667e7f44d8e"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-args-with-whitespace.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-args.correct",
+        "sha256": "9798a9795ed1fd5d46d1ed06d1e6cae25a162ed5f68248a8ea0864b7722a8634",
+        "source_sha256": "9798a9795ed1fd5d46d1ed06d1e6cae25a162ed5f68248a8ea0864b7722a8634"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-blank-arg",
+        "sha256": "1b25fba517a188167caafa709621d2307e7da1d678b169ca9dbf030d4051f13e",
+        "source_sha256": "1b25fba517a188167caafa709621d2307e7da1d678b169ca9dbf030d4051f13e"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-blank-arg.correct",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-empty-arg",
+        "sha256": "87aae9153205405f54658818deea6d531b08d2bee9f672f72f0c0255b0836c33",
+        "source_sha256": "87aae9153205405f54658818deea6d531b08d2bee9f672f72f0c0255b0836c33"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-empty-arg.correct",
+        "sha256": "f0e41ea9b48cd3f281e2a2f46c7f92a4bb89b5cd60942521b4c2ccef7cd57ad1",
+        "source_sha256": "f0e41ea9b48cd3f281e2a2f46c7f92a4bb89b5cd60942521b4c2ccef7cd57ad1"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-multi-args-with-whitespace",
+        "sha256": "c8c9136ac1fe21e264700111d909915575e5873e8a79f2374353b6050dc82da9",
+        "source_sha256": "c8c9136ac1fe21e264700111d909915575e5873e8a79f2374353b6050dc82da9"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-multi-args-with-whitespace.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-paren-stacking",
+        "sha256": "1722cbcecdb5de2f6163679756a0bd4d6c632f0451631fd4d28c1db3093c5764",
+        "source_sha256": "1722cbcecdb5de2f6163679756a0bd4d6c632f0451631fd4d28c1db3093c5764"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-paren-stacking.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-void-arg",
+        "sha256": "a88aa649857f4698e0b1f308974b43c601c2d3e61c8a1d9908e7a89156ad4815",
+        "source_sha256": "a88aa649857f4698e0b1f308974b43c601c2d3e61c8a1d9908e7a89156ad4815"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-void-arg.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-with-arg-as-macro-arg",
+        "sha256": "66ee71a9d7dba7a807d2bd62a1b9e06db8b40ce5b0192baea097f2d9debc2852",
+        "source_sha256": "66ee71a9d7dba7a807d2bd62a1b9e06db8b40ce5b0192baea097f2d9debc2852"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/macro-with-arg-as-macro-arg.correct",
+        "sha256": "fa4ba99a0d2e897274e12eaa54642c7b55828be171028b499b36cb02e848914d",
+        "source_sha256": "fa4ba99a0d2e897274e12eaa54642c7b55828be171028b499b36cb02e848914d"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/multiline-comment-no-whitespace",
+        "sha256": "27bd6a00ad3b8ad2fe3b5f3c343a87a333b45c9e733409a073845fe9a5525524",
+        "source_sha256": "27bd6a00ad3b8ad2fe3b5f3c343a87a333b45c9e733409a073845fe9a5525524"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/multiline-comment-no-whitespace.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/multiline-comments-alone-on-line",
+        "sha256": "cbbc919fb57d9fd9da12cefdf673c74c6b83317df80cb5436b01e6a77402d9a0",
+        "source_sha256": "cbbc919fb57d9fd9da12cefdf673c74c6b83317df80cb5436b01e6a77402d9a0"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/multiline-comments-alone-on-line.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/nested-macro-args",
+        "sha256": "d8fc06fd2d373f8c5be5ec9f671378fb86ed67660510b41c86b47b808ec0201b",
+        "source_sha256": "d8fc06fd2d373f8c5be5ec9f671378fb86ed67660510b41c86b47b808ec0201b"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/nested-macro-args.correct",
+        "sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c",
+        "source_sha256": "c4ce3c7ad82c8235da21fae8ea48e071a10e7b1c6df6a9e5b4603852d8b3001c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/pragma-directive-line-break",
+        "sha256": "c9a8fa83d151d864c5348d0c9982e73e379d22363955be3193d32b7465d8931d",
+        "source_sha256": "c9a8fa83d151d864c5348d0c9982e73e379d22363955be3193d32b7465d8931d"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/pragma-directive-line-break.correct",
+        "sha256": "3978ecb2aa96a6537a617c946c6aafcbbc752b282f0d8623b1683e26041a5fba",
+        "source_sha256": "3978ecb2aa96a6537a617c946c6aafcbbc752b282f0d8623b1683e26041a5fba"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-basic",
+        "sha256": "62981f0627a51e77acfc53ab9b403866f2720d1a7006112c847316839a93ebcb",
+        "source_sha256": "62981f0627a51e77acfc53ab9b403866f2720d1a7006112c847316839a93ebcb"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-basic.correct",
+        "sha256": "1dd8794362454c372661dbdd8cda042e49524d0bfb4ab4bcd1b76b40e75a98ec",
+        "source_sha256": "1dd8794362454c372661dbdd8cda042e49524d0bfb4ab4bcd1b76b40e75a98ec"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-blank-arg",
+        "sha256": "211f79c2fdc151254da63120b75b8855314ba098c96805971ef66b7e4c45228b",
+        "source_sha256": "211f79c2fdc151254da63120b75b8855314ba098c96805971ef66b7e4c45228b"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-blank-arg.correct",
+        "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+        "source_sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-indirect",
+        "sha256": "ce09b8e62ec787b5da55943698b07ab9b1bd6d9e2bbd634bd71f7efe2303191c",
+        "source_sha256": "ce09b8e62ec787b5da55943698b07ab9b1bd6d9e2bbd634bd71f7efe2303191c"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-indirect-line-macro",
+        "sha256": "4baf750c79062fe175d5f80b956ecebe818e68c795ce745eec4b6279b6b8703f",
+        "source_sha256": "4baf750c79062fe175d5f80b956ecebe818e68c795ce745eec4b6279b6b8703f"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-indirect-line-macro.correct",
+        "sha256": "836ff414d71f93ba36eb1d91b87c9dab8114cfbfca83e511c538b27ae67561d5",
+        "source_sha256": "836ff414d71f93ba36eb1d91b87c9dab8114cfbfca83e511c538b27ae67561d5"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/preprocessor/output/stringify-operator-indirect.correct",
+        "sha256": "bca883839eeca1c1e8b6952b953bc61f64226382e267c7061f9927275bfa7aeb",
+        "source_sha256": "bca883839eeca1c1e8b6952b953bc61f64226382e267c7061f9927275bfa7aeb"
+      },
+      {
+        "path": "reference/mojoshader/unit_tests/run_tests.pl",
+        "sha256": "23bf502150fc90f6fb244b9e050a6cb8fe8b05a1279b98fd25c1071d48fa744f",
+        "source_sha256": "23bf502150fc90f6fb244b9e050a6cb8fe8b05a1279b98fd25c1071d48fa744f"
+      },
+      {
+        "path": "reference/mojoshader/utils/availableprofiles.c",
+        "sha256": "ae60a05889d9e2327d7c8255c77ed0b469b7610138d611b3399ea326299bd5cd",
+        "source_sha256": "ae60a05889d9e2327d7c8255c77ed0b469b7610138d611b3399ea326299bd5cd"
+      },
+      {
+        "path": "reference/mojoshader/utils/bestprofile.c",
+        "sha256": "84e15651d565632b59ba7725e224e2d67b4b7a81f3a16fef2081258220d8a7bd",
+        "source_sha256": "84e15651d565632b59ba7725e224e2d67b4b7a81f3a16fef2081258220d8a7bd"
+      },
+      {
+        "path": "reference/mojoshader/utils/finderrors.c",
+        "sha256": "f44f725f3fcd391dfdd32c875fd5264f2ba3b670449d32ab9d75c4222c1bfd60",
+        "source_sha256": "f44f725f3fcd391dfdd32c875fd5264f2ba3b670449d32ab9d75c4222c1bfd60"
+      },
+      {
+        "path": "reference/mojoshader/utils/glcaps.c",
+        "sha256": "d0bb2d3eb1add736936719f6ed66bc997857327ccd9bc7a6feb22280dbcb110b",
+        "source_sha256": "d0bb2d3eb1add736936719f6ed66bc997857327ccd9bc7a6feb22280dbcb110b"
+      },
+      {
+        "path": "reference/mojoshader/utils/mojoshader-compiler.c",
+        "sha256": "fde617aaf2c97da0c3ca05dc9193f2ee75951379e2e108112caad650a620c59b",
+        "source_sha256": "fde617aaf2c97da0c3ca05dc9193f2ee75951379e2e108112caad650a620c59b"
+      },
+      {
+        "path": "reference/mojoshader/utils/testglcompile.c",
+        "sha256": "6eb9b1d717c96c9f02946cbe6561f346796e8cd9af92123f5a68cb2bd82cb34d",
+        "source_sha256": "6eb9b1d717c96c9f02946cbe6561f346796e8cd9af92123f5a68cb2bd82cb34d"
+      },
+      {
+        "path": "reference/mojoshader/utils/testoutput.c",
+        "sha256": "cc08e49f941560cba18b3dd7214514778791eb63c0ef6e5c855448d2d685bf35",
+        "source_sha256": "cc08e49f941560cba18b3dd7214514778791eb63c0ef6e5c855448d2d685bf35"
+      },
+      {
+        "path": "reference/mojoshader/utils/testparse.c",
+        "sha256": "0bb1922109914440cfaec8a042f4ce6d77ef21d1f2f7d13530021bcd9c7942ae",
+        "source_sha256": "0bb1922109914440cfaec8a042f4ce6d77ef21d1f2f7d13530021bcd9c7942ae"
+      }
+    ]
+  },
+  "dlmalloc": {
+    "url": "https://gee.cs.oswego.edu/pub/misc/malloc.c",
+    "version": "2.8.6",
+    "sha256": "be7be56b40b4b31417e74e77687f9b96127ea6cae534cf236aee40a4c739508d",
+    "directory": "reference/dlmalloc",
+    "license": "MIT-0",
+    "files": [
+      {
+        "path": "reference/dlmalloc/malloc.c",
+        "sha256": "be7be56b40b4b31417e74e77687f9b96127ea6cae534cf236aee40a4c739508d",
+        "source_sha256": "be7be56b40b4b31417e74e77687f9b96127ea6cae534cf236aee40a4c739508d"
+      }
+    ]
+  },
+  "bcdec": {
+    "included": false,
+    "reason": "The copied D3D9 texture decoder is self-contained; no bcdec or etcpak source is built."
+  }
+}

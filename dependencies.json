@@ -1,0 +1,485 @@
+{
+  "pcrecomp": {
+    "url": "https://github.com/sp00nznet/pcrecomp.git",
+    "upstream_revision_recorded_by_source_project": "904ac3129d0c9d05efbeec19a1dce6abbe7f5d26",
+    "source": "the Heroes V port's reference/pcrecomp (sibling project)",
+    "license": "MIT",
+    "note": "Vendored snapshot, no nested .git. Local eh32 extensions are included; exact source bytes are pinned below.",
+    "files": [
+      {
+        "path": "reference/pcrecomp/LICENSE",
+        "sha256": "a03f354a044f9acea7de6044746edb9f4d2c811c185adcc74f985348a36268c9"
+      },
+      {
+        "path": "reference/pcrecomp/tools/__init__.py",
+        "sha256": "d6f85ef10e172987ce5c15d9d0a869d82a76e7c2f62fc4deb412636773aa1b71"
+      },
+      {
+        "path": "reference/pcrecomp/tools/__main__.py",
+        "sha256": "72472997e6df055e7f1c7fe47c49e01536e02389a8bfede6b8af09b6aa136725"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/bin2iso.js",
+        "sha256": "dd059c6c2ba941b16ac6038419c88cd040e13ddc252d80b938e308fb1a0de12a"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/extract_cab.sh",
+        "sha256": "78b2b45a0cf356c492595d0b882cbe136d14d9b598eca8ff6771e1880903c1a1"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/extract_wise.py",
+        "sha256": "760a11d4b30faa2051a303fd23a1c47d6db20df65cc42dbdbfe3fc15d401fbd7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/isextract.py",
+        "sha256": "4a7b7988040c9af83c97cf46bbfed661ed0c31308aae8089f314f45b416d3193"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/iso_peek.py",
+        "sha256": "d7fbc003c53638ac50e9023d46991c67a8ebebf9873aa9cc04014faa28acbcc3"
+      },
+      {
+        "path": "reference/pcrecomp/tools/assets/pk3_inspect.py",
+        "sha256": "e8f631c5dcffc5588a504c9741f551fac7db55793ca2f9d817e02f83a7898954"
+      },
+      {
+        "path": "reference/pcrecomp/tools/audit_repo.py",
+        "sha256": "377bb38c73bef1e8c4e739f0db50bec8718025bbcae5490c51772b993506d093"
+      },
+      {
+        "path": "reference/pcrecomp/tools/classify/classify_functions.py",
+        "sha256": "30525922ee74150ff827b0913b88f6e740c5e84d477dac67fe73503662f9ee73"
+      },
+      {
+        "path": "reference/pcrecomp/tools/classify/combined_classify.py",
+        "sha256": "3c8ef58aa617dcc9bb5c549ddeb1ca1d94719eb6c6c995e17573482c177a65d5"
+      },
+      {
+        "path": "reference/pcrecomp/tools/classify/deep_classify.py",
+        "sha256": "0583342ed2938b27a89a7f5fc706850ea241b03669c4f682ff6dfce987717257"
+      },
+      {
+        "path": "reference/pcrecomp/tools/classify/resolve_stubs.py",
+        "sha256": "3ab8b9d43a286a69d1ac2aa89c51b36d4275ba6cca7397eff7fbd7c03f1079e7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/cross_mangler.py",
+        "sha256": "394aef6cafa055995a37ab02796f84461239e0ba463973450dbe53953585bac3"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/mac_unmangler.py",
+        "sha256": "0559b39dda39e8e6fd004c71dec7649da40ec7df31de20a3e104609d7e37c03d"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/msvc_mangler.py",
+        "sha256": "79483f22f1e8b30bc6f7a5a6cc5de597cc5ce13812ef73c0045103191bd7feb9"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/parse_vtables.js",
+        "sha256": "fd9140d935434ed9c1741a5f9fcf4e322959dc2b4db43670f49519f1d64425a8"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/rtti.py",
+        "sha256": "72fec9d76f188f08473c2fb746645966a0c9b1c35f005338b1afd39d8ca2c752"
+      },
+      {
+        "path": "reference/pcrecomp/tools/cpp/vtable_scan.py",
+        "sha256": "c59c9d302f6d866860e46d19d468b71871beab0008b53e001ff2d5d1fe1084aa"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/__init__.py",
+        "sha256": "6ce5180991efc85ba4d8b3b887745cfb269f5c15858b468f3591f843b138fae7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/analyze.py",
+        "sha256": "e0aa939cc2d0d5ee3119ae3ab342bc63d995e3daaa811b8c8bdc6d9168f385aa"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/callgraph.py",
+        "sha256": "eee7bb295bc87ae39d4dbec2cb40b1f1de3dab666636fd6ba45fe4053f15fac7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/decode16.py",
+        "sha256": "783a8d36deaf3633796b11538442dd6bcf24894f0da65c634f5a310f48f4a1b9"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/disasm32.py",
+        "sha256": "e59ea52b319cab3e448f520fc4b23aa052da520a717afd880a9ff44c17eefe7c"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/fpu_decode.py",
+        "sha256": "fa1be051d17cfa01d4150596e8a19318aebe4e0e25119b59e3f4a55b994510c5"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/largemodel16.py",
+        "sha256": "55f22b8ca82cea56f833e593d396b367e90d392204189e109df312f50e83a227"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/score_recovery.py",
+        "sha256": "59c7895cf08003273193cdca5a97d47f728a4e444beae6e16cfc537a2e176b9b"
+      },
+      {
+        "path": "reference/pcrecomp/tools/disasm/seed_from_log.py",
+        "sha256": "516f3b27d05a55380da9767ed04710349a877df4be2ace89982a4c1e92bf34c2"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/emu_unpack.py",
+        "sha256": "b380336f6bfa881b444278f74b507e92b123d1c87f2e8f2cbfcfb7efe93c3fa9"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/inject_and_run.c",
+        "sha256": "2e7c84bc8392760e6793ef0b0d44c28160a5427f98331d6f202845da1bcbcc36"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/safedisc_dump.py",
+        "sha256": "bb70d17dd5fccc8c494dbb2658d820382e05976510f9b5d9084c1cc24cd6165a"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/steamstub.py",
+        "sha256": "889a5c2c88fb0f88576e1d2927777810a96f2dc7460796ffa173b5e5097d3f99"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/test_unexepack.py",
+        "sha256": "6d1dbaa3c73fb579cd449c2af65c2ee9598a74bfc30632ffeef06959a88bf563"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/test_unlzexe.py",
+        "sha256": "442bd29fd401b107d8b89c0669f8303cf1288e44537fc1e6546a8173e900f20c"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/unexepack.py",
+        "sha256": "687d024bc01589a3e6650c85f3dad7d2000acc1c39d47ad8dcbc3dcdee3d06ae"
+      },
+      {
+        "path": "reference/pcrecomp/tools/drm/unlzexe.py",
+        "sha256": "58a1d9c5d69e28d8f6c09bfac82cf284a0d79e829acc721ef64aadf2df6981d4"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/datdump/datdump.c",
+        "sha256": "99e48fa9813d302bb8b36bb1de267ebcf76c6eafc65ac25e2e40ea1b58dc7f2a"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/fifdecode/fifdecode.c",
+        "sha256": "71cf0849f903f05841570e31797ff09d199576d067f375572c9d0f1663336c65"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/fifdecode/fifdecode.h",
+        "sha256": "098b05f6871b644e9a191e2c7509d8f68a37854b92ebdf1071733af54126ce89"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/ftcdecode/ftcdecode.c",
+        "sha256": "cbbf4b97a958eea761fd621b5d9dda9d7998cb8b6899ec8bdef7806bd4a2a9d7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/ftcdecode/ftcdecode.h",
+        "sha256": "3f43c04b3afe2e530019dc3922c6773ba34caaa5eaf551762e83e057445d0ede"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/m20dump/m20dump.c",
+        "sha256": "3d68a328de72d538a4515c273cc7af399cb603ba834308b91bf1188a4cf49695"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/m20dump/m20format.h",
+        "sha256": "97ffd379b7d321731cefce2e4225eafc85b64d0e84b8d51cd0e974615698498d"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/spamdump/spamdump.c",
+        "sha256": "d5a5ec33c479eb5a8c7033486ee78034dcbbe11aac620aab643fba9b0613c9af"
+      },
+      {
+        "path": "reference/pcrecomp/tools/formats/strdump/strdump.c",
+        "sha256": "bb72bb8a15caf501bc35198eff23779790b7907647c3f44650e46f15c944792b"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/DecompAddrs.java",
+        "sha256": "f44392675c3a9ae021012119caa1078d9179b16791a5fb1fe83784b40326d80e"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/DecompileAll.java",
+        "sha256": "54d33e0ecdbfd5228f1ee85d722305c63575b16f5680187bfa64e7751664b1b3"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/DisasmRange.java",
+        "sha256": "e6e61e6db52c50a9bb8b14306ec0d0b0d7fc83b2e71fe5f649bd8317b18d02f5"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/DumpBounds.java",
+        "sha256": "898af33c4d49620abfc8b17d4b340958832f081226ae55e083992b043fc70200"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/ExportFunctions.java",
+        "sha256": "af18131546edeccaa317a3fcd3f6489aabcbe746fe3e3ef7cb45069f172be156"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/FindRefs.java",
+        "sha256": "66d741bf3bc894f5ecb673799d09a65bacebfc4b01a14409bcde5a485933b610"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ghidra/GhidraStats.java",
+        "sha256": "337ad11b542b987763028f9b06a2b71500a7620dd7e75076c4ce27d5abf9f1bb"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ida/ida_export.py",
+        "sha256": "0d6e1ae02f1b0dee44ef20f529c98b26b83a114c3dc9e25cb075e63a36353079"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ida/ida_funcs.py",
+        "sha256": "769c631d37e8853f2f68c9d4ba5d7d4b79f17fb0e454d891205b8f833d971c8d"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ida/ida_probe_segs.py",
+        "sha256": "ba1edc5c086b6b960991ddeabefb24b7b33dc1db49056fa093922f7801b51649"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ida/ida_xrefs.py",
+        "sha256": "24adcaaf6a63322fc3201ff472b31501633ce1bbc33538a1554739c6fc568205"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ida/README.md",
+        "sha256": "c63a64dd6a1bfbc0a6c1e3d1a5eaa24d5e0621290d200bb11057eb4e48526baf"
+      },
+      {
+        "path": "reference/pcrecomp/tools/le/le_parse.py",
+        "sha256": "527c67477e9d0c84ff1474c40c547f8dd11a0fd99d1e72907f01458cf95b6f15"
+      },
+      {
+        "path": "reference/pcrecomp/tools/le/test_le_parse.py",
+        "sha256": "1d77d639bd402920fed6b615e370b64d71c7191980d4c3a90647099e8038c0fd"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/__init__.py",
+        "sha256": "dd42a7e4814562294fd0666eb7c6ebdaef34df8392b2a3c6b105d2d5816bf116"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/difftest.py",
+        "sha256": "61dd37a8813f1c1311531b4176972d59eaad7f19b4293201da395407795f8a61"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/difftest16.py",
+        "sha256": "70dac8191526103d9575efb301197143456e360cdd7b02eba01282b377a482bc"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/difftest64.asm",
+        "sha256": "90d8dcc1a5674414801ad7059b0ce97f72840f2e3d8597bac52a18d69fb95a20"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/difftest64.py",
+        "sha256": "fd702dfd09bcac5d343abbd383b7503a10e897a1a6dd219172c374205bc65947"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/eh32.py",
+        "sha256": "f8e74e66c101fc6b37fb2f94d0001b918066b024e8ff07bcb614d9293cdf71c6"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/generate.py",
+        "sha256": "b031040493937452db873e024e07b5ad342c5ece70938cf10c2d7a420525e4cb"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/generate64.py",
+        "sha256": "bf00af55f4b6a12760aacfa89252096e6e9e2cd48a0f0de062d1ba5f9da215ef"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/lift16.py",
+        "sha256": "623742db833c8bbe7512cb1715b325a23ef1f0f28048960d8ffdaca9b76df65a"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/lift32.py",
+        "sha256": "5cfb19321e0d83d9844431b08900517a2763f80130039d239372ef7cfa5a16dc"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/lift32_cpu.py",
+        "sha256": "c63a3c2e4bc6060d4c8f20db9a53563c6bf6a8a916ca1f4126243499a061ab59"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/lift32_sse.py",
+        "sha256": "dd676ce859ba7235a17a1e9cc3426717822c73f8528f21f90e19f4521c0633f6"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/lift64_cpu.py",
+        "sha256": "e8310bf1fdc3dcd64ea9416d7028eabaeb44ae3329bd94d7d9c81424d1249cc5"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/name_lift.py",
+        "sha256": "2a13db03d345f4f316b9f8c396ee4929e45c07613a8280cc7c320b66f919e169"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/ne_lift.py",
+        "sha256": "0814116c532842742df466ccd14f627a72e9a53fd8b27b283d1aa9d8ce397f43"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/recover.py",
+        "sha256": "9d66adcc29b2be3730b111f1992f1f9086167eeeb7462141971749a42a245f41"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/sse_selftest.py",
+        "sha256": "20ced2c33efe9484a31215c16351f446d7d39eee5f1a6654c233da94aa5f4e27"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_addr32_16.py",
+        "sha256": "c2d8e0953520624413e5e55ddcd1243e061b02fbd368461612155cbdcb468943"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_bswap.py",
+        "sha256": "ca27a88ece7a6fb201fa36e0d922e61be70269691cdddca03a59c1e0daf86c7b"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_computed_ret.py",
+        "sha256": "a2bd25f7a5c7266a8eb2429cbc4bfe1eb996f6f4fe752aebf5f2a82ba74fac6d"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_dos_hooks.py",
+        "sha256": "e7c8c2986a208ddbe9ae79cd9220d967b8315bdf81a4e597f542eaa4e135beeb"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_fpu_operands.py",
+        "sha256": "625640b7ac948deaf0f8fed70a92354b2cdbfe08d45b870937bf00b5ecbcde6c"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_lift16_div.py",
+        "sha256": "d9500643ac7d19d4e0c2d5ee68bf44a4e0906f95ef2b29cd5764228935c1b42c"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_loopcc.py",
+        "sha256": "29551bfe27876bcb42b370a928a0b4d8822521e663784f037ae87875094538da"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_nontemporal.py",
+        "sha256": "64be321a05ce29875fb05618c792630ce534aadb86433e229fc9a360965e841e"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_repz_ret.py",
+        "sha256": "e2410dd5f103b88b1941d27f38d7a18c22548ec07915407f33393802fb778cd2"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/test_sar_narrow.py",
+        "sha256": "5d9356602b90b09fbd2030985ff2ebe125236bb2969623880f4a491ccd8c98da"
+      },
+      {
+        "path": "reference/pcrecomp/tools/lift/translator.py",
+        "sha256": "c0dcad43af9e546baa1d011ef762441efa0cf510f3d965c20c4d5fcb84ba0eb8"
+      },
+      {
+        "path": "reference/pcrecomp/tools/macho/__init__.py",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "reference/pcrecomp/tools/macho/macho.py",
+        "sha256": "792e33d3562af27f37c4b16a785670a6023b7847fd1482a9b168601c098912a3"
+      },
+      {
+        "path": "reference/pcrecomp/tools/macho/README.md",
+        "sha256": "9ee47d2a7786bd20018be73ff9ce2e99b992a3f24cd1aca6e71c065a242ab202"
+      },
+      {
+        "path": "reference/pcrecomp/tools/macho/survey.py",
+        "sha256": "1dac02338fa6adb68414eb8d64205b47668664420795f76982af0589af701093"
+      },
+      {
+        "path": "reference/pcrecomp/tools/macho/ufs.py",
+        "sha256": "285d0bc84b4f5a4ddee6ee98dd2f50bc0a638d0be0e6a7d87cb2dc7c5498a09e"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/__init__.py",
+        "sha256": "14c0e9d40967cf9641cd3933ed613e6dbca1b7e137fd33ac797c0407d3677d32"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/gen_image.py",
+        "sha256": "766d6d5f73fb83018e69c1ef82eda4f783113f81b1612d6a70f47c47188f9506"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/gen_segments_h.py",
+        "sha256": "9410c992d5c108ee1fa39f30368b8ff82f463423d9e92e9e2d2cce8756d582b1"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/gen_unresolved_stubs.py",
+        "sha256": "68083a7a427d80eddf924930d935d460e8d7d6b7f1c871d173be9a414b4a6e15"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/gen_win16_stubs.py",
+        "sha256": "1c0bad4eb852c69eee59561d7167f3ded42a240d43b136f07fb368a655d4d81d"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/idt_to_json.py",
+        "sha256": "7de3ecff2d895e1db0b68095e37e1af27567b1e6dafac2c7f370593a993eafb3"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/ne_decode.py",
+        "sha256": "900a2d59fc3c45ac268dba961591545d0271eef2232c6b7bd42758ed523a69e4"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/ne_parse.py",
+        "sha256": "35ed50753393a548ec9ffcb4a5cd16790a0fa417522f1e88c290b274a62f62cd"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/ne_xref.py",
+        "sha256": "aa1e0b2e41c36dfd476623997443d29dea6ad00c289af77a5612ca286828128e"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/README.md",
+        "sha256": "4a3e34992e762c8a28a5b5d5c5e00c454b0ca6a652de51c58d97b8b3d0ed5377"
+      },
+      {
+        "path": "reference/pcrecomp/tools/ne/win16.py",
+        "sha256": "bbf58df48badd979accd24448449aafe3545fd8553b505a6a130323ac31e159b"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/__init__.py",
+        "sha256": "8481a9dcefbf374a6b249139c33c43ce0e5567d5f64b562c2c6e6c856eb8aa28"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/analyze_sections.py",
+        "sha256": "e1291cd221217988e0290b620e5bbfab0b3b80a264f485b660a44b86f281b861"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/catalog.py",
+        "sha256": "f495ec9f9d10d17eef98fcf8879a202f509f5bb270da953c67bca35a093b497e"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/debug_symbols.py",
+        "sha256": "89d83392482e198795475aaad6588110dc3af7001396924794652be168e6916b"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/delay_imports.py",
+        "sha256": "ca60d965cc3142fd8bc1d7d41395ee692e6274ef23d741b0f1e90162f55f4383"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/extract_imports.py",
+        "sha256": "062e5bce3d00c5da15def5c0ddeeb6551e87af25c568434929e22ebf6d61f425"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/map_names.py",
+        "sha256": "4f027ec6fd55ad6bbf41cd76fb540ad9d061729cf48f30ec5ac186b4ff9a0743"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/merge_names.py",
+        "sha256": "1450bc7ef56378c551d57e63c99dda519520114e8be3e72cf7088c78919dcfb8"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/pe_analyze.py",
+        "sha256": "75760a4a5c6be1e766ac68dc1750f6934049dedb08b7a72159c7c6707ee0d937"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/rsrc.py",
+        "sha256": "ca4f11949be13ac99cc44455206dc2c53bf5f2ced911bb9d418bd68020bc55e7"
+      },
+      {
+        "path": "reference/pcrecomp/tools/pe/stdcall_argc.py",
+        "sha256": "ebd1c30cf3dbc25c25704d8a15405244b6ee6fc932cb118665144f075ddcd27e"
+      }
+    ]
+  },
+  "checked_lifter": {
+    "source": "the Heroes V port's tools/lift_game.py (sibling project)",
+    "source_sha256": "d60757ae73db0deb193a0fe6c3f6fd822edfb2267399e5df510258fe08dcd95d",
+    "path": "tools/lift_game.py",
+    "adapted_sha256": "fad1f7b9b65f792c5929eff2e8e1fc2cb3ab5727dec3fa3f742ec4841e595fcb"
+  },
+  "host_manifest": "dependencies-host.json",
+  "python_packages": {
+    "capstone": "5.0.7",
+    "pefile": "2024.8.26",
+    "unicorn": "2.1.4"
+  },
+  "audio_manifest": "dependencies-audio.json",
+  "dxvk_manifest": "dependencies-dxvk.json"
+}

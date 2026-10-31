@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "app": {
+    "label": "Unreal Tournament 3",
+    "title": "Unreal Tournament 3",
+    "subtitle": {"en": "Android ARM64 port", "ru": "Порт для Android ARM64", "de": "Android-ARM64-Port", "pl": "Port na Androida ARM64"},
+    "logTag": "UT3",
+    "storage": "UT3",
+    "github": "phys-winner/pc_decomp_ut3",
+    "languages": ["en", "ru", "de", "pl"],
+    "hooks": "org.ut3.port.LauncherHooks",
+    "allFilesAccess": true,
+    "localNetwork": true,
+    "autoLaunch": false,
+    "processes": {"launcher": ":launcher"},
+    "licenses": [
+      {"path": "THIRD_PARTY_NOTICES.md", "title": {"en": "Third-party components", "ru": "Сторонние компоненты",
+                                                   "de": "Komponenten Dritter", "pl": "Komponenty zewnętrzne"}},
+      {"path": "GPL-3.0.txt", "title": {"en": "GNU GPL 3.0: the compatibility host (Heroes V and The Void ports)",
+                                        "ru": "GNU GPL 3.0: слой совместимости (порты Heroes V и The Void)",
+                                        "de": "GNU GPL 3.0: die Kompatibilitätsschicht (Ports von Heroes V und The Void)",
+                                        "pl": "GNU GPL 3.0: warstwa zgodności (porty Heroes V i The Void)"}},
+      {"path": "pcrecomp-license.txt", "title": "pcrecomp (MIT)"},
+      {"path": "mojoshader-license.txt", "title": "MojoShader (zlib)"},
+      {"path": "x87-attribution.md", "title": {"en": "x87 sliding window (NFSU2 recompiled, MIT)",
+                                               "ru": "Скользящее окно x87 (NFSU2 recompiled, MIT)",
+                                               "de": "x87-Gleitfenster (NFSU2 recompiled, MIT)",
+                                               "pl": "Przesuwne okno x87 (NFSU2 recompiled, MIT)"}},
+      "native-licenses/"
+    ]
+  },
+  "theme": {
+    "background": ["#1B2027", "#0E1115", "#050607"],
+    "card": "#EB161A20",
+    "cardStroke": "#55E8742A",
+    "cell": "#262B33",
+    "accent": "#E8742A",
+    "accentDark": "#9A4A16",
+    "primaryFill": "#3A2414",
+    "text": "#F3EDE4",
+    "muted": "#A3ABB7",
+    "error": "#FF8C7A",
+    "good": "#9FD59A",
+    "titleFont": "sans-serif-medium"
+  },
+  "distributions": [
+    {
+      "id": "ut3",
+      "title": "Unreal Tournament 3",
+      "activity": "org.ut3.port.GameActivity",
+      "renderers": ["gles", "dxvk", "dxvk-turnip"],
+      "intro": {"default": true},
+      "parts": [
+        {
+          "id": "game",
+          "title": {"en": "Game data", "ru": "Данные игры", "de": "Spieldaten", "pl": "Dane gry"},
+          "folder": "{storage}/game",
+          "fixed": false,
+          "marker": "UTGame/CookedPC/",
+          "required": ["UTGame/CookedPC/", "UTGame/Localization/", "UTGame/Config/DefaultEngine.ini",
+                       "UTGame/Config/DefaultCompat.ini", "UTGame/Config/DefaultGame.ini", "Engine/Config/BaseEngine.ini",
+                       "Engine/Config/BaseCompat.ini", "Engine/Config/BaseGame.ini",
+                       "Binaries/UT3.exe", "Binaries/wxmsw262u.dll", "Binaries/wxdockitu.dll", "Binaries/FxGraphLayout.dll",
+                       "Binaries/libresample.dll", "Binaries/ogg.dll", "Binaries/vorbis.dll", "Binaries/vorbisenc.dll",
+                       "Binaries/vorbisfile.dll", "Binaries/binkw32.dll", "Binaries/NxCooking.dll", "Binaries/NxCharacter.dll",
+                       "Binaries/PhysXLocal/PhysXLoader.dll", "Binaries/PhysXCore.dll", "Binaries/steam_api.dll",
+                       "Binaries/steamclient.dll", "Binaries/tier0_s.dll", "Binaries/vstdlib_s.dll"],
+          "needed": ["UTGame/", "Engine/", "Binaries/"],
+          "mount": true
+        }
+      ]
+    }
+  ],
+  "renderers": {
+    "default": "gles",
+    "modes": [
+      {"id": "gles", "kind": "gles", "title": "OpenGL ES",
+       "description": {"en": "The port's Direct3D 9 on OpenGL ES 3.2: runs on every device.",
+                       "ru": "Direct3D 9 порта поверх OpenGL ES 3.2: работает на любом устройстве.",
+                       "de": "Direct3D 9 des Ports über OpenGL ES 3.2: läuft auf jedem Gerät.",
+                       "pl": "Direct3D 9 portu na OpenGL ES 3.2: działa na każdym urządzeniu."}},
+      {"id": "dxvk", "kind": "vulkan", "title": "DXVK (Vulkan)", "vulkan": "1.3", "minSdk": 30,
+       "libraries": ["libdxvk_d3d9.so", "libc++_shared.so"],
+       "description": {"en": "DXVK on the GPU's system Vulkan driver. Needs Vulkan 1.3 and DXT (BC) textures in the driver.",
+                       "ru": "DXVK на системном драйвере Vulkan. Нужны Vulkan 1.3 и поддержка текстур DXT (BC) в драйвере.",
+                       "de": "DXVK auf dem Vulkan-Systemtreiber der GPU. Benötigt Vulkan 1.3 und DXT-(BC-)Texturen im Treiber.",
+                       "pl": "DXVK na systemowym sterowniku Vulkan. Wymaga Vulkana 1.3 i tekstur DXT (BC) w sterowniku."}},
+      {"id": "dxvk-turnip", "kind": "turnip", "title": "DXVK (Turnip)", "vulkan": "1.3", "minSdk": 30, "adreno": [600, 799],
+       "driver": "libut3_turnip.so",
+       "libraries": ["libdxvk_d3d9.so", "libc++_shared.so", "libadrenotools.so", "libut3_turnip.so", "libhook_impl.so",
+                     "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so"],
+       "description": {"en": "DXVK on the Mesa Turnip driver shipped with the port: Vulkan 1.3 on Adreno 6xx/7xx even where the system driver is older.",
+                       "ru": "DXVK на драйвере Mesa Turnip из порта: Vulkan 1.3 на Adreno 6xx/7xx, даже если системный драйвер старее.",
+                       "de": "DXVK auf dem mitgelieferten Mesa-Turnip-Treiber: Vulkan 1.3 auf Adreno 6xx/7xx, auch wenn der Systemtreiber älter ist.",
+                       "pl": "DXVK na dołączonym sterowniku Mesa Turnip: Vulkan 1.3 na Adreno 6xx/7xx, nawet gdy sterownik systemu jest starszy."}}
+    ]
+  },
+  "cleanup": {
+    "categories": [
+      {"id": "installers", "part": "game",
+       "title": {"en": "Windows installers (DirectX, PhysX, VC++, OpenAL)", "ru": "Установщики Windows (DirectX, PhysX, VC++, OpenAL)",
+                 "de": "Windows-Installer (DirectX, PhysX, VC++, OpenAL)", "pl": "Instalatory Windows (DirectX, PhysX, VC++, OpenAL)"},
+       "globs": ["directx9c/", "PhysX/", "VCRedist/", "OpenAL/", "installscript.vdf"]}
+    ]
+  },
+  "hints": {
+    "gameFiles": {
+      "en": "Game data: the installed Steam game's folder (UTGame, Engine, Binaries); the port also loads the game's own programs from Binaries. It reads the folder you choose; a ZIP archive is unpacked into a folder you pick. A ZIP of the game data whose files are stored without compression (7-Zip: compression level Store) also plays straight from the archive.",
+      "ru": "Данные игры — папка установленной Steam-версии игры (UTGame, Engine, Binaries); программы самой игры порт тоже берёт из Binaries. Порт читает выбранную вами папку; ZIP-архив распаковывается в указанную папку. ZIP с данными игры, в котором файлы сохранены без сжатия (7-Zip: уровень «Без сжатия»), можно не распаковывать: игра запускается прямо из архива.",
+      "de": "Spieldaten: der Ordner des installierten Steam-Spiels (UTGame, Engine, Binaries); auch die Programme des Spiels lädt der Port aus Binaries. Er liest den gewählten Ordner; ein ZIP-Archiv wird in einen Ordner Ihrer Wahl entpackt. Ein ZIP der Spieldaten mit unkomprimiert gespeicherten Dateien (7-Zip: Kompressionsstufe „Speichern“) lässt sich auch direkt aus dem Archiv spielen.",
+      "pl": "Dane gry: folder zainstalowanej wersji gry ze Steama (UTGame, Engine, Binaries); programy samej gry port też wczytuje z Binaries. Czyta wybrany folder; archiwum ZIP zostanie rozpakowane do wskazanego folderu. Archiwum ZIP z danymi gry, w którym pliki zapisano bez kompresji (7-Zip: poziom „Bez kompresji”), można też uruchomić bezpośrednio z archiwum."
+    }
+  }
+}

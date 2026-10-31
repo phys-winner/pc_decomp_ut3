@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An arena (a hexagon ring) and a crosshair, inside the 66 dp safe circle (radius 30). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+  <path android:fillColor="#FFE8742A" android:fillType="evenOdd"
+      android:pathData="M54,24 L79.98,39 L79.98,69 L54,84 L28.02,69 L28.02,39 Z M54,29.5 L75.22,41.75 L75.22,66.25 L54,78.5 L32.78,66.25 L32.78,41.75 Z" />
+  <path android:fillColor="#FFF3EDE4"
+      android:pathData="M52,35 h4 v11 h-4 z M52,62 h4 v11 h-4 z M35,52 h11 v4 h-11 z M62,52 h11 v4 h-11 z" />
+  <path android:fillColor="#FFE8742A" android:pathData="M51,54 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>
