@@ -16,6 +16,25 @@ from pe_rebase import rebase_image
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def openspy_calls(directory, sources):
+    """The proxy detours three MD5 call sites; their shared callee is in the same C unit as one caller."""
+    count, updates = 0, []
+    for name in sources:
+        path = directory / name
+        source = path.read_text()
+        hits = source.count("RECOMP_CALL(sub_01243A50)")
+        count += hits + source.count("RECOMP_CALL(void_openspy_md5)")
+        if hits:
+            source = source.replace("RECOMP_CALL(sub_01243A50)", "RECOMP_CALL(void_openspy_md5)")
+            if "extern void void_openspy_md5(void);" not in source:
+                source = "extern void void_openspy_md5(void);\n" + source
+            updates.append((path, source))
+    if count != 3:
+        raise ValueError(f"OpenSpy MD5 call sites changed: expected 3, found {count}")
+    for path, source in updates:
+        path.write_text(source)
+
+
 def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -194,6 +213,8 @@ def regenerate_function(spec, address, source_root):
     temporary_source = source.with_suffix(".c.tmp")
     temporary_source.write_text(updated, encoding="utf-8")
     temporary_source.replace(source)
+    if spec["name"] == "ut3":
+        openspy_calls(directory, report["sources"])
     traps = set(report["functions_containing_traps"])
     traps.discard(hex(address))
     if "void_lift_trap(" in replacement:
@@ -247,6 +268,8 @@ def main():
                     symbol.name.decode() if symbol.name else f"#{symbol.ordinal}")
         report = emit_functions(directory, imports, decoder, functions,
                                 label=spec["file"], header_name="functions.h", chunk_prefix="functions")
+        if spec["name"] == "ut3":
+            openspy_calls(directory, report["sources"])
         report.update(status="GENERATED", module=spec["file"],
                       original_sha256=spec["sha256"], image_sha256=image_hash,
                       metadata_roots=len(roots), rejected_entries=rejected,

@@ -159,6 +159,9 @@ struct d3d_texture {
     /* A converted texture: GPU-native blocks behind the original DXT format. */
     const d3d_native_format *native;
     int native_lock_logged;
+    /* Optional content cache; D3D locks still expose the original DXT bytes. */
+    const void *cached_faces[6];
+    unsigned cache_active, cache_disabled, cache_attempted;
     /* Sampler parameters currently applied to the GL texture object. */
     uint32_t applied_base_level;
 };

@@ -9,6 +9,41 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TouchControlsTest(unittest.TestCase):
+    def test_menu_pointer_stays_inside_original_cursor_reach(self):
+        source = (ROOT / 'android/app/src/org/ut3/port/GameControls.java').read_text(encoding='utf-8')
+        method = self._method(source, 'private boolean uiPointer(')
+        program = '''
+class GameActivity { static float x,y;static boolean nativePointer(float a,float b,boolean p){x=a;y=b;return true;} }
+public class PointerCheck {
+    int w,h;int getWidth(){return w;}int getHeight(){return h;}
+    static float clamp(float x,float a,float b){return Math.max(a,Math.min(b,x));}
+''' + method + '''
+    public static void main(String[] args){
+        PointerCheck c=new PointerCheck();assert !c.uiPointer(0,0);
+        for(int[] size:new int[][]{{2424,1080},{1680,1264},{1280,720},{3200,1440}}){
+            c.w=size[0];c.h=size[1];
+            for(float x:new float[]{-10,0,5,45,c.w/2f,c.w,c.w+10})
+            for(float y:new float[]{-10,0,5,45,c.h/2f,c.h,c.h+10}){
+                assert c.uiPointer(x,y);float px=GameActivity.x*c.w,py=GameActivity.y*c.h;
+                assert px>=23.99&&px<=c.w-23.99&&py>=27.99&&py<=c.h-27.99;
+                if(x>40&&x<c.w-40)assert Math.abs(px-x)<.001f;
+                if(y>41&&y<c.h-41)assert Math.abs(py-y)<.001f;
+            }
+        }
+        System.out.println("PASS UI cursor reach: all four edges, top tap cannot wait on an unreachable Y=5, interior coordinates retained");
+    }
+}
+'''
+        out = ROOT / 'build/touch-pointer-test'
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / 'PointerCheck.java'
+        path.write_text(program)
+        java = Path(os.environ['JAVA_HOME']) / 'bin'
+        for command in ([java/'javac.exe', '-d', out, path], [java/'java.exe', '-ea', '-cp', out, 'PointerCheck']):
+            result = subprocess.run(list(map(str, command)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        print(result.stdout.strip())
+
     @staticmethod
     def _method(source, signature):
         begin = source.index(signature)
@@ -49,7 +84,7 @@ class Canvas {
 }
 public class PieFitCheck {
     static final int SETTINGS=-3,PIE_ACTIONS=0,PIE_SEATS=1,SEAT_COUNT=5;
-    final Paint paint=new Paint();float dp=1,layoutScale=1,w=800,h=360,pieR;int profile;boolean russian;
+    final Paint paint=new Paint();float dp=1,layoutScale=1,w=800,h=360,pieR;int profile,vehicleFlags=31<<8;boolean russian;
     float width(){return w;}float height(){return h;}String text(String en,String ru){return russian?ru:en;}
 ''' + methods + r'''
     public static void main(String[] args){
@@ -83,6 +118,10 @@ public class PieFitCheck {
                 assert c.size>=11.5f*density&&c.width<=view.pieTitleWidth()+.01f:full;
                 ++cases;
             }
+        }
+        for(int mask=0;mask<32;++mask){
+            view.vehicleFlags=mask<<8;int[] seats=view.pieItems(PIE_SEATS);assert seats.length==Integer.bitCount(mask);
+            int at=0;for(int slot=0;slot<SEAT_COUNT;++slot)if((mask&(1<<slot))!=0)assert seats[at++]==TouchInput.WEAPON1<<slot;
         }
         int draws=c.draws;view.drawText(c,"",0,0,10,10,0);view.drawText(c,"x",0,0,10,0,0);assert c.draws==draws;
         System.out.println("PASS "+cases+" production pie caption cases: EN/RU, foot/vehicle/board/turret actions and seats, 65..160 percent, phone/tablet densities; captions fit their sector and ring");
@@ -123,7 +162,8 @@ class InputMethodManager {
     void hideSoftInputFromWindow(Object token,int flags){assert restarts==hides+1;++hides;}
 }
 public class ImeRetireCheck {
-    boolean imeRequested,imeWasVisible,authoritative=true;long cursorContext=7,imeSession=10;
+    boolean imeRequested,imeWasVisible,authoritative=true;long cursorContext=7,imeSession=10,imeTouchContext;
+    final Runnable imeOpen=()->{};void removeCallbacks(Runnable value){assert value==imeOpen;}
     final Context context=new Context();Context getContext(){return context;}Object getWindowToken(){return this;}
 ''' + method("void hideKeyboard") + method("@Override public boolean onCheckIsTextEditor").replace("@Override ", "") + r'''
     public static void main(String[] args){
@@ -154,10 +194,11 @@ package org.ut3.port;
 class GameActivity { static long current=7;static long nativeTouchContext(){return current;} }
 class EditorBase { public boolean performEditorAction(int action){return false;} }
 public class ImeGuardCheck extends EditorBase {
-    static final int MORE=-1,MODE=-2,SETTINGS=-3,KEYBOARD=-4,WEAPON=-5,SEATS=-6,VEHICLE_SEAT_JUMP=4;
+    static final int MORE=-1,MODE=-2,SETTINGS=-3,KEYBOARD=-4,WEAPON=-5,SEATS=-6,VEHICLE_SEAT_JUMP=4,VEHICLE_SEATS=128,VEHICLE_SEAT_MASK=31<<8;
     boolean editing,authoritative=true,playing,imeRequested=true;int profile,vehicleFlags;
     long cursorContext=7,context=7,imeSession=2,session=1;
-    int hidden,commits;
+    int imeHidden,commits;
+    boolean touchVisible=true;final boolean[] hidden=new boolean[TouchLayout.COUNT];
     boolean settingsPending;int menuId=-1,editId=-1,reloads;
     final TouchInput input=new TouchInput(new TouchInput.Sink(){
         public void submit(float a,float b,float c,float d,int held){}
@@ -168,7 +209,7 @@ public class ImeGuardCheck extends EditorBase {
     final TouchText text=new TouchText(new TouchText.Sink(){
         public boolean commit(String value){++commits;return true;}public boolean delete(int count){return true;}
     });
-    void hideKeyboard(){++hidden;imeRequested=false;++imeSession;}
+    void hideKeyboard(){++imeHidden;imeRequested=false;++imeSession;}
 ''' + methods + r'''
     boolean only(int... controls){
         for(int c=0;c<TouchLayout.COUNT;++c){
@@ -182,11 +223,13 @@ public class ImeGuardCheck extends EditorBase {
         // Original UI: only the keyboard shortcut; the Android settings are a tab of the original settings.
         assert view.only(TouchLayout.KEYBOARD);
         view.cursorContext=5;assert view.only();
-        view.cursorContext=6;view.playing=true;
+        view.cursorContext=6;view.playing=true;view.vehicleFlags=64;
         int[] foot={TouchLayout.FIRE,TouchLayout.ALT,TouchLayout.JUMP,TouchLayout.DUCK,TouchLayout.USE,
             TouchLayout.WEAPON,TouchLayout.BOARD,TouchLayout.MORE,TouchLayout.PAUSE,TouchLayout.SCORES,TouchLayout.FIRE2};
         assert view.only(foot)&&view.action(TouchLayout.WEAPON)==WEAPON&&view.action(TouchLayout.USE)==TouchInput.USE;
         view.profile=1;
+        assert !view.visible(TouchLayout.WEAPON); // One-seat vehicles publish no seat choices.
+        view.vehicleFlags=VEHICLE_SEATS|(2<<8);
         assert view.only(TouchLayout.FIRE,TouchLayout.ALT,TouchLayout.JUMP,TouchLayout.DUCK,TouchLayout.USE,
             TouchLayout.WEAPON,TouchLayout.MORE,TouchLayout.PAUSE,TouchLayout.SCORES,TouchLayout.FIRE2)&&view.action(TouchLayout.WEAPON)==SEATS;
         assert view.action(TouchLayout.FIRE2)==TouchInput.FIRE;
@@ -198,12 +241,12 @@ public class ImeGuardCheck extends EditorBase {
         assert view.only(TouchLayout.FIRE,TouchLayout.ALT,TouchLayout.USE,TouchLayout.WEAPON,TouchLayout.MORE,
             TouchLayout.PAUSE,TouchLayout.SCORES,TouchLayout.FIRE2);
         // A gunner seat whose vehicle accepts turret Jump (the deployed Hellfire's cannon) keeps Jump: it undeploys.
-        view.vehicleFlags=VEHICLE_SEAT_JUMP;
+        view.vehicleFlags=VEHICLE_SEAT_JUMP|VEHICLE_SEATS|(1<<8);
         assert view.only(TouchLayout.FIRE,TouchLayout.ALT,TouchLayout.JUMP,TouchLayout.USE,TouchLayout.WEAPON,TouchLayout.MORE,
             TouchLayout.PAUSE,TouchLayout.SCORES,TouchLayout.FIRE2)&&view.action(TouchLayout.JUMP)==TouchInput.JUMP;
         view.vehicleFlags=0;
         // The layout editor shows every on-foot control whatever the seat.
-        view.editing=true;assert view.only(foot);view.editing=false;view.profile=0;
+        view.editing=true;assert view.visible(TouchLayout.STICK);for(int c:foot)assert view.visible(c);view.editing=false;view.profile=0;
         // Without a script publisher the manual PLAY/MENU fallback remains.
         view.authoritative=false;view.cursorContext=0;view.playing=false;
         assert view.only(TouchLayout.MODE);
@@ -211,14 +254,14 @@ public class ImeGuardCheck extends EditorBase {
         assert view.visible(TouchLayout.MODE)&&!view.visible(TouchLayout.SETTINGS)&&view.visible(TouchLayout.FIRE)&&!view.visible(TouchLayout.KEYBOARD);
         view.cursorContext=5;assert view.only();
         view.authoritative=true;view.cursorContext=7;view.playing=false;
-        assert !view.ready()&&view.imeRequested&&view.hidden==0;
-        assert !view.performEditorAction(6)&&view.imeRequested&&view.hidden==0&&view.commits==0;
+        assert !view.ready()&&view.imeRequested&&view.imeHidden==0;
+        assert !view.performEditorAction(6)&&view.imeRequested&&view.imeHidden==0&&view.commits==0;
         view.session=2;assert view.ready()&&view.text.compose("A");
-        assert view.performEditorAction(6)&&!view.imeRequested&&view.hidden==1&&view.commits==1;
+        assert view.performEditorAction(6)&&!view.imeRequested&&view.imeHidden==1&&view.commits==1;
         view.imeRequested=true;view.imeSession=10;view.session=9;
-        assert !view.performEditorAction(6)&&view.imeRequested&&view.hidden==1;
+        assert !view.performEditorAction(6)&&view.imeRequested&&view.imeHidden==1;
         view.session=10;GameActivity.current=11;
-        assert !view.ready()&&!view.imeRequested&&view.hidden==2;
+        assert !view.ready()&&!view.imeRequested&&view.imeHidden==2;
         view.settingsPending=true;view.applyPendingSettings();
         assert view.reloads==0&&view.settingsPending;
         view.cursorContext=6;view.menuId=1;view.applyPendingSettings();assert view.reloads==0;
@@ -349,6 +392,43 @@ public class PreImeCheck extends PreImeBase {
             subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary, source], check=True)
             subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "PreImeCheck"], check=True)
 
+    def test_external_device_detection(self):
+        source = (ROOT / 'android/app/src/org/ut3/port/GameControls.java').read_text(encoding='utf-8')
+        methods = '\n'.join(self._method(source, name) for name in ('static boolean gamepadAttached', 'static boolean externalInputAttached'))
+        program = r'''
+package org.ut3.port;
+class InputDevice {
+    static final int SOURCE_GAMEPAD=0x401,SOURCE_JOYSTICK=0x1000010,SOURCE_MOUSE=0x2002,KEYBOARD_TYPE_ALPHABETIC=2;
+    static InputDevice[] devices={}; int sources,keyboard; boolean virtual;
+    InputDevice(int sources,int keyboard,boolean virtual){this.sources=sources;this.keyboard=keyboard;this.virtual=virtual;}
+    static int[] getDeviceIds(){int[] ids=new int[devices.length];for(int i=0;i<ids.length;i++)ids[i]=i;return ids;}
+    static InputDevice getDevice(int id){return devices[id];}
+    int getSources(){return sources;} int getKeyboardType(){return keyboard;} boolean isVirtual(){return virtual;}
+    boolean supportsSource(int source){return (sources&source)==source;}
+}
+public class DeviceCheck {
+''' + methods + r'''
+    public static void main(String[] ignored){
+        assert !externalInputAttached();
+        InputDevice keyboard=new InputDevice(0x101,2,false),mouse=new InputDevice(0x2002,0,false);
+        InputDevice.devices=new InputDevice[]{keyboard};assert !externalInputAttached();
+        InputDevice.devices=new InputDevice[]{mouse};assert !externalInputAttached();
+        InputDevice.devices=new InputDevice[]{keyboard,mouse};assert externalInputAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x401,0,false)};assert externalInputAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x1000010,0,false)};assert externalInputAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x1000411,2,true)};assert !externalInputAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x5103,1,false)};assert !externalInputAttached();
+        System.out.println("PASS production device detection: physical pad/joystick or alphabetic keyboard plus mouse; built-in buttons, keyboard-only, mouse-only and virtual devices excluded");
+    }
+}
+'''
+        java = Path(os.environ.get('JAVA_HOME', 'C:/Portable/jdk-24.0.1')) / 'bin'
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'DeviceCheck.java'
+            path.write_text(program, encoding='utf-8')
+            subprocess.run([java / 'javac.exe', '--release', '8', '-d', temporary, path], check=True)
+            subprocess.run([java / 'java.exe', '-ea', '-cp', temporary, 'org.ut3.port.DeviceCheck'], check=True)
+
     def test_text_composition(self):
         java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
         program = r'''
@@ -405,27 +485,28 @@ public class TextCheck {
         source = (ROOT / "android/app/src/org/ut3/port/GameControls.java").read_text(encoding="utf-8")
         methods = "\n".join(self._method(source, name) for name in ("private void buildLayout", "private int action",
             "private boolean visible", "private float width", "private float height", "static float gyroDelta",
-            "private static float clamp"))
+            "private static float clamp", "private float buttonSize"))
         program = r'''
 package org.ut3.port;
 import java.util.ArrayList;
 public class GeometryCheck {
-    static final int MORE=-1,MODE=-2,SETTINGS=-3,KEYBOARD=-4,WEAPON=-5,SEATS=-6,VEHICLE_SEAT_JUMP=4,HUD_MAP=1<<15;
+    static final int MORE=-1,MODE=-2,SETTINGS=-3,KEYBOARD=-4,WEAPON=-5,SEATS=-6,VEHICLE_SEAT_JUMP=4,VEHICLE_SEATS=128,VEHICLE_SEAT_MASK=31<<8,HUD_MAP=1<<15;
     int vehicleFlags,weaponSlots=HUD_MAP; // The minimap shown: the strictest HUD.
     static class Insets {int left,top,right,bottom;} final Insets safe=new Insets();
     int w=2400,h=1080;int getWidth(){return w;}int getHeight(){return h;}
     final float[] controlX=new float[TouchLayout.COUNT],controlY=new float[TouchLayout.COUNT],controlR=new float[TouchLayout.COUNT],
-        customX=new float[TouchLayout.COUNT],customY=new float[TouchLayout.COUNT];
-    final boolean[] shown=new boolean[TouchLayout.COUNT];
+        customX=new float[TouchLayout.COUNT],customY=new float[TouchLayout.COUNT],customSize=new float[TouchLayout.COUNT];
+    final boolean[] shown=new boolean[TouchLayout.COUNT],hidden=new boolean[TouchLayout.COUNT];
     final ArrayList<float[]> occupied=new ArrayList<>(),reserved=new ArrayList<>();
     float dp=3,scale=1,layoutScale=1,uiScale=1;
+    boolean touchVisible=true;
     boolean playing=true,editing,leftHanded,authoritative=true,layoutDirty,wasd,dpadShown;int profile;long cursorContext=6;
     float dpadX,dpadY,dpadCell;
-    void buildTools(){}
+    void buildTools(){}void configureInput(){}
 ''' + methods + r'''
     int crowded,noCross;
     void check(String name){
-        java.util.Arrays.fill(customX,Float.NaN);java.util.Arrays.fill(customY,Float.NaN);
+        java.util.Arrays.fill(customSize,Float.NaN);java.util.Arrays.fill(customX,Float.NaN);java.util.Arrays.fill(customY,Float.NaN);
         buildLayout();
         float left=safe.left,top=safe.top,right=w-safe.right,bottom=h-safe.bottom;
         for(int c=0;c<TouchLayout.COUNT;++c){
@@ -614,6 +695,26 @@ final class TouchCheck {
         assert t.down(1,100,500,0,TouchInput.MOVEMENT,-1)&&t.moving()&&!t.looking();
         assert t.down(2,120,520,0,TouchInput.MOVEMENT,-1)&&t.looking();
         t.move(2,125,520);close(c.dx,10);close(c.x,0);t.cancel();
+        // Left fire drives movement while right look remains independent.
+        assert t.down(4,100,500,TouchInput.FIRE,TouchInput.MOVEMENT,-1);
+        t.move(4,100,400);close(c.y,1);assert c.held==TouchInput.FIRE&&!t.looking();
+        assert t.down(5,800,400,0,TouchInput.LOOK,-1);t.move(5,805,400);close(c.dx,10);close(c.y,1);
+        t.up(4,100,400);close(c.y,0);assert c.held==0&&t.looking();t.cancel();
+        // A fixed stick starts at its saved centre; cancellation always releases movement.
+        assert t.fixed(7,100,400,100,500,-1);close(c.y,1);close(t.anchorY(),500);
+        assert !t.fixed(8,100,400,100,500,-1);t.cancel();close(c.y,0);
+        for(int selected=0;selected<4;selected++) {
+            float x=0;
+            for(int card=0;card<4;card++) {
+                float width=card==selected?1.5f:1;
+                assert TouchLayout.weaponHit((x+width*.5f)*75,0,75,4,selected)==card;
+                x+=width;
+            }
+        }
+        assert TouchLayout.weaponHit(-1,0,75,4,0)==-1&&TouchLayout.weaponHit(Float.NaN,0,75,4,0)==-1;
+        float[] bar100=TouchLayout.weaponBar(0,0,1920,1080,1,1,4),bar50=TouchLayout.weaponBar(0,0,1920,1080,1,.5f,4);
+        close(bar50[4],bar100[4]*.5f);
+        float[] bar150=TouchLayout.weaponBar(0,0,1920,1080,1.5f,.5f,4);close(bar150[4],bar50[4]*1.5f);
         // A passive contact (weapon or scores) neither looks nor moves.
         assert t.down(3,500,500,0,TouchInput.PASSIVE,-1)&&!t.looking()&&!t.moving();
         t.move(3,600,500);close(c.dx,0);
@@ -657,7 +758,8 @@ final class TouchCheck {
             source = Path(temporary) / "TouchCheck.java"
             source.write_text(program, encoding="utf-8")
             subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary,
-                            ROOT / "android/app/src/org/ut3/port/TouchInput.java", source], check=True)
+                            ROOT / "android/app/src/org/ut3/port/TouchInput.java",
+                            ROOT / "android/app/src/org/ut3/port/TouchLayout.java", source], check=True)
             subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "org.ut3.port.TouchCheck"], check=True)
 
 

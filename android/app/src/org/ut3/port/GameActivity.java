@@ -64,6 +64,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     static native long nativeTouchContext();
     static native int nativeTouchVehicle();
     static native void nativeSettings();
+    static native void nativeControlsVisible(boolean visible);
     static native boolean nativeText(String text, long context);
     static native boolean nativeDelete(int count, long context);
     static native int nativeConfigure(int fps, int queryWaitUs, int precacheWaitUs, boolean benchmark);
@@ -82,6 +83,44 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
        APK carries no launcher. */
     private Launch launch;
     private FrameLayout root;
+    private TouchLayoutEditor layoutEditor;
+    private boolean inputPrompted;
+
+    void showLayoutEditor(GameControls view) {
+        closeLayoutEditor();
+        layoutEditor=new TouchLayoutEditor(this,view,"RUS".equals(portPreferences.getString("language","INT")));
+        int width=Math.min(root.getWidth(),Math.round(330*getResources().getDisplayMetrics().density));
+        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(width,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        root.addView(layoutEditor,params);
+    }
+    void refreshLayoutEditor() { if(layoutEditor!=null)layoutEditor.refresh(); }
+    void closeLayoutEditor() { if(layoutEditor!=null){root.removeView(layoutEditor);layoutEditor=null;} }
+
+    private void offerTouchVisibility() {
+        if(inputPrompted)return;
+        inputPrompted=true;
+        if(portPreferences.getBoolean("touchInputPromptDisabled",false))return;
+        boolean external=GameControls.externalInputAttached(),shown=portPreferences.getBoolean("touchVisible",true);
+        if(external!=shown)return;
+        controls.release();
+        AlertDialog.Builder prompt=new AlertDialog.Builder(this,android.R.style.Theme_Material_Light_Dialog_Alert);
+        android.widget.CheckBox remember=new android.widget.CheckBox(prompt.getContext());
+        remember.setText(say("Don't ask again","Больше не предлагать","Nicht mehr fragen","Nie pytaj ponownie"));
+        remember.setTextColor(0xFF202020);
+        remember.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF344355));
+        prompt.setTitle(say("Touch controls","Экранное управление","Touch-Steuerung","Sterowanie dotykowe"))
+            .setMessage(external?say("A controller or keyboard and mouse are connected. Hide the on-screen controls?",
+                "Подключён геймпад или клавиатура с мышью. Скрыть экранное управление?",
+                "Controller oder Tastatur und Maus verbunden. Bildschirmtasten ausblenden?","Podłączono kontroler lub klawiaturę i mysz. Ukryć przyciski?"):
+                say("No controller or keyboard and mouse detected. Show the on-screen controls?",
+                "Геймпад или клавиатура с мышью не обнаружены. Показать экранное управление?",
+                "Kein Controller oder Tastatur mit Maus gefunden. Bildschirmtasten anzeigen?","Nie wykryto kontrolera ani klawiatury i myszy. Pokazać przyciski?"))
+            .setView(remember).setNegativeButton(android.R.string.cancel,null)
+            .setPositiveButton(android.R.string.ok,(dialog,which)->{
+                portPreferences.put("touchVisible",!external);nativeControlsVisible(!external);controls.reloadSettings();
+            })
+            .setOnDismissListener(dialog->{portPreferences.put("touchInputPromptDisabled",remember.isChecked());savePortSettings(null);}).show();
+    }
     /* Wi-Fi chips drop broadcast frames to save power unless an app holds this: the LAN game finds
        and answers its matches by UDP broadcast (the original LAN beacon, port 14001). */
     private android.net.wifi.WifiManager.MulticastLock lanLock;
@@ -166,7 +205,13 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 boolean changed = portPreferences.reloadIfChanged();
                 handler.post(() -> {
                     settingsRefreshPending = false;
-                    if (!isFinishing() && controls != null && changed) controls.requestSettingsReload();
+                    if (!isFinishing() && controls != null && changed) {
+                        controls.requestSettingsReload();
+                        if(portPreferences.getBoolean("touchEditLayout",false)) {
+                            portPreferences.put("touchEditLayout",false);
+                            savePortSettings(controls::requestLayoutEditor);
+                        }
+                    }
                 });
             } catch (IOException error) {
                 handler.post(() -> { settingsRefreshPending = false; status.setText(say("Could not read the control settings: ",
@@ -219,16 +264,19 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private int fpsLimit() {
-        int fps = portPreferences.getInt("fpsLimit", 60);
-        if (fps == 0) {
-            float refresh = getWindowManager().getDefaultDisplay().getRefreshRate();
-            for (android.view.Display.Mode mode : getWindowManager().getDefaultDisplay().getSupportedModes())
-                if (mode.getPhysicalWidth() == getWindowManager().getDefaultDisplay().getMode().getPhysicalWidth() &&
-                    mode.getPhysicalHeight() == getWindowManager().getDefaultDisplay().getMode().getPhysicalHeight())
-                    refresh = Math.max(refresh, mode.getRefreshRate());
-            return Math.max(1, Math.min(1000, Math.round(refresh)));
-        }
-        return fps == 30 || fps == 45 || fps == 60 ? fps : 60;
+        return GameSettings.nearestRate(portPreferences.getInt("fpsLimit", 60), displayRates());
+    }
+    private int[] displayRates() {
+        android.view.Display display = getWindowManager().getDefaultDisplay();
+        android.view.Display.Mode current = display.getMode();
+        java.util.ArrayList<Float> modes = new java.util.ArrayList<>();
+        for (android.view.Display.Mode mode : display.getSupportedModes())
+            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight())
+                modes.add(mode.getRefreshRate());
+        if (modes.isEmpty()) modes.add(display.getRefreshRate());
+        float[] rates = new float[modes.size()];
+        for (int i = 0; i < rates.length; i++) rates[i] = modes.get(i);
+        return GameSettings.displayRates(rates);
     }
     private final Runnable progress = new Runnable() {
         @Override public void run() {
@@ -239,6 +287,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             if (result == Integer.MAX_VALUE) {
                 status.setVisibility(View.GONE);
                 if (launch != null) launch.firstFrame(root);
+                if((nativeTouchContext()&3)==3)offerTouchVisibility();
             } else if (result != Integer.MIN_VALUE) {
                 /* A clean exit returns to the launcher; another code stays on screen. */
                 if (launch != null) launch.exited(result);
@@ -393,6 +442,11 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         }
         int renderWidth, renderHeight;
         try {
+            if (portPreferences.getString("language", null) == null) {
+                portPreferences.put("language", GameSettings.defaultLanguage(game, java.util.Locale.getDefault()));
+                portPreferences.save();
+                controls.requestSettingsReload();
+            }
             if ("dxvk-turnip".equals(renderer)) {
                 File debug = new File(userdata, "tu-debug.txt");
                 if (!debug.exists() && !debug.createNewFile()) throw new IOException("Cannot create driver diagnostics file");
@@ -405,7 +459,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 renderer, renderScale(displayHeight));
             String options = "RUS".equals(portPreferences.getString("language", "INT")) ? "AndroidPortOptions-RUS.ini" : "AndroidPortOptions.ini";
             GameSettings.prepareNativeUi(engine, game, userdata,
-                asset("AndroidPort.u"), new String(asset(options), StandardCharsets.UTF_8));
+                asset("AndroidPort.u"), GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()));
         } catch (IOException | IllegalArgumentException error) {
             refuse(say("Could not prepare the game's settings: ", "Не удалось подготовить настройки игры: ",
                 "Die Spieleinstellungen konnten nicht vorbereitet werden: ", "Nie udało się przygotować ustawień gry: ") + error.getMessage());

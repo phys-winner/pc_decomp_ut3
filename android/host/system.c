@@ -163,6 +163,7 @@ static uint32_t reg_open_api(int wide, int extended, int create)
 WINAPI_EXPORT(ADV, RegOpenKeyExW, 5) { return reg_open_api(1, 1, 0); }
 WINAPI_EXPORT(ADV, RegOpenKeyExA, 5) { return reg_open_api(0, 1, 0); }
 WINAPI_EXPORT(ADV, RegOpenKeyA, 3) { return reg_open_api(0, 0, 0); }
+WINAPI_EXPORT(ADV, RegOpenKeyW, 3) { return reg_open_api(1, 0, 0); }
 WINAPI_EXPORT(ADV, RegCreateKeyExA, 9) { return reg_open_api(0, 1, 1); }
 WINAPI_EXPORT(ADV, RegCreateKeyExW, 9) { return reg_open_api(1, 1, 1); }
 static uint32_t reg_query_api(int wide)
@@ -175,6 +176,136 @@ static uint32_t reg_query_api(int wide)
 }
 WINAPI_EXPORT(ADV, RegQueryValueExW, 6) { return reg_query_api(1); }
 WINAPI_EXPORT(ADV, RegQueryValueExA, 6) { return reg_query_api(0); }
+/* Optional Steam cache writes must take their normal failure branch, not a missing-import trap. */
+static uint32_t reg_write_denied(uint32_t key)
+{
+    return reg_path(key, NULL) ? ERROR_ACCESS_DENIED_ : ERROR_INVALID_HANDLE_;
+}
+WINAPI_EXPORT(ADV, RegSetValueExA, 6) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegSetValueExW, 6) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegDeleteValueA, 2) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegDeleteValueW, 2) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegDeleteKeyA, 2) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegDeleteKeyW, 2) { return reg_write_denied(ARG(0)); }
+WINAPI_EXPORT(ADV, RegFlushKey, 1) { return reg_path(ARG(0), NULL) ? 0 : ERROR_INVALID_HANDLE_; }
+static uint32_t reg_create_legacy(int wide)
+{
+    if (!ARG(1)) return 1010;
+    char *sub;
+    uint32_t result = reg_string(ARG(1), wide, &sub);
+    if (!result) result = reg_open(ARG(0), sub, ARG(2), 0xF003Fu, 1, 0);
+    free(sub); return result;
+}
+WINAPI_EXPORT(ADV, RegCreateKeyA, 3) { return reg_create_legacy(0); }
+WINAPI_EXPORT(ADV, RegCreateKeyW, 3) { return reg_create_legacy(1); }
+
+static int reg_subkey(const char *path, uint32_t index, char name[256])
+{
+    char seen[sizeof registry_keys / sizeof registry_keys[0]][256];
+    uint32_t count = 0;
+    size_t length = strlen(path);
+    for (size_t i = 0; i < sizeof registry_keys / sizeof registry_keys[0]; ++i) {
+        const char *key = registry_keys[i];
+        if (strncasecmp(key, path, length) || key[length] != '\\') continue;
+        const char *from = key + length + 1, *end = strchr(from, '\\');
+        size_t n = end ? (size_t)(end - from) : strlen(from);
+        int duplicate = 0;
+        for (uint32_t j = 0; j < count; ++j)
+            if (strlen(seen[j]) == n && !strncasecmp(seen[j], from, n)) duplicate = 1;
+        if (duplicate) continue;
+        memcpy(seen[count], from, n); seen[count][n] = 0;
+        if (count++ == index) { memcpy(name, from, n); name[n] = 0; return 1; }
+    }
+    return 0;
+}
+static const reg_value *reg_value_at(const char *path, uint32_t index)
+{
+    for (size_t i = 0; i < sizeof registry / sizeof registry[0]; ++i)
+        if (!strcasecmp(registry[i].key, path) && !index--) return &registry[i];
+    return NULL;
+}
+static uint32_t reg_enum_key(int wide, int extended)
+{
+    uint32_t access;
+    const char *path = reg_path(ARG(0), &access);
+    if (!path) return ERROR_INVALID_HANDLE_;
+    if (!(access & 8u)) return ERROR_ACCESS_DENIED_;
+    if (extended && ARG(4)) return ERROR_INVALID_PARAMETER_;
+    if (extended && (!ARG(3) || !void_vm_readable(ARG(3), 4) || !void_vm_writable(ARG(3), 4))) return 998;
+    uint32_t cap = extended ? MEM32(ARG(3)) : ARG(3);
+    char name[256];
+    if (!reg_subkey(path, ARG(1), name)) return 259; /* ERROR_NO_MORE_ITEMS */
+    uint32_t n = (uint32_t)strlen(name), width = wide ? 2u : 1u;
+    if (cap <= n) return ERROR_MORE_DATA_;
+    if (!ARG(2) || !void_vm_writable(ARG(2), (n + 1) * width)) return 998;
+    if (extended && ((ARG(5) && !ARG(6)) ||
+        (ARG(6) && (!void_vm_readable(ARG(6), 4) || !void_vm_writable(ARG(6), 4))) ||
+        (ARG(7) && !void_vm_writable(ARG(7), 8)))) return ERROR_INVALID_PARAMETER_;
+    if (extended && ARG(5) && (!MEM32(ARG(6)) || !void_vm_writable(ARG(5), width))) return ERROR_MORE_DATA_;
+    if (wide) void_utf8_to_gw(name, ARG(2), cap); else void_utf8_to_ga(name, ARG(2), cap);
+    if (extended) {
+        MEM32(ARG(3)) = n;
+        if (ARG(5)) { if (wide) MEM16(ARG(5)) = 0; else MEM8(ARG(5)) = 0; }
+        if (ARG(6)) MEM32(ARG(6)) = 0;
+        if (ARG(7)) MEM64(ARG(7)) = 0;
+    }
+    return 0;
+}
+WINAPI_EXPORT(ADV, RegEnumKeyA, 4) { return reg_enum_key(0, 0); }
+WINAPI_EXPORT(ADV, RegEnumKeyW, 4) { return reg_enum_key(1, 0); }
+WINAPI_EXPORT(ADV, RegEnumKeyExA, 8) { return reg_enum_key(0, 1); }
+WINAPI_EXPORT(ADV, RegEnumKeyExW, 8) { return reg_enum_key(1, 1); }
+static uint32_t reg_enum_value(int wide)
+{
+    uint32_t access;
+    const char *path = reg_path(ARG(0), &access);
+    if (!path) return ERROR_INVALID_HANDLE_;
+    if (!(access & 1u)) return ERROR_ACCESS_DENIED_;
+    if (ARG(4) || !ARG(3)) return ERROR_INVALID_PARAMETER_;
+    if (!void_vm_readable(ARG(3), 4) || !void_vm_writable(ARG(3), 4)) return 998;
+    const reg_value *v = reg_value_at(path, ARG(1));
+    if (!v) return 259;
+    uint32_t n = (uint32_t)strlen(v->name), cap = MEM32(ARG(3));
+    if (cap <= n) return ERROR_MORE_DATA_;
+    if (!ARG(2) || !void_vm_writable(ARG(2), (n + 1) * (wide ? 2u : 1u))) return 998;
+    uint32_t result = reg_query(ARG(0), v->name, ARG(5), ARG(6), ARG(7), wide);
+    if (result && result != ERROR_MORE_DATA_) return result;
+    if (wide) void_utf8_to_gw(v->name, ARG(2), cap); else void_utf8_to_ga(v->name, ARG(2), cap);
+    MEM32(ARG(3)) = n;
+    return result;
+}
+WINAPI_EXPORT(ADV, RegEnumValueA, 8) { return reg_enum_value(0); }
+WINAPI_EXPORT(ADV, RegEnumValueW, 8) { return reg_enum_value(1); }
+static uint32_t reg_info(int wide)
+{
+    uint32_t access;
+    const char *path = reg_path(ARG(0), &access);
+    if (!path) return ERROR_INVALID_HANDLE_;
+    if (!(access & 1u)) return ERROR_ACCESS_DENIED_;
+    if (ARG(3) || (ARG(1) && !ARG(2))) return ERROR_INVALID_PARAMETER_;
+    for (unsigned i = 2; i < 12; ++i)
+        if (i != 3 && ARG(i) && !void_vm_writable(ARG(i), i == 11 ? 8 : 4)) return 998;
+    if (ARG(1) && (!void_vm_readable(ARG(2), 4) || !MEM32(ARG(2)) ||
+        !void_vm_writable(ARG(1), wide ? 2 : 1))) return ERROR_MORE_DATA_;
+    uint32_t subkeys = 0, longest = 0, values = 0, value_name = 0, value_bytes = 0;
+    char name[256];
+    while (reg_subkey(path, subkeys, name)) { ++subkeys; if (strlen(name) > longest) longest = (uint32_t)strlen(name); }
+    const reg_value *v;
+    while ((v = reg_value_at(path, values)) != NULL) {
+        ++values;
+        uint32_t n = (uint32_t)strlen(v->name), bytes = v->type == REG_DWORD_ ? 4 : (uint32_t)((strlen(v->text) + 1) * (wide ? 2 : 1));
+        if (n > value_name) value_name = n;
+        if (bytes > value_bytes) value_bytes = bytes;
+    }
+    if (ARG(1)) { if (wide) MEM16(ARG(1)) = 0; else MEM8(ARG(1)) = 0; }
+    if (ARG(2)) MEM32(ARG(2)) = 0;
+    uint32_t fields[7] = {subkeys, longest, 0, values, value_name, value_bytes, 20};
+    for (unsigned i = 4; i <= 10; ++i) if (ARG(i)) MEM32(ARG(i)) = fields[i - 4];
+    if (ARG(11)) MEM64(ARG(11)) = 0;
+    return 0;
+}
+WINAPI_EXPORT(ADV, RegQueryInfoKeyA, 12) { return reg_info(0); }
+WINAPI_EXPORT(ADV, RegQueryInfoKeyW, 12) { return reg_info(1); }
 WINAPI_EXPORT(ADV, RegCloseKey, 1)
 {
     if (root_name(ARG(0))) return ERROR_SUCCESS_;

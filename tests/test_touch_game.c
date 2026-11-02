@@ -140,8 +140,9 @@ static void scroll_bounds(void)
     scroll_fixture();name(LIST_CLASS,"UTUIOptionList");assert(void_touch_ui_control()==10);
     assert(void_touch_ui_scroll(65)==1 && MEM32(VIEWPORT+0xD4)==65);
     put(VIEWPORT+0xD4,0);assert(void_touch_ui_scroll(64)==1 && MEM32(VIEWPORT+0xD4)==64);
-    put(VIEWPORT+0xD4,0);assert(void_touch_ui_scroll(66)==1 && MEM32(VIEWPORT+0xD4)==66);
-    put(VIEWPORT+0xD4,0);assert(void_touch_ui_scroll(4096+3)==1 && MEM32(VIEWPORT+0xD4)==4099);
+    /* Only the documented begin/tap phases and bounded scroll deltas enter the script mailbox. */
+    put(VIEWPORT+0xD4,0);assert(void_touch_ui_scroll(66)==-1 && !MEM32(VIEWPORT+0xD4));
+    assert(void_touch_ui_scroll(4096+3)==-1 && !MEM32(VIEWPORT+0xD4));
     put(VIEWPORT+0xD4,0);assert(void_touch_ui_scroll(67)==-1 && void_touch_ui_scroll(63)==-1 && void_touch_ui_scroll(6144)==-1 && !MEM32(VIEWPORT+0xD4));
     /* A checkbox or an option button's own arrow keeps its original click. */
     scroll_fixture();name(LIST_CLASS,"UTUIOptionList");name(BUTTON_CLASS,"UICheckbox");assert(void_touch_ui_control()==3);
@@ -155,6 +156,18 @@ static void scroll_bounds(void)
     name(BUTTON_CLASS,"UIButton");assert(void_touch_ui_control()==3);
     /* A plain text field in an option list keeps its click. */
     put(WIDGET+0x80,LIST);name(BUTTON_CLASS,"UIEditBox");assert(void_touch_ui_control()==3);
+    /* Only a writable field opens the IME; combo captions and invalid bool metadata do not. */
+    const uint32_t bool_kind=0x170000,bool_field=0x171000;
+    name(bool_kind,"BoolProperty");property(bool_field,"bReadOnly",bool_kind,0x88,0);
+    put(bool_field+0x84,4);put(BUTTON_CLASS+CHILDREN_OFFSET,bool_field);
+    assert(void_touch_ui_control()==19);
+    put(WIDGET+0x88,4);assert(void_touch_ui_control()==3);put(WIDGET+0x88,0);
+    put(bool_field+0x84,3);assert(void_touch_ui_control()==3);put(bool_field+0x84,4);
+    denied=bool_field+0x84;assert(void_touch_ui_control()==3);denied=0;
+    put(WIDGET+0x80,0);assert(void_touch_ui_control()==17);
+    name(OPTION_BUTTON_CLASS,"UIComboBox");put(OPTION_BUTTON_CLASS+SUPER_OFFSET,UI_OBJECT_CLASS);
+    put(OPTION_BUTTON+CLASS_OFFSET,OPTION_BUTTON_CLASS);put(OPTION_BUTTON+0x80,LIST);put(WIDGET+0x80,OPTION_BUTTON);
+    assert(void_touch_ui_control()==10);
     /* Rows in a plain list are only highlighted; the option tap needs an option list. */
     scroll_fixture();assert(void_touch_ui_control()==3 && void_touch_ui_scroll(65)==-1 && void_touch_ui_scroll(64)==1);
     scroll_fixture();put(SCROLL_TARGET_PROPERTY+CLASS_OFFSET,INT_KIND);touch_metadata.viewport_class=0;
@@ -184,6 +197,14 @@ static void putf(uint32_t address,float value) { memcpy(GPTR(address),&value,4);
 static void detail_cases(void)
 {
     uint32_t out[3],snapshot[4],flags=0;float steer[3];
+    /* PlayerDriving negates the pad's raw X before SetInputs. */
+    int16_t turn,gas;float console_steer[3]={.5f,-.3f,1.1f};
+    touch_look_steer(0,1,console_steer,8|16,&turn,&gas);
+    assert(turn<0&&gas==32767);
+    touch_look_steer(0,-1,console_steer,8|16|32,&turn,&gas);
+    assert(turn>0&&gas==-32767);
+    console_steer[0]=-.5f;touch_look_steer(0,1,console_steer,8|16,&turn,&gas);
+    assert(turn>0&&gas==32767);
     /* An older package without the fields: everything stays off. */
     fixture();assert(void_touch_game_read(snapshot)==1);
     assert(void_touch_game_details(out)==0 && !out[0] && !out[1] && void_touch_weapon_request(0x102)==-1 &&
@@ -192,7 +213,10 @@ static void detail_cases(void)
     put(VIEWPORT+0xE0,1|2|16|(4<<10)|(1<<14));put(VIEWPORT+0xEC,1|4);
     assert(void_touch_game_details(out)==1 && out[0]==(1u|2|16|(4u<<10)|(1u<<14)) && out[1]==5);
     put(VIEWPORT+0xE0,1|(12<<10)|(1<<14));put(VIEWPORT+0xEC,64);
-    assert(void_touch_game_details(out)==1 && !out[0] && !out[1]); /* Invalid selected slot, unknown flag. */
+    assert(void_touch_game_details(out)==1 && !out[0] && out[1]==64); /* Invalid slot; hoverboard is available. */
+    put(VIEWPORT+0xEC,128|(21<<8));assert(void_touch_game_details(out)==1 && out[1]==(128|(21<<8)));
+    put(VIEWPORT+0xEC,1<<13);assert(void_touch_game_details(out)==1 && out[1]==8192); /* Scorpion steering. */
+    put(VIEWPORT+0xEC,1<<14);assert(void_touch_game_details(out)==1 && !out[1]); /* Unknown flag. */
     put(VIEWPORT+0xE0,1u<<15);put(VIEWPORT+0xEC,0);assert(void_touch_game_details(out)==1 && out[0]==(1u<<15)); /* Minimap only. */
     put(VIEWPORT+0xE0,1u<<16);assert(void_touch_game_details(out)==1 && !out[0]);
     /* Weapon mailbox: a later preview replaces an unread preview, never an unread switch. */
@@ -208,6 +232,23 @@ static void detail_cases(void)
     assert(!void_touch_steer(steer,&flags));
     put(VIEWPORT+0xEC,8|16|32);assert(void_touch_steer(steer,&flags)==1 && flags==(8|16|32) &&
         steer[0]==.5f && steer[1]==-.3f && steer[2]==1.1f);
+    put(VIEWPORT+0xEC,8|16|32|128|(2<<8));
+    assert(void_touch_steer(steer,&flags)==1 && flags==(8|16|32|128|(2<<8)));
+    put(VIEWPORT+0xEC,8|(1<<13));assert(!void_touch_steer(steer,&flags));
+    put(VIEWPORT+0xEC,1<<13);assert(void_touch_steer(steer,&flags)==1 && flags==8192 && steer[0]==0 && steer[2]==1);
+    publish(1,77,1);observe();uint64_t context=touch_cursor_context;uint8_t pad[16];
+    for (int direction=-1;direction<=1;++direction) for (int side=-1;side<=1;++side) {
+        assert(touch_submit(side*.0068f,direction*.23f,0,0,0,context) && void_input_touch_pad(0,pad));
+        assert((int16_t)((uint16_t)pad[10]|((uint16_t)pad[11]<<8))==touch_stick_y);
+        assert(!pad[8] && !pad[9]);
+    }
+    assert(touch_submit(.56f,.5f,0,0,0,context) && void_input_touch_pad(0,pad));
+    assert((int16_t)((uint16_t)pad[8]|((uint16_t)pad[9]<<8))==touch_axis(.5f));
+    assert(touch_submit(0,0,0,0,0,context) && void_input_touch_pad(0,pad) && !pad[10] && !pad[11]);
+    assert(pad_set(1,0,0,0,5000,15000,0,0) && void_input_touch_pad(0,pad));
+    assert((int16_t)((uint16_t)pad[10]|((uint16_t)pad[11]<<8))==15000); /* Physical analog stays analog. */
+    (void)pad_set(0,0,0,0,0,0,0,0);
+    put(VIEWPORT+0xEC,8|16|32);
     putf(VIEWPORT+0xF0,1.5f);assert(!void_touch_steer(steer,&flags));
     putf(VIEWPORT+0xF0,.5f);putf(VIEWPORT+0xF8,0);assert(!void_touch_steer(steer,&flags));
     putf(VIEWPORT+0xF8,NAN);assert(!void_touch_steer(steer,&flags));
@@ -330,6 +371,12 @@ int main(void)
     put(VIEWPORT+0x9C,0);assert(void_touch_game_read(out)==1 && !MEM32(VIEWPORT+0x9C) && !void_touch_menu_pending());
     Java_org_ut3_port_GameActivity_nativeSettings(NULL,NULL);
     assert(void_touch_game_read(out)==1 && MEM32(VIEWPORT+0x9C)==1 && !void_touch_menu_pending());
+    for (int visible=0;visible<2;visible++) {
+        put(VIEWPORT+0x9C,0);
+        Java_org_ut3_port_GameActivity_nativeControlsVisible(NULL,NULL,(jboolean)visible);
+        assert(void_touch_menu_pending()==visible+2);
+        assert(void_touch_game_read(out)==1 && MEM32(VIEWPORT+0x9C)==(uint32_t)visible+2 && !void_touch_menu_pending());
+    }
     uint32_t xy[2]={99,99};
     ui_fixture();assert(void_touch_ui_mouse(xy)==2 && xy[0]==99 && xy[1]==99);
     put(VIEWPORT+0xB0,PATH_DATA);put(VIEWPORT+0xB4,1);put(VIEWPORT+0xB8,1);

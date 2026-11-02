@@ -176,7 +176,7 @@ class NativeListStyleChain(unittest.TestCase):
             elif address == 0xF75DB0:
                 entered += 1
                 mode_now = self.word(vm, string+0xBC) & 0xff
-                if inject and mode_now == 0 and baseline_x == baseline_y and baseline_x > 0 and factor > 1:
+                if inject and mode_now in (0, 2) and baseline_x == baseline_y and baseline_x > 0 and factor > 1:
                     policy = bytes(vm.mem_read(string+0xB8, 8)), self.word(vm, string+0xE4)
                     scaled = baseline_x * factor
                     vm.mem_write(string+0xB8, struct.pack('<fI', scaled, 1))
@@ -244,7 +244,7 @@ class NativeListStyleChain(unittest.TestCase):
                         self.assertAlmostEqual(after, before*factor, places=4)
 
     def test_default_non_none_and_anisotropic_bypass(self):
-        for x, y, mode, factor in ((1,1,0,1), (1,1,2,1.5), (.75,1.25,0,1.5)):
+        for x, y, mode, factor in ((1,1,0,1), (1,1,1,1.5), (.75,1.25,0,1.5)):
             original = self.fixture(x, y, factor, False, mode)
             bypass = self.fixture(x, y, factor, True, mode)
             self.assertFalse(bypass['injected'])
@@ -252,6 +252,13 @@ class NativeListStyleChain(unittest.TestCase):
             self.assertEqual(original['node_extent_scale'], bypass['node_extent_scale'])
             self.assertEqual(original['final_string_bytes_sha256'], bypass['final_string_bytes_sha256'])
             self.assertEqual(original['final_node_bytes_sha256'], bypass['final_node_bytes_sha256'])
+
+    def test_justified_map_cells_take_the_requested_scale(self):
+        original = self.fixture(1, 1, 1, False, mode=2)
+        scaled = self.fixture(1, 1, 1.5, True, mode=2)
+        self.assertTrue(scaled['injected'])
+        for before, after in zip(original['node_extent_scale'], scaled['node_extent_scale']):
+            self.assertAlmostEqual(after, before * 1.5, places=4)
 
     @classmethod
     def tearDownClass(cls):

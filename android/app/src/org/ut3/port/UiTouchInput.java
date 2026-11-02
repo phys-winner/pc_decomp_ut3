@@ -8,7 +8,7 @@ package org.ut3.port;
  */
 final class UiTouchInput {
     /** Native probe flags: a tap clicks, list rows follow the finger, a drag adjusts, a tap changes the option. */
-    static final int TAP = 1, ROWS = 2, DRAG = 4, OPTION = 8;
+    static final int TAP = 1, ROWS = 2, DRAG = 4, OPTION = 8, TEXT = 16;
     /**
      * List requests beside -8..8 rows: from 64 until the gesture retires the
      * game highlights the row under the moving cursor (held beyond the list,
@@ -21,6 +21,7 @@ final class UiTouchInput {
         boolean pointer(float x,float y);
         boolean button(boolean down);
         boolean scroll(int request); // rows or a list request; 0 retires the gesture.
+        default void keyboard() { }
         void reset();
     }
     private final Sink sink;
@@ -88,6 +89,7 @@ final class UiTouchInput {
         if(!sink.scroll(0)){cancel();return;}
         // Native queued taps may still await UI acknowledgement after Android UP.
         active=false;dragging=false;
+        if(!moved&&(flags&TEXT)!=0)sink.keyboard();
     }
     void cancel() {
         if(active)sink.reset();

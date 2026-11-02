@@ -649,6 +649,21 @@ static void zip_materialize(const char *host_dir)
     }
 }
 
+/* A virtual ZIP parent already exists for Windows, even before its sidecar directory does. */
+static int zip_materialize_parent(const char *windows_path, char *host)
+{
+    char parent[1024];
+    char *cut = normalize(windows_path, parent, sizeof parent) ? strrchr(parent, '\\') : NULL;
+    char *last = strrchr(host, '/');
+    if (!cut || !last) return 0;
+    *cut = 0;
+    if (zip_lookup(parent, NULL) != 2) return 0;
+    *last = 0;
+    zip_materialize(host);
+    *last = '/';
+    return 1;
+}
+
 /* A file only the archive has, about to be written: its bytes (unless truncated
  * anyway) go to the folder first. 0 or the Win32 error. */
 static uint32_t zip_copy_up(const zm_entry *e, const char *host, int copy)
@@ -830,19 +845,7 @@ static uint32_t create_file(const char *path, uint32_t access, uint32_t disposit
             zip_materialize(host);
             parent_ok = leaf = 1;
         } else if (!parent_ok && (oflags & O_CREAT)) {
-            /* A new file in a directory only the archive has. */
-            char up[1024];
-            char *cut = normalize(path, up, sizeof up) ? strrchr(up, '\\') : NULL;
-            char *last = strrchr(host, '/');
-            if (cut && last) {
-                *cut = 0;
-                if (zip_lookup(up, NULL) == 2) {
-                    *last = 0;
-                    zip_materialize(host);
-                    *last = '/';
-                    parent_ok = 1;
-                }
-            }
+            parent_ok = zip_materialize_parent(path, host);
         }
     }
     if (write || (oflags & (O_CREAT | O_TRUNC))) archive_changed(host);
@@ -1331,6 +1334,7 @@ static uint32_t copy_file(const char *from, const char *to, int fail_if_exists)
     const zm_entry *archived = NULL;
     uint64_t copied = 0;
     if (!a || !b) { error = ERROR_PATH_NOT_FOUND_; goto done; }
+    if (!dest_parent && game_zip) dest_parent = zip_materialize_parent(to, b);
     do { in = open(a, O_RDONLY | O_NONBLOCK | O_CLOEXEC); } while (in < 0 && errno == EINTR);
     if (in < 0 && errno == ENOENT && zip_lookup(from, &archived) == 1) {
         zip_stat(archived, &source);
@@ -1434,6 +1438,7 @@ static uint32_t move_file(const char *from, const char *to)
     struct stat st;
     int ok = 0;
     if (a && b) {
+        if (game_zip) zip_materialize_parent(to, b);
         if (!stat(b, &st)) void_set_last_error(ERROR_ALREADY_EXISTS_);
         else if (rename(a, b)) void_set_last_error(void_errno_to_win32(errno));
         else ok = 1;
@@ -1465,8 +1470,15 @@ static uint32_t create_directory(const char *path)
     char *host = path ? to_host(path, NULL, NULL) : NULL;
     uint32_t ok = 0;
     if (host) {
+        if (game_zip && zip_lookup(path, NULL)) {
+            void_set_last_error(ERROR_ALREADY_EXISTS_);
+            free(host);
+            return 0;
+        }
+        if (game_zip) zip_materialize_parent(path, host);
         if (!mkdir(host, 0775)) ok = 1;
-        else void_set_last_error(errno == EEXIST ? ERROR_ALREADY_EXISTS_ : void_errno_to_win32(errno));
+        else void_set_last_error(errno == EEXIST ? ERROR_ALREADY_EXISTS_ :
+            errno == ENOENT ? ERROR_PATH_NOT_FOUND_ : void_errno_to_win32(errno));
         listing_forget_parent(host, 0);
     } else {
         void_set_last_error(ERROR_PATH_NOT_FOUND_);

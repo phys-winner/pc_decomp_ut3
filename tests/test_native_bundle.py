@@ -66,6 +66,16 @@ class NativeBundleTest(unittest.TestCase):
             path = "build/turnip-runtime/runtime/licenses/" + name
             self.write(path, b"custom driver license")
             self.turnip["licenses"].append({"path": path, "sha256": self.digest(path)})
+        self.write("dependencies-textures.json", b"{}")
+        self.write("tools/build_texconv.py", b"texture tool")
+        self.write("android/texconv/ut3tex.cpp", b"texture converter")
+        self.write("build/texconv/libtexconv.so", self.elf)
+        for dependency in ("astcenc", "etcpak"):
+            self.write(f"reference/{dependency}/LICENSE.txt", b"texture license")
+        self.texture = {"manifest_sha256": self.digest("dependencies-textures.json"),
+                        "tool_sha256": self.digest("tools/build_texconv.py"),
+                        "sha256": self.digest("build/texconv/libtexconv.so"),
+                        "sources": {"android/texconv/ut3tex.cpp": self.digest("android/texconv/ut3tex.cpp")}}
         self.receipts()
 
     def write(self, name, data):
@@ -79,12 +89,18 @@ class NativeBundleTest(unittest.TestCase):
     def receipts(self):
         for name, value in (("native-audio", self.audio), ("dxvk", self.dxvk), ("turnip-runtime", self.turnip)):
             self.write(f"build/{name}/build-receipt.json", json.dumps(value).encode())
+        self.write("build/texconv/receipt.json", json.dumps(self.texture).encode())
 
     def test_complete_bundle_deduplicates_identical_cpp_runtime(self):
         runtime, pins, licenses = build_android.native_dependencies()
-        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so"})
+        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so", "libtexconv.so"})
         self.assertIn(self.root / "build/dxvk/libut3_dxvk.a", pins)
-        self.assertEqual(len(licenses), 6)
+        self.assertEqual(len(licenses), 8)
+
+    def test_modified_converter_is_rejected(self):
+        self.write("build/texconv/libtexconv.so", self.elf + b"changed")
+        with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            build_android.native_dependencies()
 
     def test_modified_turnip_driver_is_rejected(self):
         self.write("build/turnip-runtime/runtime/libut3_turnip.so", self.elf + b"changed")

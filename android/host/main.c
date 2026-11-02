@@ -9,6 +9,9 @@ int void_modules_start(void);
 void void_files_std_init(void);
 void void_loading_init(void);
 void void_ui_hud_init(void);
+int void_openspy_init(void);
+int void_profiles_init(void);
+void void_texture_cache_init(const char *game);
 
 void void_process_exit(uint32_t code, int run_detach)
 {
@@ -36,6 +39,9 @@ int ut3_game_main(const char *game, const char *data, int selftest)
     if (!void_files_init(game, data)) return 66;
     void_files_std_init();
     if (!void_modules_init(NULL)) return 67;
+    if (!void_openspy_init()) return 67;
+    if (!void_profiles_init()) return 67;
+    void_texture_cache_init(game);
     void_loading_init();
     void_ui_hud_init();
     void_machine_enter();

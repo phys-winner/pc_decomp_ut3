@@ -114,8 +114,10 @@ static void invoke(int scaled)
 int main(void)
 {
     assert(VirtualAlloc((void *)(uintptr_t)VOID_GUEST_BASE,LIST_TEST_SIZE,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)(uintptr_t)VOID_GUEST_BASE);
-    for(unsigned n=0;n<3;++n)for(unsigned s=0;s<3;++s) {
-        float baseline[]={0.75f,1,1.25f},scale[]={1.01f,1.25f,1.5f};fixture(scale[s],baseline[n]);expected=scale[s]*baseline[n];invoke(1);
+    for(unsigned mode=0;mode<=2;mode+=2)for(unsigned n=0;n<3;++n)for(unsigned s=0;s<3;++s) {
+        float baseline[]={0.75f,1,1.25f},scale[]={1.01f,1.25f,1.5f};fixture(scale[s],baseline[n]);
+        put(STRING+0xBC,0xAABBCC00|mode);memcpy(original_policy,GPTR(STRING+0xB8),8);
+        expected=scale[s]*baseline[n];invoke(1);
         assert(getf(STRING+0xDC)==expected&&getf(STRING+0xD4)==100*expected);
     }
     fixture(1.25f,1);float factor=0;assert(void_touch_ui_list_scale(STRING,&factor)&&factor==1.25f);
@@ -132,7 +134,7 @@ int main(void)
         case 11:putf(BOUNDS+0x14,0.75f);break;case 12:putf(BOUNDS+0x10,0);putf(BOUNDS+0x14,0);break;
         case 13:putf(BOUNDS+0x10,INFINITY);putf(BOUNDS+0x14,INFINITY);break;
         case 14:putf(BOUNDS+0x10,FLT_MAX);putf(BOUNDS+0x14,FLT_MAX);break;
-        case 15:put(STRING+0xBC,0xAABBCC02);memcpy(original_policy,GPTR(STRING+0xB8),8);break;
+        case 15:put(STRING+0xBC,0xAABBCC03);memcpy(original_policy,GPTR(STRING+0xB8),8);break;
         case 16:readonly=STRING+0xDC;break;case 17:denied=BOUNDS+0x10;break;
         case 18:put(0xF75DB0,0);break;case 19:put(0x1DEB464,0);break;
         }
@@ -145,7 +147,7 @@ int main(void)
     int cold_reads=reads;
     fixture(1,1);void_touch_ui_list_scale(STRING,&factor);reads=0;seed();invoke(0);int default_reads=reads;
     fixture(1.5f,1);put(VIEWPORT+0x90,1);void_touch_ui_list_scale(STRING,&factor);reads=0;seed();invoke(0);
-    printf("PASS actual wrapper: 9 relative-factor cases, 20 bypasses, original once, policies/flags/nodes/provider/errno preserved; cold UI reads=%d, warmed UI reads=%d, warmed gameplay-mode reads=%d per formatter\n",cold_reads,default_reads,reads);
+    printf("PASS actual wrapper: 18 None/Justified relative-factor cases, 20 bypasses, original once, policies/flags/nodes/provider/errno preserved; cold UI reads=%d, warmed UI reads=%d, warmed gameplay-mode reads=%d per formatter\n",cold_reads,default_reads,reads);
     puts("PASS S100 complete original core register/x87-window/segment/object result identical to direct original");
     return 0;
 }

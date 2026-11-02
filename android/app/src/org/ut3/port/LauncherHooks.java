@@ -37,7 +37,8 @@ public final class LauncherHooks implements PortHooks {
         if (!"game".equals(part) || folder == null || !folder.isDirectory()) return Collections.emptyList();
         String language = "INT";
         try {
-            language = new PortPreferences(context.getExternalFilesDir(null)).getString("language", "INT");
+            language = new PortPreferences(context.getExternalFilesDir(null)).getString("language",
+                GameSettings.defaultLanguage(folder, java.util.Locale.getDefault()));
         } catch (IOException error) {
             android.util.Log.w("UT3", "launcher: language setting: " + error);
         }

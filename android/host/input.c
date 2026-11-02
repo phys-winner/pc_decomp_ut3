@@ -612,6 +612,8 @@ void void_input_pump(void)
             }
             if (event.msg==UI_END) {
                 if (void_touch_ui_scroll)(void)void_touch_ui_scroll(INT32_MIN);
+                if (ui_probe_context==event.context && ui_probe_epoch==(uint32_t)event.touch && ui_probe_status>0)
+                    ui_probe_status=-2;
                 continue;
             }
             if (event.msg==UI_SCROLL || event.msg==UI_SCROLL_ACK) {
@@ -1034,9 +1036,15 @@ int void_input_touch_pad(uint32_t index, uint8_t out[16])
              * deflection past the bindings' 0.2 dead zone, like the touch stick's. */
             x = pad_lx; y = pad_ly;
             float scale = fminf(1.0f, (length - 0.2f) / 0.8f) / length / 32767.0f;
-            if (steering) touch_look_steer(pad_lx * scale, pad_ly * scale, steer, steer_flags, &x, &y);
+            if (steering && (steer_flags&8u)) touch_look_steer(pad_lx * scale, pad_ly * scale, steer, steer_flags, &x, &y);
         } else if (steering && (context&3u)==2u && (touch_move_x != 0 || touch_move_y != 0))
-            touch_look_steer(touch_move_x, touch_move_y, steer, steer_flags, &x, &y);
+        {
+            if (steer_flags&8192u) {
+                /* Scorpion's PC steering locks its wheels even for tiny radial-stick drift. */
+                float turn=fabsf(touch_move_x);
+                x=touch_axis(turn<=0.12f ? 0 : copysignf((turn-0.12f)/0.88f,touch_move_x));
+            } else touch_look_steer(touch_move_x, touch_move_y, steer, steer_flags, &x, &y);
+        }
         uint8_t left = 0, right = 0;
         int transient = 0;
         if (physical) {

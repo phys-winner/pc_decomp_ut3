@@ -72,7 +72,7 @@ final class TouchInput {
         int slot = find(-1);
         if (slot < 0) return false;
         // The stick zone holds one stick; a second finger there turns the camera.
-        if (role == MOVEMENT && movement >= 0) role = LOOK;
+        if (role == MOVEMENT && movement >= 0) role = action == FIRE ? PASSIVE : LOOK;
         ids[slot] = id; actions[slot] = action; roles[slot] = role; x[slot] = px; y[slot] = py;
         times[slot] = time; speed[slot] = untimed[slot] = 0;
         if (role == MOVEMENT) {
@@ -145,6 +145,13 @@ final class TouchInput {
         return true;
     }
     boolean padActive() { return movement >= 0 && pad; }
+
+    boolean fixed(int id, float px, float py, float cx, float cy, long time) {
+        if (movement >= 0 || !down(id, px, py, 0, MOVEMENT, time)) return false;
+        anchorX = cx; anchorY = cy;
+        move(id, px, py, time);
+        return true;
+    }
 
     void up(int id, float px, float py) { up(id, px, py, -1); }
 

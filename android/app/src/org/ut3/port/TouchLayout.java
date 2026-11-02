@@ -7,13 +7,13 @@ final class TouchLayout {
     private TouchLayout() {}
     /** Stable control ids; saved custom positions use NAMES, never these numbers. */
     static final int FIRE = 0, ALT = 1, JUMP = 2, DUCK = 3, USE = 4, WEAPON = 5, BOARD = 6, MORE = 7,
-        PAUSE = 8, SCORES = 9, SETTINGS = 10, KEYBOARD = 11, MODE = 12, FIRE2 = 13, COUNT = 14;
+        PAUSE = 8, SCORES = 9, SETTINGS = 10, KEYBOARD = 11, MODE = 12, FIRE2 = 13, STICK = 14, COUNT = 15;
     static final String[] NAMES = {"fire", "alt", "jump", "duck", "use", "weapon", "board", "more",
-        "pause", "scores", "settings", "keyboard", "mode", "fire2"};
+        "pause", "scores", "settings", "keyboard", "mode", "fire2", "stick"};
     /** Anchor corners of the safe area. */
     static final int BOTTOM_RIGHT = 0, BOTTOM_LEFT = 1, TOP_LEFT = 2, TOP_RIGHT = 3;
     static final int[] CORNER = {BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_RIGHT,
-        BOTTOM_LEFT, TOP_LEFT, TOP_LEFT, TOP_LEFT, TOP_RIGHT, TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT};
+        BOTTOM_LEFT, TOP_LEFT, TOP_LEFT, TOP_LEFT, TOP_RIGHT, TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_LEFT};
     /**
      * Centres in dp from the anchor corner, and diameters. The right thumb's arc
      * holds the combat cluster: Fire in its middle, Jump below it, secondary fire
@@ -21,17 +21,17 @@ final class TouchLayout {
      * left stick, so the left thumb can shoot while the right one aims.
      * Utilities keep the top row.
      */
-    static final float[] DX = {140, 48, 140, 48, 230, 230, 58, 58, 30, 82, 34, 88, 30, 150};
-    static final float[] DY = {142, 156, 50, 80, 218, 128, 196, 100, 30, 30, 34, 34, 84, 200};
-    static final float[] SIZE = {92, 68, 70, 62, 62, 68, 50, 48, 44, 44, 44, 44, 44, 64};
+    static final float[] DX = {140, 48, 140, 48, 230, 230, 58, 58, 30, 82, 34, 88, 30, 150, 132};
+    static final float[] DY = {142, 156, 50, 80, 218, 128, 196, 100, 30, 30, 34, 34, 84, 200, 112};
+    static final float[] SIZE = {92, 68, 70, 62, 62, 68, 50, 48, 44, 44, 44, 44, 44, 64, 120};
     /** Smallest finger target, whatever the player's control size. */
     static final float MIN_DP = 44;
     /** The smallest designed combat control; below its scale the floor keeps the arc. */
     static final float SMALLEST_DP = 62;
     /** Combat controls follow the thumbs in left-handed mode; utilities keep their corner. */
-    static boolean mirrored(int control) { return control <= MORE || control == FIRE2; }
+    static boolean mirrored(int control) { return control <= MORE || control == FIRE2 || control == STICK; }
     /** Order of placement: what the thumb uses most claims its place first. */
-    static final int[] ORDER = {FIRE, JUMP, ALT, DUCK, WEAPON, USE, FIRE2, BOARD, MORE, PAUSE, SCORES, SETTINGS, KEYBOARD, MODE};
+    static final int[] ORDER = {FIRE, JUMP, ALT, DUCK, WEAPON, USE, FIRE2, BOARD, MORE, PAUSE, SCORES, SETTINGS, KEYBOARD, MODE, STICK};
     /** Height of the default cluster in dp; scale is limited so it fits the safe area. */
     static final float CLUSTER_DP = 266;
 
@@ -186,12 +186,24 @@ final class TouchLayout {
         BAR_HEIGHT = 48f / 1280, BAR_SELECTED = 1.5f;
     /** {left, top, right, bottom, pitch} of the settled bar on the full game surface; null without cards. */
     static float[] weaponBar(float left, float top, float right, float bottom, float uiScale, int count) {
+        return weaponBar(left, top, right, bottom, uiScale, 1, count);
+    }
+    static float[] weaponBar(float left, float top, float right, float bottom, float uiScale, float barScale, int count) {
         float w = right - left;
         if (!(w > 0) || !(bottom - top > 0) || count < 2) return null;
         float s = Float.isFinite(uiScale) ? Math.max(1, Math.min(1.5f, uiScale)) : 1;
-        float pitch = BAR_PITCH * w * s, total = (count - 1 + BAR_SELECTED) * pitch;
+        float b = Float.isFinite(barScale) ? Math.max(.5f, Math.min(1, barScale)) : 1;
+        float pitch = BAR_PITCH * w * s * b, total = (count - 1 + BAR_SELECTED) * pitch;
         float x = left + w * .5f + s * BAR_OFFSET * w - total * .5f, y = bottom - s * BAR_BOTTOM * w;
-        return new float[]{x, y - s * BAR_HEIGHT * w * BAR_SELECTED, x + total, y, pitch};
+        return new float[]{x, y - s * b * BAR_HEIGHT * w * BAR_SELECTED, x + total, y, pitch};
+    }
+    static int weaponHit(float x, float left, float pitch, int count, int selected) {
+        if (!Float.isFinite(x) || !(pitch > 0) || count < 1 || selected < 0 || selected >= count) return -1;
+        float position = (x - left) / pitch;
+        if (position < 0 || position > count - 1 + BAR_SELECTED) return -1;
+        if (position < selected) return Math.min(count - 1, (int)position);
+        if (position < selected + BAR_SELECTED) return selected;
+        return Math.min(count - 1, (int)(position - BAR_SELECTED + 1));
     }
     /** Slots 0-9 present in the bar's bit mask, left to right. */
     static int[] weaponSlots(int mask) {

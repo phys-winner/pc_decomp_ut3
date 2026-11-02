@@ -15,6 +15,26 @@ import pefile
 
 
 class LiftInputsTest(unittest.TestCase):
+    def test_openspy_call_rewrites_survive_targeted_regeneration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'functions_0000.c'
+            original = 'void f(void){ RECOMP_CALL(sub_01243A50); RECOMP_CALL(sub_01243A50); RECOMP_CALL(sub_01243A50); }\n'
+            path.write_text(original)
+            lift_ut3.openspy_calls(root, [path.name])
+            patched = path.read_text()
+            self.assertEqual(patched.count('RECOMP_CALL(void_openspy_md5)'), 3)
+            lift_ut3.openspy_calls(root, [path.name])
+            self.assertEqual(path.read_text(), patched)
+            path.write_text(patched.replace('RECOMP_CALL(void_openspy_md5)', 'RECOMP_CALL(sub_01243A50)', 1))
+            lift_ut3.openspy_calls(root, [path.name])
+            self.assertEqual(path.read_text(), patched)
+            path.write_text(original.replace('RECOMP_CALL(sub_01243A50);', '', 1))
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, 'expected 3, found 2'):
+                lift_ut3.openspy_calls(root, [path.name])
+            self.assertEqual(path.read_bytes(), before)
+
     def test_changed_input_is_rejected_before_pe_parsing(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "image.exe"

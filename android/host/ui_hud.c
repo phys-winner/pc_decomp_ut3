@@ -14,7 +14,7 @@ static void_fn hud_original[2],hud_push,hud_pop;
 static float hud_requested=1.0f,hud_scale=1.0f;
 static int hud_ready,hud_bound;
 static struct {
-    uint32_t root,canvas,map,portrait,resolution[4],names[2][2];
+    uint32_t root,canvas,map,portrait,resolution[4],names[3][2];
 } hud_metadata;
 static void_fn crosshair_original_tile,crosshair_original_position;
 static int crosshair_bound;
@@ -37,6 +37,7 @@ static void crosshair_position(void);
  * PawnOwner.InvManager.PendingWeapon, else Pawn.Weapon, and animates and names
  * that card itself. The field is restored before any gameplay code can run. */
 extern uint32_t void_touch_weapon_preview(void) __attribute__((weak));
+extern float void_touch_weapon_wheel_scale(void) __attribute__((weak));
 static struct { uint32_t hud,weapon,owner,item_manager,pawn_class,pawn_manager,manager_class,pending; } preview_metadata;
 static _Thread_local struct { int active; uint32_t manager,previous,preview; } preview_scope;
 
@@ -152,6 +153,8 @@ static int hud_prepare(void)
     uint32_t first=hud_field(root,"DrawGameHUD","Function"),second=hud_field(root,"DrawPostGameHud","Function");
     if(!first||!second||!hud_read(first+0x2C,hud_metadata.names[0],8)||
        !hud_read(second+0x2C,hud_metadata.names[1],8))return 0;
+    uint32_t wheel=hud_field(root,"DisplayQuickPickMenu","Function");
+    if(wheel)hud_read(wheel+0x2C,hud_metadata.names[2],8);
     hud_metadata.canvas=hud_property(root,"Canvas","ObjectProperty",4);
     hud_metadata.map=hud_property(root,"MapDefaultSize","FloatProperty",4);
     hud_metadata.portrait=hud_property(root,"CharPortraitSize","StructProperty",8);
@@ -405,7 +408,7 @@ static void hud_leave(void)
     }
     --hud_scope.busy;hud_restore(&saved);
 }
-static int hud_enter(uint32_t object)
+static int hud_enter(uint32_t object,float factor)
 {
     uint32_t cls,canvas,kind,native,depth;
     if(hud_scope.active||hud_scope.busy||object>UINT32_MAX-65536||!hud_member(object,0x34,&cls)||!hud_class(cls,"UTHUD")||
@@ -419,7 +422,7 @@ static int hud_enter(uint32_t object)
         if(!isfinite(value)||value<=0||value>65536)return 0;
     }
     if(!void_vm_writable(object+hud_metadata.resolution[1],4))return 0;
-    if(hud_scale==1.0f) {
+    if(factor==1.0f) {
         uint32_t data;
         if(resolution[0]==resolution[1]||!hud_word(native+0x24,&data)||
            !hud_read(data+(depth-1)*80,hud_scope.entry,sizeof hud_scope.entry))return 0;
@@ -445,17 +448,17 @@ static int hud_enter(uint32_t object)
     hud_scope.native=native;hud_scope.depth=depth;memcpy(hud_scope.bounds,bounds,sizeof bounds);
     hud_scope.map=map;memcpy(hud_scope.portrait,portrait,sizeof portrait);memcpy(hud_scope.resolution,resolution,sizeof resolution);
     hud_scope.entry_valid=0;hud_scope.scaled=1;
-    if(!hud_push_matrix(native,hud_scale))return 0;
+    if(!hud_push_matrix(native,factor))return 0;
     hud_scope.active=1;
     uint32_t pushed;
     if(!hud_depth(native,&pushed)||pushed!=depth+1) { hud_leave();return 0; }
     uint32_t data;
     if(!hud_word(native+0x24,&data)||!hud_read(data+depth*80,hud_scope.entry,sizeof hud_scope.entry)) { hud_leave();return 0; }
     hud_scope.entry_valid=1;
-    for(unsigned i=0;i<4;++i)values[i]/=hud_scale;
-    uint32_t sizes[2]={(uint32_t)((float)bounds[4]/hud_scale),(uint32_t)((float)bounds[5]/hud_scale)};
+    for(unsigned i=0;i<4;++i)values[i]/=factor;
+    uint32_t sizes[2]={(uint32_t)((float)bounds[4]/factor),(uint32_t)((float)bounds[5]/factor)};
     if(!sizes[0])sizes[0]=1;if(!sizes[1])sizes[1]=1;
-    map_value*=hud_scale;portrait_values[0]*=hud_scale;portrait_values[1]*=hud_scale;
+    map_value*=factor;portrait_values[0]*=factor;portrait_values[1]*=factor;
     hud_write(canvas+0x40,values,16);hud_write(canvas+0x64,sizes,8);
     hud_write(object+hud_metadata.map,&map_value,4);hud_write(object+hud_metadata.portrait,portrait_values,8);
     hud_write(object+hud_metadata.resolution[1],resolution,4);
@@ -508,18 +511,20 @@ static void preview_leave(void)
 static void hud_opcode(unsigned final)
 {
     uint32_t frame,code,name[2],function,kind;
-    int target=0,crosshair=0,game=0;
+    int target=0,crosshair=0,game=0,wheel=0;
     if(!hud_scope.active&&!hud_scope.busy&&!crosshair_scope.active&&g_esp<=UINT32_MAX-8&&void_machine_is_owned()&&
        hud_word(g_esp+4,&frame)&&hud_member(frame,0x0C,&code)) {
         int named=final ? hud_word(code,&function)&&function<=UINT32_MAX-0x34&&hud_read(function+0x2C,name,8) : hud_read(code,name,8);
         game=named&&!memcmp(name,hud_metadata.names[0],8);
-        target=game||(named&&!memcmp(name,hud_metadata.names[1],8));
+        wheel=named&&hud_metadata.names[2][0]&&!memcmp(name,hud_metadata.names[2],8);
+        target=game||wheel||(named&&!memcmp(name,hud_metadata.names[1],8));
         crosshair=named&&crosshair_metadata.root&&!memcmp(name,crosshair_metadata.name,8)&&
             (!final||function==crosshair_metadata.function)&&code<=UINT32_MAX-8;
         /* The common unmatched final call pays no class/name traversal. */
         if(target&&final)target=hud_member(function,0x34,&kind)&&hud_class(kind,"Function");
     }
-    int entered=target&&hud_enter(g_ecx);
+    float factor=wheel&&void_touch_weapon_wheel_scale ? void_touch_weapon_wheel_scale() : hud_scale;
+    int entered=target&&hud_enter(g_ecx,factor);
     int previewed=game&&target&&preview_enter(g_ecx);
     int cross_entered=crosshair&&crosshair_enter(g_ecx,frame,code+(final?4:8));
     uint64_t cross_generation=crosshair_scope.generation;

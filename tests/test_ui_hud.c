@@ -221,7 +221,7 @@ int main(void)
         putf(HUD_OBJECT+0x524,physical_width/1024);expected_scale=large?1.5f:1;
         expected_scaled=(int)large;expected_aspect=1;
         assert(void_ui_hud_scale_observe(expected_scale));
-        if(!ratio&&!large)assert(!hud_enter(HUD_OBJECT)); /* Identical4:3bits: no active scope. */
+        if(!ratio&&!large)assert(!hud_enter(HUD_OBJECT,hud_scale)); /* Identical4:3bits: no active scope. */
         void_resolve(HUD_VIRTUAL)();restored();assert(pushes==(int)large&&pops==(int)large);
         assert(getf(HUD_OBJECT+0x524)==physical_width/1024);
         assert(getf(HUD_OBJECT+0x520)==1.40625f&&getf(HUD_OBJECT+0x528)==1.875f&&getf(HUD_OBJECT+0x52C)==1.875f);

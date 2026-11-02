@@ -15,6 +15,11 @@ import build_uscript
 def original_route_contract():
     """Pin the original callbacks/skin restoration reused by the gear route."""
     folder = ROOT / "research/native-settings-source"
+    originals = ("UTUIFrontEnd_Settings", "UTUITabPage_MidGameSettings")
+    if any(not (folder / (name + ".uc")).is_file() for name in originals):
+        original = Path(json.loads((ROOT / "config/inputs.json").read_text())["source_root"])
+        subprocess.run([sys.executable, str(ROOT / "tools/extract_scripttext.py"), str(folder),
+                        str(original / "UTGame/CookedPC/UTGame.u"), *originals], check=True)
     parent = re.sub(r"\s+", "", (folder / "UTUIFrontEnd_Settings.uc").read_text(encoding="utf-8"))
     midgame = re.sub(r"\s+", "", (folder / "UTUITabPage_MidGameSettings.uc").read_text(encoding="utf-8"))
     assert "OpenSceneByName(SettingsPanelsScene,false,OnPanelsSceneOpened)" in parent
@@ -60,6 +65,12 @@ def main():
     engine.write_text(engine.read_text(encoding="utf-8-sig") +
         "\n[Core.System]\nPaths=..\\UTGame\\Unpublished\\CookedPC\\Script\n" +
         "SeekFreePCPaths=..\\UTGame\\Unpublished\\CookedPC\\Script\n", encoding="utf-8")
+    options = (ROOT / "android/uscript/AndroidPort/AndroidPortOptions-RUS.ini").read_text(encoding="utf-8")
+    caption = re.search(r"(?m)^LayoutCaption=(.+)$", options)[1].strip()
+    game_config = work / "UTGame/Config/UTGame.ini"
+    data = game_config.read_bytes()
+    text = data.decode("utf-16" if data.startswith(b"\xff\xfe") else "utf-8-sig")
+    game_config.write_text(text + "\n[AndroidPortChecks.AndroidPortDataStore]\nLayoutCaption=" + caption + "\n", encoding="utf-16")
     log = work / "UTGame/Logs/AndroidPortChecks.log"
     log.unlink(missing_ok=True)
     command = [str(work / "Binaries/UT3.exe"), "run", "AndroidPortChecks.AndroidPortChecks", "-unattended",
@@ -81,7 +92,7 @@ def main():
         raise AssertionError("SaveConfig did not create UTAndroidPort.ini in the private checkout")
     settings = saved.read_text(encoding="utf-16" if saved.read_bytes().startswith(b"\xff\xfe") else "utf-8-sig")
     assert "[AndroidPortChecks.AndroidPortSettings]" in settings
-    for expected in ("renderer=dxvk-turnip", "language=RUS", "fpsLimit=0", "renderScale=25", "touchGyroMode=2",
+    for expected in ("renderer=dxvk-turnip", "language=RUS", "fpsLimit=90", "renderScale=25", "touchGyroMode=2",
                      "touchWasd=True", "uiScale=1.250000"):
         assert expected.lower() in settings.lower(), expected
     evidence = ROOT / "research/native-settings-selfcheck"

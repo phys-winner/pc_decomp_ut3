@@ -33,7 +33,8 @@ void __wrap_sub_00F75DB0(void)
            void_vm_writable(string+0xB8,8)&&void_vm_writable(string+0xDC,8)&&void_vm_writable(string+0xE4,4)) {
             memcpy(baseline,GPTR(bounds+0x10),8);memcpy(policy,GPTR(string+0xB8),8);
             scaled=baseline[0]*factor;
-            if(!policy[4]&&isfinite(baseline[0])&&baseline[0]>0&&baseline[0]==baseline[1]&&
+            /* Game-mode and map cells use Justified; its fit otherwise erases explicit UI scaling. */
+            if((policy[4]==0||policy[4]==2)&&isfinite(baseline[0])&&baseline[0]>0&&baseline[0]==baseline[1]&&
                isfinite(scaled)&&scaled>0) {
                 memcpy(&flags,GPTR(string+0xE4),4);
                 uint8_t normal[8];memcpy(normal,policy,8);memcpy(normal,&scaled,4);normal[4]=1;

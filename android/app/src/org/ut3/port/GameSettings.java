@@ -58,6 +58,8 @@ final class GameSettings {
             current = bootstrap(previous, read(game, "Engine/Config/BaseEngine.ini"), defaults);
         }
         String defaults = read(game, "UTGame/Config/DefaultCompat.ini");
+        if (previous == null || repair)
+            current = section(current, "SystemSettings", minimumVideo(defaults, width, height, scale));
         String result = minimum(current, defaults, width, height, fps, nativePacer, scale);
         LinkedHashMap<String, String> locale = new LinkedHashMap<>();
         locale.put("Language", language);
@@ -72,11 +74,13 @@ final class GameSettings {
                 throw new IllegalArgumentException("Unsupported DefaultCompat inheritance");
             compat = combine(read(game, "Engine/Config/BaseCompat.ini"), defaults);
         }
-        // First-run hardware detection reapplies a bucket after SystemSettings.
-        // Keep real hardware scores, but every chosen bucket uses our minimum.
-        Map<String, String> video = minimumVideo(defaults, width, height, scale);
-        for (int bucket = 1; bucket <= 5; bucket++)
-            compat = section(compat, "AppCompatBucket" + bucket, video);
+        // Older ports replaced every quality preset with bucket 1, so changing
+        // the game's graphics level could never select a higher preset.
+        if (uniformMinimum(compat, defaults)) {
+            String original = combine(read(game, "Engine/Config/BaseCompat.ini"), defaults);
+            for (int bucket = 1; bucket <= 5; bucket++)
+                compat = section(compat, "AppCompatBucket" + bucket, profile(original, bucket));
+        }
         write(compatibility, compat);
         if (repair) {
             File backup = new File(engine.getParentFile(), "UTEngine.before-bootstrap-repair.ini.bak");
@@ -225,7 +229,13 @@ final class GameSettings {
     static String minimum(String current, String compatibility, int width, int height, int fps, boolean nativePacer, int scale) {
         validateVideo(width, height, fps);
         validateScale(scale);
-        Map<String, String> video = minimumVideo(compatibility, width, height, scale);
+        Map<String, String> video = new LinkedHashMap<>();
+        if (legacySeed(current) || !ini(current).containsKey("systemsettings"))
+            video.putAll(minimumVideo(compatibility, width, height, scale));
+        video.put("ResX", Integer.toString(width));
+        video.put("ResY", Integer.toString(height));
+        video.put("UseVsync", "False");
+        video.put("ScreenPercentage", Integer.toString(scale));
         LinkedHashMap<String, String> timing = new LinkedHashMap<>();
         // DXVK delays its frame-latency signal at the selected native rate.
         // Keep UE3's independent adaptive limiter for the GLES path.
@@ -248,6 +258,36 @@ final class GameSettings {
 
     static final String[] LANGUAGES = {"INT", "RUS", "DEU", "FRA", "ESN", "ITA", "POL", "CZE", "HUN"};
     static final String[] LANGUAGE_NAMES = {"English", "Русский", "Deutsch", "Français", "Español", "Italiano", "Polski", "Čeština", "Magyar"};
+
+    static String defaultLanguage(File game, Locale locale) {
+        String[] languages = {"en", "ru", "de", "fr", "es", "it", "pl", "cs", "hu"};
+        for (int i = 0; i < languages.length; i++) if (languages[i].equals(locale.getLanguage())) {
+            try { validateLanguage(game, LANGUAGES[i]); return LANGUAGES[i]; }
+            catch (IOException missing) { return "INT"; }
+        }
+        return "INT";
+    }
+
+    static int[] displayRates(float[] rates) {
+        return java.util.stream.IntStream.range(0, rates.length)
+            .filter(i -> Float.isFinite(rates[i]) && rates[i] >= 1 && rates[i] <= 1000)
+            .map(i -> Math.round(rates[i])).distinct().sorted().toArray();
+    }
+
+    static int nearestRate(int requested, int[] rates) {
+        if (rates.length == 0) return 60;
+        int best = rates[rates.length - 1];
+        if (requested == 0) return best;
+        for (int rate : rates) if (Math.abs(rate - requested) < Math.abs(best - requested)) best = rate;
+        return best;
+    }
+
+    static String displayOptions(String options, int[] rates) {
+        StringBuilder out = new StringBuilder(options);
+        out.append("\n[AndroidPort.AndroidPortDataStore]\n!DisplayFps=ClearArray\n");
+        for (int rate : rates) out.append(".DisplayFps=").append(rate).append('\n');
+        return out.toString();
+    }
 
     static void validateLanguage(File game, String language) throws IOException {
         boolean supported = false;
@@ -278,17 +318,25 @@ final class GameSettings {
             }
         }
         String path = "C:\\Users\\Player\\Documents\\My Games\\Unreal Tournament 3\\UTGame\\Published\\CookedPC\\Script";
-        String layer = "[Core.System]\n+Paths=" + path + "\n+SeekFreePCPaths=" + path +
-            "\n[Engine.Engine]\nGameViewportClientClassName=AndroidPort.AndroidPortViewportClient\n" +
+        String originalEngine = read(engine);
+        StringBuilder paths = new StringBuilder("[Core.System]\n");
+        for (String name : new String[]{"Paths", "SeekFreePCPaths"}) {
+            paths.append('!').append(name).append("=ClearArray\n.").append(name).append('=').append(path).append('\n');
+            for (String line : ini(originalEngine).getOrDefault("core.system", new ArrayList<>()))
+                if (key(line).equalsIgnoreCase(name) && !value(line).equalsIgnoreCase(path))
+                    paths.append('.').append(name).append('=').append(value(line)).append('\n');
+        }
+        String layer = paths +
+            "[Engine.Engine]\nGameViewportClientClassName=AndroidPort.AndroidPortViewportClient\n" +
             "[Engine.DataStoreClient]\n+GlobalDataStoreClasses=AndroidPort.AndroidPortDataStore\n" +
             "+GlobalDataStoreClasses=AndroidPort.AndroidPortValueStore\n";
-        write(engine, combine(read(engine), layer));
+        write(engine, combine(originalEngine, layer));
         File runtimeGame = new File(engine.getParentFile(), "UTGame.ini");
         String current = runtimeGame.isFile() ? withoutPortOptions(read(runtimeGame)) :
             combine(read(game, "Engine/Config/BaseGame.ini"), read(game, "UTGame/Config/DefaultGame.ini"));
         if (!options.contains("OptionSet=AndroidPort") || !options.contains("<AndroidPort:"))
             throw new IOException("AndroidPort option definitions are missing");
-        write(runtimeGame, combine(current, options.replaceAll("(?m)^[\\t ]*\\r?\\n", "") + FORCE_FEEDBACK));
+        write(runtimeGame, combine(combine(current, FORCE_FEEDBACK), options.replaceAll("(?m)^[\\t ]*\\r?\\n", "")));
     }
 
     /*
@@ -298,7 +346,8 @@ final class GameSettings {
      * gamepad in use, which Android passes to the pad's motors.
      */
     static final String FORCE_FEEDBACK =
-        "\n[UTGame.UTPlayerController]\nForceFeedbackManagerClassName=WinDrv.XnaForceFeedbackManager\n";
+        "\n[UTGame.UTPlayerController]\nForceFeedbackManagerClassName=WinDrv.XnaForceFeedbackManager\n" +
+        "[UTGame.UTGameUISceneClient]\nbPerformedMinSpecCheck=True\n";
 
     /*
      * The option definitions each start writes replace the previous build's in
@@ -336,6 +385,29 @@ final class GameSettings {
         video.put("UseVsync", "False");
         video.put("ScreenPercentage", Integer.toString(scale));
         return video;
+    }
+
+    private static Map<String, String> profile(String text, int bucket) {
+        LinkedHashMap<String, String> result = new LinkedHashMap<>();
+        for (String line : ini(text).getOrDefault("appcompatbucket" + bucket, new ArrayList<>()))
+            if (!key(line).isEmpty()) result.put(key(line), value(line));
+        return result;
+    }
+
+    private static boolean uniformMinimum(String current, String defaults) {
+        Map<String, String> minimum = profile(defaults, 1);
+        for (int bucket = 1; bucket <= 5; bucket++) {
+            Map<String, String> selected = profile(current, bucket);
+            for (Map.Entry<String, String> setting : minimum.entrySet()) {
+                String name = setting.getKey();
+                if (name.equalsIgnoreCase("ResX") || name.equalsIgnoreCase("ResY") ||
+                    name.equalsIgnoreCase("UseVsync") || name.equalsIgnoreCase("ScreenPercentage")) continue;
+                String actual = selected.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(name))
+                    .map(Map.Entry::getValue).findFirst().orElse("");
+                if (!actual.replaceAll("\\s+", "").equalsIgnoreCase(setting.getValue().replaceAll("\\s+", ""))) return false;
+            }
+        }
+        return !minimum.isEmpty();
     }
 
     static String section(String current, String name, Map<String, String> values) {

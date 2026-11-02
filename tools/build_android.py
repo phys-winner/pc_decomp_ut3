@@ -24,7 +24,7 @@ def sha(path):
 
 def native_dependencies(prepare=False):
     if prepare:
-        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py"):
+        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py", "build_texconv.py"):
             subprocess.run([sys.executable, str(ROOT / "tools" / tool)], cwd=ROOT, check=True)
     pinned, runtime = {}, {}
 
@@ -83,6 +83,16 @@ def native_dependencies(prepare=False):
         path = ROOT / "reference/dxvk" / name
         pinned[path] = sha(path)
         licenses.append(path)
+    texture = json.loads((ROOT / "build/texconv/receipt.json").read_text())
+    pin(ROOT / "dependencies-textures.json", texture["manifest_sha256"])
+    pin(ROOT / "tools/build_texconv.py", texture["tool_sha256"])
+    for name, expected in texture["sources"].items():
+        pin(ROOT / name, expected)
+    library(ROOT / "build/texconv/libtexconv.so", texture["sha256"])
+    for directory in ("reference/astcenc", "reference/etcpak"):
+        for path in (ROOT / directory).glob("LICENSE*"):
+            pinned[path] = sha(path)
+            licenses.append(path)
     return runtime, pinned, licenses
 
 

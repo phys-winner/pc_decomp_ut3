@@ -42,20 +42,24 @@ final class GameControls extends View implements SensorEventListener {
     private static final int PIE_ACTIONS=0, PIE_SEATS=1, SEAT_COUNT=5;
     private static final int ACCENT=0xFFFFAE42;
     /** A held weapon button opens the original quick pick; a shorter tap or flick switches weapons. */
-    private static final long PICK_HOLD_MS=180, SCORES_TAP_MS=300, HINT_MS=5500, RESET_CONFIRM_MS=3000;
+    private static final long PICK_HOLD_MS=180, SCORES_TAP_MS=300, HINT_MS=5500;
     private static final int HINT_LOOK=1, HINT_WEAPON=2, HINT_MORE=4, HINT_VEHICLE=8, HINT_CROUCH=16, HINT_STEER=32, HINT_LEFT_FIRE=64;
     /** Script vehicle flags: Jump deploys, deployed, a gunner seat passes Jump on, look steering;
      *  16|32 without look steering is the gyroscope's sniper mode (scope zoom, a steered Redeemer). */
     private static final int VEHICLE_DEPLOY=1, VEHICLE_DEPLOYED=2, VEHICLE_SEAT_JUMP=4, VEHICLE_LOOK_STEER=8, VEHICLE_SCOPED=48;
+    private static final int VEHICLE_SEATS=128, VEHICLE_SEAT_MASK=31<<8;
     /** Gyroscope aim modes of the ANDROID settings. */
     static final int GYRO_OFF=0, GYRO_SNIPER=1, GYRO_FIRING=2, GYRO_ALWAYS=3;
     /** Script weapon bar word: slot bits 0-9, the selected slot in 10-13, shown in 14, HUD minimap in 15. */
     private static final int BAR_SHOWN=1<<14,HUD_MAP=1<<15;
-    private static final int TOOL_DONE=0, TOOL_RESET=1;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Rect safe=new Rect();
     private final float[] controlX=new float[TouchLayout.COUNT],controlY=new float[TouchLayout.COUNT],
-        controlR=new float[TouchLayout.COUNT],customX=new float[TouchLayout.COUNT],customY=new float[TouchLayout.COUNT];
+        controlR=new float[TouchLayout.COUNT],customX=new float[TouchLayout.COUNT],customY=new float[TouchLayout.COUNT],
+        customSize=new float[TouchLayout.COUNT];
+    private final boolean[] hidden=new boolean[TouchLayout.COUNT];
+    private float[] savedX,savedY,savedSize;
+    private boolean[] savedHidden;
     private final boolean[] shown=new boolean[TouchLayout.COUNT];
     private final ArrayList<float[]> occupied=new ArrayList<>(),reserved=new ArrayList<>();
     /** Utility controls under a finger, acting on release over the button, and their pointer ids. */
@@ -67,6 +71,8 @@ final class GameControls extends View implements SensorEventListener {
     private Runnable settingsAction;
     private float dp,scale=1,layoutScale=1,opacity=.65f,sensitivity=.22f,gyroSensitivity=1,uiScale=1;
     private boolean playing,editing,leftHanded,invertY,pausedByControl,focused,gyroListening,gyroActive,wasd;
+    private boolean touchVisible=true,weaponSwipe=true,weaponTap,staticStick;
+    private float barScale=1;
     /** On-screen W/A/S/D cross: its centre and cell size while shown, the finger driving it and its direction. */
     private float dpadX,dpadY,dpadCell;
     private boolean dpadShown;
@@ -76,14 +82,14 @@ final class GameControls extends View implements SensorEventListener {
     private boolean imeRequested,imeWasVisible;
     private long imeSession;
     private int accessibilityFocus=-1,hovered=-1;
-    private long sensorTime,resetDeadline;
+    private long sensorTime;
     private long cursorContext;
-    private boolean layoutPending;
     private boolean settingsPending;
-    // Layout editor: the dragged control and the toolbar.
-    private int editId=-1,editControl=-1,toolId=-1,toolPressed=-1;
+    // Layout editor: the selected control and its active drag.
+    private int editId=-1,editControl=-1;
     private float editDX,editDY;
-    private final float[][] tools=new float[2][];
+    private int pinchId=-1;
+    private float pinchSpan,pinchSize;
     // Weapon button: tap next, swipe along the weapon bar, hold the original quick pick.
     private int weaponId=-1;
     private boolean weaponPicker;
@@ -93,10 +99,13 @@ final class GameControls extends View implements SensorEventListener {
     private int[] scrubSlots=new int[0];
     private float scrubX,scrubStep;
     private boolean scrubButton;
+    private float scrubY;
+    private boolean scrubMoved;
     private Vibrator vibrator;
     // Scores: held shows while held, a tap keeps them shown until the next tap.
     private int scoresId=-1;
     private long scoresTime;
+    private int pauseId=-1;
     // Pie: More actions or vehicle seats; drag and release, or tap to keep it open.
     private boolean pieOpen,pieDragged,pieSticky;
     private int pieId=-1,pieKind,pieSelected=-1,pieSource=-1,swallowed=-1;
@@ -122,20 +131,28 @@ final class GameControls extends View implements SensorEventListener {
     private final Runnable weaponHold=new Runnable() {
         @Override public void run() { if(weaponId>=0&&!weaponPicker)startPicker(); }
     };
+    private final Runnable pauseHold=new Runnable() {
+        @Override public void run() {
+            if(pauseId>=0&&playing&&!editing&&(!authoritative||(cursorContext&3)==2)) {
+                pauseId=-1;
+                requestLayoutEditor();
+                haptic(HapticFeedbackConstants.LONG_PRESS);
+            }
+        }
+    };
     private final Runnable hintCheck=new Runnable() {
         @Override public void run() { offerHint(); }
     };
     /*
-     * The original UI stops its pointer short of the right and bottom edges (at
-     * 2401x1053 on a 2424x1080 screen), and the host waits until the UI reaches
+     * The original UI clips its cursor inside all four screen edges, and the host waits until it reaches
      * each point a finger gives it. UI points stay inside that reach, with a
      * margin that also covers other screen sizes.
      */
     private boolean uiPointer(float x,float y) {
         float w=getWidth(),h=getHeight();
         if(w<=0||h<=0)return false;
-        float right=w-Math.max(24f,h*.024f),bottom=h-Math.max(28f,h*.028f);
-        return GameActivity.nativePointer(Math.min(x,right)/w,Math.min(y,bottom)/h,false);
+        float insetX=Math.min(w*.5f,Math.max(24f,h*.024f)),insetY=Math.min(h*.5f,Math.max(28f,h*.028f));
+        return GameActivity.nativePointer(clamp(x,insetX,w-insetX)/w,clamp(y,insetY,h-insetY)/h,false);
     }
 
     GameControls(Context context) {
@@ -163,6 +180,10 @@ final class GameControls extends View implements SensorEventListener {
                 return GameActivity.nativeTouch(0,0,0,0,down?TouchInput.FIRE:0,cursorContext);
             }
             @Override public boolean scroll(int rows) { return GameActivity.nativeUiScroll(rows,cursorContext); }
+            @Override public void keyboard() {
+                imeTouchContext=cursorContext;
+                postOnAnimation(imeOpen);
+            }
             @Override public void reset() { GameActivity.nativeTouchReset(); }
         });
         sensors=(SensorManager)context.getSystemService(Context.SENSOR_SERVICE);
@@ -187,6 +208,11 @@ final class GameControls extends View implements SensorEventListener {
             scale=clamp(p.getFloat("touchScale",1),.65f,1.6f);
             opacity=clamp(p.getFloat("touchOpacity",.65f),.2f,1);
             uiScale=clamp(p.getFloat("uiScale",1),1,1.5f);
+            barScale=clamp(p.getFloat("weaponBarScale",1),.5f,1);
+            touchVisible=p.getBoolean("touchVisible",true);
+            weaponSwipe=p.getBoolean("touchWeaponSwipe",true);
+            weaponTap=p.getBoolean("touchWeaponTap",false);
+            staticStick=p.getBoolean("touchStaticStick",false);
             leftHanded=p.getBoolean("touchLeftHanded",false);
             invertY=p.getBoolean("touchInvertY",false);
             gyroMode=gyroMode(p);
@@ -197,6 +223,8 @@ final class GameControls extends View implements SensorEventListener {
             for(int i=0;i<TouchLayout.COUNT;++i) {
                 float x=p.getFloat("touchX"+TouchLayout.NAMES[i],Float.NaN),y=p.getFloat("touchY"+TouchLayout.NAMES[i],Float.NaN);
                 if(x>=0&&x<=1&&y>=0&&y<=1){customX[i]=x;customY[i]=y;}
+                customSize[i]=p.getFloat("touchSize"+TouchLayout.NAMES[i],Float.NaN);
+                hidden[i]=p.getBoolean("touchHidden"+TouchLayout.NAMES[i],false);
             }
         }
         input.configure(60*scale*dp,sensitivity*10/dp,
@@ -214,7 +242,7 @@ final class GameControls extends View implements SensorEventListener {
     void requestSettingsReload() { settingsPending=true;applyPendingSettings(); }
     private void applyPendingSettings() {
         // A native UI click can still await mouse-poll acknowledgement after Android UP.
-        if(settingsPending&&(cursorContext&3)!=3&&menuId<0&&editId<0&&!input.hasContacts()&&!imeRequested)reloadSettings();
+        if(settingsPending&&!editing&&(cursorContext&3)!=3&&menuId<0&&editId<0&&!input.hasContacts()&&!imeRequested)reloadSettings();
     }
     private static float clamp(float value,float minimum,float maximum) {
         return Math.max(minimum,Math.min(maximum,value));
@@ -231,16 +259,32 @@ final class GameControls extends View implements SensorEventListener {
         hideKeyboard();releaseInput();
     }
     private void releaseInput() {
+        cancelPause();
         removeCallbacks(uiPoll);removeCallbacks(weaponHold);padRelease();
         if(uiInput!=null)uiInput.cancel();
         if(input!=null) input.cancel();
-        menuId=editId=editControl=toolId=toolPressed=-1;
+        menuId=editId=pinchId=-1;
+        if(!editing)editControl=-1;
         weaponId=scoresId=swallowed=scrubId=dpadId=-1;weaponPicker=false;
         for(int i=0;i<utility.length;++i)utility[i]=-1;
         pieOpen=false;pieId=-1;pieSelected=-1;
         sensorTime=0; gyroActive=false; stopGyro(); invalidate();
     }
+    private long imeTouchContext;
+    private final Runnable imeOpen=new Runnable() {
+        @Override public void run() {
+            long context=imeTouchContext;
+            if(context==0)return;
+            if(!textUi(context)){imeTouchContext=0;return;}
+            int state=GameActivity.nativeUiControl(context);
+            // END is acknowledged after the original UI has consumed the field's click.
+            if(state==-2){imeTouchContext=0;if(!imeRequested)showKeyboard();return;}
+            if(state<0){imeTouchContext=0;return;}
+            postOnAnimation(this);
+        }
+    };
     void hideKeyboard() {
+        imeTouchContext=0;removeCallbacks(imeOpen);
         if(!imeRequested&&!imeWasVisible)return;
         ++imeSession;
         imeRequested=imeWasVisible=false;
@@ -316,43 +360,74 @@ final class GameControls extends View implements SensorEventListener {
         if(authoritative||(cursorContext&3)==1)return;
         release(); playing=next;layoutDirty=true;
         if(next&&pausedByControl) { input.pulse(TouchInput.PAUSE); pausedByControl=false; }
-        if(next&&layoutPending&&(cursorContext&2)==0)editLayout();
         updateGyro(); invalidate();
     }
     void editLayout() {
-        release(); editing=true;layoutPending=false;layoutDirty=true;resetDeadline=0;
+        release(); editing=true;layoutDirty=true;
+        savedX=customX.clone();savedY=customY.clone();savedSize=customSize.clone();savedHidden=hidden.clone();
+        editControl=TouchLayout.FIRE;
+        activity().showLayoutEditor(this);
         invalidate();
-        announceForAccessibility(text("Drag a control. Tap Done to save.","Перетащите кнопки. Нажмите «Готово» для сохранения."));
+        announceForAccessibility(text("Drag a control. Tap Save to keep the layout.","Перетащите кнопки. Нажмите «Сохранить» для сохранения раскладки."));
     }
-    void requestLayoutEditor() { layoutPending=true;syncContext(); }
+    void requestLayoutEditor() { if(!editing)editLayout(); }
     boolean handleBack() {
         if(imeRequested) { hideKeyboard();return true; }
-        if(editing) { finishEditing();return true; }
+        if(editing) { endLayoutEditor(false);return true; }
         if(pieOpen) { closePie();return true; }
         return false;
     }
     private void finishEditing() {
         release(); editing=false;layoutDirty=true;
+        activity().closeLayoutEditor();
         PortPreferences p=preferences();
         if(p!=null) {
             for(int i=0;i<TouchLayout.COUNT;++i) {
                 boolean custom=!Float.isNaN(customX[i]);
                 p.put("touchX"+TouchLayout.NAMES[i],custom?Float.toString(customX[i]):"");
                 p.put("touchY"+TouchLayout.NAMES[i],custom?Float.toString(customY[i]):"");
+                p.put("touchSize"+TouchLayout.NAMES[i],Float.isFinite(customSize[i])?Float.toString(customSize[i]):"");
+                p.put("touchHidden"+TouchLayout.NAMES[i],hidden[i]);
             }
             activity().savePortSettings(null);
         }
         updateGyro(); invalidate();
     }
-    private void resetLayout() {
-        long now=SystemClock.uptimeMillis();
-        if(now>resetDeadline) {
-            resetDeadline=now+RESET_CONFIRM_MS;postInvalidateDelayed(RESET_CONFIRM_MS);
-            announceForAccessibility(text("Tap Reset again to confirm.","Нажмите «Сброс» ещё раз для подтверждения."));
-            invalidate(); return;
-        }
-        for(int i=0;i<TouchLayout.COUNT;++i)customX[i]=customY[i]=Float.NaN;
-        resetDeadline=0;layoutDirty=true; invalidate();
+    String editLabel(int control) { return control==TouchLayout.STICK?text("Movement stick","Стик движения"):label(control); }
+    int editSelection() { return editControl; }
+    float editSize() { return buttonSize(editControl)/dp; }
+    boolean editHidden() { return editControl>=0&&hidden[editControl]; }
+    void editSelect(int control) { editControl=control;invalidate(); }
+    void editSize(float diameter) {
+        if(editControl<0)return;
+        customSize[editControl]=clamp(diameter,TouchLayout.MIN_DP,200);
+        configureInput();
+        layoutDirty=true;invalidate();
+    }
+    void editHidden(boolean value) { if(editControl>=0)hidden[editControl]=value;invalidate(); }
+    void resetEditedLayout() {
+        java.util.Arrays.fill(customX,Float.NaN);java.util.Arrays.fill(customY,Float.NaN);
+        java.util.Arrays.fill(customSize,Float.NaN);java.util.Arrays.fill(hidden,false);
+        layoutDirty=true;invalidate();
+    }
+    void endLayoutEditor(boolean save) {
+        if(save){finishEditing();return;}
+        System.arraycopy(savedX,0,customX,0,customX.length);System.arraycopy(savedY,0,customY,0,customY.length);
+        System.arraycopy(savedSize,0,customSize,0,customSize.length);System.arraycopy(savedHidden,0,hidden,0,hidden.length);
+        release();editing=false;layoutDirty=true;activity().closeLayoutEditor();invalidate();
+    }
+    private float buttonSize(int control) {
+        return control>=0&&Float.isFinite(customSize[control])?clamp(customSize[control],TouchLayout.MIN_DP,200)*dp:
+            TouchLayout.size(Math.max(0,control),dp,layoutScale);
+    }
+    private float stickRadius() { return buttonSize(TouchLayout.STICK)*.5f; }
+    private void configureInput() {
+        input.configure(stickRadius(),sensitivity*10/dp,preferences()==null?1:preferences().getFloat("touchAltSensitivity",1),invertY);
+    }
+    private float[] stickAnchor() {
+        int c=TouchLayout.STICK;
+        if(Float.isFinite(customX[c]))return new float[]{safe.left+(leftHanded?1-customX[c]:customX[c])*width(),safe.top+customY[c]*height()};
+        return TouchLayout.anchor(c,safe.left,safe.top,getWidth()-safe.right,getHeight()-safe.bottom,dp,layoutScale,leftHanded);
     }
     @Override public WindowInsets onApplyWindowInsets(WindowInsets insets) {
         releaseInput();
@@ -392,12 +467,10 @@ final class GameControls extends View implements SensorEventListener {
         if(context!=cursorContext) {
             cursorContext=context;
             release();playing=(context&3)==2;pausedByControl=false;
-            if(editing&&!playing){editing=false;requestSettingsReload();}
             layoutDirty=true;updateGyro();invalidate();
             removeCallbacks(hintCheck);
             if(playing&&!editing)postDelayed(hintCheck,1500);
         }
-        if(layoutPending&&(context&3)==2)editLayout();
     }
     /** Weapon bar and vehicle details, which change without a new input context. */
     private void readDetails() {
@@ -405,7 +478,10 @@ final class GameControls extends View implements SensorEventListener {
         if(((weaponSlots^(int)details)&HUD_MAP)!=0){layoutDirty=true;invalidate();}
         weaponSlots=(int)details;
         int flags=(int)(details>>>32);
-        if(flags!=vehicleFlags){vehicleFlags=flags;layoutDirty=true;invalidate();updateGyro();}
+        if(flags!=vehicleFlags){
+            if(pieOpen&&pieKind==PIE_SEATS&&((flags^vehicleFlags)&(VEHICLE_SEATS|VEHICLE_SEAT_MASK))!=0)closePie();
+            vehicleFlags=flags;layoutDirty=true;invalidate();updateGyro();
+        }
     }
     /** A zoomed scope or a steered Redeemer missile (the script's 16|32 without look steering). */
     private boolean scoped() { return (vehicleFlags&(VEHICLE_LOOK_STEER|VEHICLE_SCOPED))==VEHICLE_SCOPED; }
@@ -423,8 +499,9 @@ final class GameControls extends View implements SensorEventListener {
         case TouchLayout.JUMP:return p==4&&(vehicleFlags&VEHICLE_SEAT_JUMP)==0?0:TouchInput.JUMP;
         case TouchLayout.DUCK:return p==4?0:TouchInput.DUCK;
         case TouchLayout.USE:return TouchInput.USE;
-        case TouchLayout.WEAPON:return p==0?WEAPON:p==3?0:SEATS;
-        case TouchLayout.BOARD:return p==0||p==3?TouchInput.BOARD:0;
+        case TouchLayout.WEAPON:return p==0?WEAPON:p!=3&&(vehicleFlags&VEHICLE_SEATS)!=0
+            &&(vehicleFlags&VEHICLE_SEAT_MASK)!=0?SEATS:0;
+        case TouchLayout.BOARD:return editing||p==3||(p==0&&(vehicleFlags&64)!=0)?TouchInput.BOARD:0;
         case TouchLayout.MORE:return MORE;
         case TouchLayout.PAUSE:return TouchInput.PAUSE;
         case TouchLayout.SCORES:return TouchInput.SCORES;
@@ -437,13 +514,14 @@ final class GameControls extends View implements SensorEventListener {
     }
     private boolean visible(int control) {
         long context=cursorContext&3;
-        if(editing)return (control<=TouchLayout.SCORES||control==TouchLayout.FIRE2)&&action(control)!=0;
+        if(editing)return control==TouchLayout.STICK||(control<=TouchLayout.SCORES||control==TouchLayout.FIRE2)&&action(control)!=0;
+        if(!touchVisible)return false;
         if(control==TouchLayout.KEYBOARD)return authoritative&&context==3;
         // The ANDROID settings are a tab of the original settings: no separate button.
         if(control==TouchLayout.SETTINGS)return false;
         if(control==TouchLayout.MODE)return !authoritative&&context!=1;
         if(context==1||!playing)return false;
-        return action(control)!=0;
+        return touchVisible&&!hidden[control]&&action(control)!=0;
     }
     private int icon(int control) {
         int p=editing?0:profile;
@@ -512,7 +590,7 @@ final class GameControls extends View implements SensorEventListener {
             for(int control:TouchLayout.CLUSTER) {
                 custom|=!Float.isNaN(customX[control]);
                 if(!visible(control))continue;
-                float size=TouchLayout.size(control,dp,layoutScale);
+                float size=buttonSize(control);
                 float[] at=TouchLayout.anchor(control,left,top,right,bottom,dp,layoutScale,leftHanded);
                 squares.add(new float[]{at[0]-size*.5f,at[1]-size*.5f,at[0]+size*.5f,at[1]+size*.5f});
             }
@@ -530,7 +608,7 @@ final class GameControls extends View implements SensorEventListener {
             if(custom!=(pass==0))continue;
             shown[control]=visible(control);
             if(!shown[control])continue;
-            float size=TouchLayout.size(control,dp,layoutScale);
+            float size=buttonSize(control);
             float[] at=TouchLayout.anchor(control,left,top,right,bottom,dp,layoutScale,leftHanded);
             if(custom) {
                 float nx=leftHanded&&TouchLayout.mirrored(control)?1-customX[control]:customX[control];
@@ -546,7 +624,7 @@ final class GameControls extends View implements SensorEventListener {
         // The W/A/S/D cross takes the best room left in its thumb's half, near where the stick
         // rests, with smaller cells on a crowded short screen; without room the stick stays.
         dpadShown=false;
-        if(wasd&&playing&&!editing) {
+        if(wasd&&playing&&!editing&&touchVisible&&!hidden[TouchLayout.STICK]) {
             float mid=left+(right-left)*.5f,from=leftHanded?mid:left,to=leftHanded?right:mid;
             float[] at=TouchLayout.dpadAnchor(left,top,right,bottom,dp,layoutScale,leftHanded),cross=null;
             for(float cell=TouchLayout.dpadCell(dp,layoutScale);cross==null&&cell>=TouchLayout.MIN_DP*dp-.01f;cell-=4*dp) {
@@ -555,15 +633,7 @@ final class GameControls extends View implements SensorEventListener {
             }
             if(cross!=null){occupied.add(cross);dpadX=(cross[0]+cross[2])*.5f;dpadY=(cross[1]+cross[3])*.5f;dpadShown=true;}
         }
-        if(editing)buildTools();
-    }
-    private void buildTools() {
-        paint.setTextSize(14*dp);
-        String[] names={text("Done","Готово"),text("Reset","Сброс")};
-        float gap=10*dp,h=40*dp,total=-gap;float[] widths=new float[2];
-        for(int i=0;i<2;++i){widths[i]=Math.max(96*dp,paint.measureText(names[i])+40*dp);total+=widths[i]+gap;}
-        float x=safe.left+(width()-total)*.5f,y=safe.top+10*dp;
-        for(int i=0;i<2;++i){tools[i]=new float[]{x,y,x+widths[i],y+h};x+=widths[i]+gap;}
+        configureInput();
     }
     private int hit(float x,float y) {
         if(layoutDirty)buildLayout();
@@ -591,9 +661,8 @@ final class GameControls extends View implements SensorEventListener {
             canvas.drawColor(0x8C0B0D10);
             paint.setStyle(Paint.Style.FILL);
         }
-        if(playing||editing)drawStick(canvas);
+        if(playing&&touchVisible&&!hidden[TouchLayout.STICK])drawStick(canvas);
         for(int c=0;c<TouchLayout.COUNT;++c)if(shown[c])drawControl(canvas,c);
-        if(editing)drawTools(canvas);
         if(pieOpen)drawPie(canvas);
         else drawHint(canvas);
     }
@@ -608,7 +677,7 @@ final class GameControls extends View implements SensorEventListener {
     private void drawControl(Canvas canvas,int c) {
         float x=controlX[c],y=controlY[c],r=controlR[c];
         boolean active=pressed(c);
-        float level=active||editing?Math.max(.82f,opacity):opacity;
+        float level=editing&&hidden[c]?.25f:active||editing?Math.max(.82f,opacity):opacity;
         paint.setStyle(Paint.Style.FILL);
         if(active) {
             paint.setColor(0x55000000|(ACCENT&0xFFFFFF));
@@ -619,26 +688,28 @@ final class GameControls extends View implements SensorEventListener {
         paint.setColor(active?ACCENT:((int)(110*level)<<24)|0xFFFFFF);
         canvas.drawCircle(x,y,r-paint.getStrokeWidth()*.5f,paint);
         int ink=active?ACCENT:((int)(255*Math.min(1,.35f+level))<<24)|0xFFFFFF;
-        TouchIcons.draw(canvas,paint,icon(c),x,y,Math.min(34*dp,r*1.05f),ink);
+        if(c==TouchLayout.STICK)canvas.drawCircle(x,y,r*.35f,paint);
+        else TouchIcons.draw(canvas,paint,icon(c),x,y,Math.min(34*dp,r*1.05f),ink);
         if(c==TouchLayout.SCORES&&input.latched(TouchInput.SCORES)) {
             paint.setStyle(Paint.Style.FILL);paint.setColor(ACCENT);canvas.drawCircle(x+r*.7f,y-r*.7f,3.5f*dp,paint);
         }
-        if(editing)drawText(canvas,label(c),x,y+r+11*dp,11*dp,Math.max(2*r+24*dp,80*dp),0xFFFFFFFF);
+        if(editing)drawText(canvas,editLabel(c),x,y+r+11*dp,11*dp,Math.max(2*r+24*dp,80*dp),0xFFFFFFFF);
     }
     private void drawStick(Canvas canvas) {
         if(editing)return;
         if(dpadShown){drawDpad(canvas);return;}
-        float radius=60*layoutScale*dp,knob=22*layoutScale*dp;
+        float radius=stickRadius(),knob=radius*.37f;
         boolean moving=input.moving();
-        float ax=moving?input.anchorX():safe.left+width()*(leftHanded?.80f:.20f);
-        float ay=moving?input.anchorY():safe.top+height()*.70f;
+        float[] anchor=stickAnchor();
+        float ax=moving?input.anchorX():anchor[0];
+        float ay=moving?input.anchorY():anchor[1];
         float alpha=moving?Math.max(.45f,opacity):opacity*.22f;
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2*dp);
         paint.setColor(((int)(150*alpha)<<24)|0xFFFFFF);
         canvas.drawCircle(ax,ay,radius,paint);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(((int)(140*alpha)<<24)|0xFFFFFF);
-        canvas.drawCircle(ax+input.moveX()*42*layoutScale*dp,ay-input.moveY()*42*layoutScale*dp,knob,paint);
+        canvas.drawCircle(ax+input.moveX()*radius*.7f,ay-input.moveY()*radius*.7f,knob,paint);
     }
     /** The W/A/S/D cross; the keys of the current direction are lit. */
     private void drawDpad(Canvas canvas) {
@@ -670,22 +741,6 @@ final class GameControls extends View implements SensorEventListener {
         if(measured>maxWidth)paint.setTextSize(size*maxWidth/measured);
         Paint.FontMetrics metrics=paint.getFontMetrics();
         canvas.drawText(value,x,y-(metrics.ascent+metrics.descent)*.5f,paint);
-    }
-    private void drawPill(Canvas canvas,float[] r,String value,boolean active) {
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(active?ACCENT:0xE6101317);
-        float h=r[3]-r[1];
-        canvas.drawRoundRect(r[0],r[1],r[2],r[3],h*.5f,h*.5f,paint);
-        drawText(canvas,value,(r[0]+r[2])*.5f,(r[1]+r[3])*.5f,Math.min(14*dp,h*.42f),r[2]-r[0]-16*dp,active?0xFF101317:0xFFFFFFFF);
-    }
-    private void drawTools(Canvas canvas) {
-        if(tools[0]==null)return;
-        boolean armed=SystemClock.uptimeMillis()<resetDeadline;
-        drawPill(canvas,tools[TOOL_DONE],text("Done","Готово"),true);
-        drawPill(canvas,tools[TOOL_RESET],armed?text("Reset?","Сбросить?"):text("Reset","Сброс"),armed||toolPressed==TOOL_RESET);
-        drawText(canvas,text("Drag controls to move them · Reset twice restores the original layout",
-                "Перетаскивайте кнопки · «Сброс» дважды возвращает исходную раскладку"),
-            getWidth()*.5f,tools[0][3]+20*dp,13*dp,width()-32*dp,0xFFFFFFFF);
     }
     private void drawHint(Canvas canvas) {
         if(hintText==null)return;
@@ -736,7 +791,7 @@ final class GameControls extends View implements SensorEventListener {
     /** The original weapon bar's settled rectangle and card pitch, while it is shown on foot. */
     private float[] weaponBar() {
         if(!playing||editing||(weaponSlots&BAR_SHOWN)==0)return null;
-        return TouchLayout.weaponBar(0,0,getWidth(),getHeight(),uiScale,Integer.bitCount(weaponSlots&1023));
+        return TouchLayout.weaponBar(0,0,getWidth(),getHeight(),uiScale,barScale,Integer.bitCount(weaponSlots&1023));
     }
     private boolean weaponBarHit(float x,float y) {
         float[] bar=weaponBar();
@@ -761,14 +816,14 @@ final class GameControls extends View implements SensorEventListener {
             if(a==MORE||a==SEATS) { openPie(id,x,y,a==MORE?PIE_ACTIONS:PIE_SEATS,control);return; }
             if(a==WEAPON) { weaponDown(id,x,y,time);return; }
             if(a==TouchInput.SCORES) { scoresDown(id,x,y,time);return; }
-            if(a<0||a==TouchInput.PAUSE) {
+            if(a==TouchInput.PAUSE) { pauseDown(id);return; }
+            if(a<0) {
                 // Utilities act on release over the button, so a brushing thumb can slide off.
                 for(int i=0;i<utility.length;++i)if(utility[i]<0){utility[i]=control;utilityIds[i]=id;break;}
                 haptic(HapticFeedbackConstants.VIRTUAL_KEY);
                 return;
             }
-            // The left Fire only shoots: the right thumb keeps the camera.
-            if(playing&&input.down(id,x,y,a,control==TouchLayout.FIRE2?TouchInput.PASSIVE:TouchInput.BUTTON,time)) {
+            if(playing&&input.down(id,x,y,a,control==TouchLayout.FIRE2?TouchInput.MOVEMENT:TouchInput.BUTTON,time)) {
                 haptic(HapticFeedbackConstants.VIRTUAL_KEY);
                 if(a==TouchInput.DUCK&&profile==0)offer(HINT_CROUCH,"Double-tap Crouch to stay crouched","Двойное касание «Присесть» — сидеть без удержания");
             }
@@ -779,8 +834,15 @@ final class GameControls extends View implements SensorEventListener {
             if(input.pad(id,x,y,dpadX,dpadY,dpadCell*.5f,time)){dpadId=id;haptic(HapticFeedbackConstants.VIRTUAL_KEY);}
             return;
         }
-        if(scrubId<0&&weaponBarHit(x,y)&&input.down(id,x,y,0,TouchInput.PASSIVE,time)) {
+        if(scrubId<0&&(weaponSwipe||weaponTap)&&weaponBarHit(x,y)&&input.down(id,x,y,0,TouchInput.PASSIVE,time)) {
+            scrubY=y;
             if(!scrubStart(id,x,false))input.up(id,x,y,time);
+            return;
+        }
+        if(staticStick&&!dpadShown) {
+            float[] at=stickAnchor();
+            if(Math.hypot(x-at[0],y-at[1])<=stickRadius()*1.25f)input.fixed(id,x,y,at[0],at[1],time);
+            else input.down(id,x,y,0,TouchInput.LOOK,time);
             return;
         }
         // With the W/A/S/D cross shown, the rest of the screen only looks.
@@ -792,6 +854,7 @@ final class GameControls extends View implements SensorEventListener {
     }
     private void pointerMove(int id,float x,float y,long time) {
         if(id==swallowed)return;
+        if(id==pauseId) { pauseMove(x,y);return; }
         if(pieOpen&&id==pieId) { pieMove(x,y);return; }
         if(id==scrubId) { scrubMove(x);return; }
         if(id==weaponId) { weaponMove(x,y);return; }
@@ -805,6 +868,7 @@ final class GameControls extends View implements SensorEventListener {
     }
     private void pointerUp(int id,float x,float y,long time) {
         if(id==swallowed) { swallowed=-1;return; }
+        if(id==pauseId) { pauseUp(x,y);return; }
         if(id==dpadId)dpadId=-1;
         if(pieOpen&&id==pieId) { pieUp(x,y);return; }
         if(id==scrubId) { scrubUp(x,y,time);return; }
@@ -855,6 +919,19 @@ final class GameControls extends View implements SensorEventListener {
         invalidate();
     }
 
+    private void pauseDown(int id) {
+        if(pauseId>=0)return;
+        pauseId=id;
+        postDelayed(pauseHold,ViewConfiguration.getLongPressTimeout());
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY);
+    }
+    private void cancelPause() { pauseId=-1;removeCallbacks(pauseHold); }
+    private void pauseMove(float x,float y) { if(!inside(TouchLayout.PAUSE,x,y))cancelPause(); }
+    private void pauseUp(float x,float y) {
+        cancelPause();
+        if(inside(TouchLayout.PAUSE,x,y))activate(TouchLayout.PAUSE);
+    }
+
     // ------------------------------------------------- weapon button gestures
     private void weaponDown(int id,float x,float y,long time) {
         if(weaponId>=0||!input.down(id,x,y,0,TouchInput.PASSIVE,time))return;
@@ -873,7 +950,7 @@ final class GameControls extends View implements SensorEventListener {
         if(weaponPicker) { weaponStick(x,y);return; }
         // A sideways slide walks the original weapon bar instead of waiting for the wheel.
         float dx=x-weaponX,dy=y-weaponY;
-        if(Math.abs(dx)>ViewConfiguration.get(getContext()).getScaledTouchSlop()&&Math.abs(dx)>Math.abs(dy)*1.2f&&
+        if(weaponSwipe&&Math.abs(dx)>ViewConfiguration.get(getContext()).getScaledTouchSlop()&&Math.abs(dx)>Math.abs(dy)*1.2f&&
            (weaponSlots&BAR_SHOWN)!=0&&scrubId<0) {
             int id=weaponId;
             removeCallbacks(weaponHold);
@@ -893,7 +970,7 @@ final class GameControls extends View implements SensorEventListener {
         }
         input.up(id,x,y,time);
         float dx=x-weaponX,dy=y-weaponY;
-        if(Math.abs(dx)>=24*dp&&Math.abs(dx)>Math.abs(dy)*1.4f)input.pulse(dx<0?TouchInput.PREVIOUS:TouchInput.NEXT);
+        if(weaponSwipe&&Math.abs(dx)>=24*dp&&Math.abs(dx)>Math.abs(dy)*1.4f)input.pulse(dx<0?TouchInput.PREVIOUS:TouchInput.NEXT);
         else if(Math.hypot(dx,dy)<=ViewConfiguration.get(getContext()).getScaledTouchSlop()*1.5f)input.pulse(TouchInput.NEXT);
     }
     /** Begin a swipe on the original bar at the selected weapon; false when the bar is not shown. */
@@ -904,11 +981,14 @@ final class GameControls extends View implements SensorEventListener {
         if((mask&BAR_SHOWN)==0||slots.length<2||start<0)return false;
         float[] bar=weaponBar();
         scrubId=id;scrubSlots=slots;scrubStart=scrubIndex=start;scrubX=x;scrubButton=fromButton;
+        scrubMoved=false;
         scrubStep=clamp(bar!=null?bar[4]:48*dp,36*dp,64*dp);
         if(!fromButton)haptic(HapticFeedbackConstants.VIRTUAL_KEY);
         return true;
     }
     private void scrubMove(float x) {
+        if(!scrubButton&&Math.abs(x-scrubX)>ViewConfiguration.get(getContext()).getScaledTouchSlop())scrubMoved=true;
+        if(!weaponSwipe)return;
         int next=TouchLayout.weaponIndex(scrubStart,x-scrubX,scrubStep,scrubSlots.length);
         if(scrubId<0||next==scrubIndex)return;
         scrubIndex=next;
@@ -921,6 +1001,11 @@ final class GameControls extends View implements SensorEventListener {
         int id=scrubId;scrubId=-1;
         if(id<0)return;
         boolean changed=scrubIndex!=scrubStart;
+        if(!scrubButton&&!scrubMoved&&Math.abs(y-scrubY)<=ViewConfiguration.get(getContext()).getScaledTouchSlop()&&weaponTap) {
+            float[] bar=weaponBar();
+            int card=bar==null?-1:TouchLayout.weaponHit(x,bar[0],bar[4],scrubSlots.length,scrubStart);
+            if(card>=0){scrubIndex=card;changed=card!=scrubStart;}
+        }
         GameActivity.nativeTouchWeapon(changed?2:3,scrubSlots[scrubIndex],cursorContext);
         if(changed)haptic(HapticFeedbackConstants.VIRTUAL_KEY);
         input.up(id,x,y,time);
@@ -958,8 +1043,9 @@ final class GameControls extends View implements SensorEventListener {
     // -------------------------------------------------------------------- pie
     private int[] pieItems(int kind) {
         if(kind==PIE_SEATS) {
-            int[] seats=new int[SEAT_COUNT];
-            for(int i=0;i<SEAT_COUNT;++i)seats[i]=TouchInput.WEAPON1<<i;
+            int mask=(vehicleFlags>>>8)&((1<<SEAT_COUNT)-1),at=0;
+            int[] seats=new int[Integer.bitCount(mask)];
+            for(int i=0;i<SEAT_COUNT;++i)if((mask&(1<<i))!=0)seats[at++]=TouchInput.WEAPON1<<i;
             return seats;
         }
         switch(profile) {
@@ -1000,6 +1086,7 @@ final class GameControls extends View implements SensorEventListener {
     private void openPie(int id,float x,float y,int kind,int source) {
         closePie();
         pieItems=pieItems(kind);pieKind=kind;pieSource=source;
+        if(pieItems.length==0)return;
         pieOpen=true;pieId=id;pieSelected=-1;pieDragged=pieSticky=false;pieStartX=x;pieStartY=y;
         pieR=pieRadius(pieItems.length);
         pieX=clamp(x,safe.left+pieR,Math.max(safe.left+pieR,getWidth()-safe.right-pieR));
@@ -1137,8 +1224,8 @@ final class GameControls extends View implements SensorEventListener {
             "Ведите пальцем справа — обзор · держите «Огонь» и ведите — стрельба с прицеливанием");
         else if(profile==0&&(hintsSeen&HINT_WEAPON)==0)offer(HINT_WEAPON,"Weapons: slide along the bar at the bottom and release to switch",
             "Оружие: ведите по полосе внизу и отпустите палец — смена оружия");
-        else if(profile==0&&(hintsSeen&HINT_LEFT_FIRE)==0)offer(HINT_LEFT_FIRE,"The left Fire shoots while the right thumb aims",
-            "Левая кнопка огня стреляет, пока правый палец целится");
+        else if(profile==0&&(hintsSeen&HINT_LEFT_FIRE)==0)offer(HINT_LEFT_FIRE,"Drag the left Fire to move while shooting; aim with the other thumb",
+            "Ведите левую кнопку огня для движения со стрельбой; прицеливайтесь другой рукой");
         else if((vehicleFlags&VEHICLE_LOOK_STEER)!=0&&(hintsSeen&HINT_STEER)==0)offer(HINT_STEER,
             "This vehicle drives where you look · pull the stick back to reverse",
             "Техника едет туда, куда вы смотрите · стик назад — задний ход");
@@ -1148,34 +1235,32 @@ final class GameControls extends View implements SensorEventListener {
     }
 
     // ----------------------------------------------------------------- editor
-    private int toolHit(float x,float y) {
-        for(int i=0;i<tools.length;++i) {
-            float[] r=tools[i];
-            if(r!=null&&x>=r[0]-6*dp&&x<=r[2]+6*dp&&y>=r[1]-6*dp&&y<=r[3]+6*dp)return i;
-        }
-        return -1;
-    }
     private boolean editTouch(MotionEvent event) {
         int action=event.getActionMasked(),index=event.getActionIndex(),id=event.getPointerId(index);
         float x=event.getX(index),y=event.getY(index);
         if(layoutDirty)buildLayout();
         if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN) {
-            int tool=toolHit(x,y);
-            if(tool>=0&&toolId<0){toolId=id;toolPressed=tool;}
-            else if(editId<0) {
+            if(editId>=0&&pinchId<0&&editControl>=0) {
+                int first=event.findPointerIndex(editId);
+                if(first>=0) {
+                    pinchSpan=(float)Math.hypot(x-event.getX(first),y-event.getY(first));
+                    pinchSize=editSize();pinchId=id;
+                }
+            } else if(editId<0) {
                 int control=hit(x,y);
                 if(control>=0){editId=id;editControl=control;editDX=controlX[control]-x;editDY=controlY[control]-y;
-                    haptic(HapticFeedbackConstants.VIRTUAL_KEY);}
+                    activity().refreshLayoutEditor();haptic(HapticFeedbackConstants.VIRTUAL_KEY);}
             }
         } else if(action==MotionEvent.ACTION_MOVE) {
             int pointer=editId<0?-1:event.findPointerIndex(editId);
-            if(pointer>=0)dragTo(editControl,event.getX(pointer)+editDX,event.getY(pointer)+editDY);
+            int second=pinchId<0?-1:event.findPointerIndex(pinchId);
+            if(pointer>=0&&second>=0&&pinchSpan>1) {
+                editSize(pinchSize*(float)Math.hypot(event.getX(second)-event.getX(pointer),event.getY(second)-event.getY(pointer))/pinchSpan);
+                activity().refreshLayoutEditor();
+            } else if(pointer>=0)dragTo(editControl,event.getX(pointer)+editDX,event.getY(pointer)+editDY);
         } else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP) {
-            if(id==toolId) {
-                int tool=toolPressed;toolId=toolPressed=-1;
-                if(toolHit(x,y)==tool)tool(tool);
-            }
-            if(id==editId){editId=editControl=-1;layoutDirty=true;}
+            if(id==pinchId)pinchId=-1;
+            if(id==editId){editId=pinchId=-1;layoutDirty=true;}
         }
         invalidate();return true;
     }
@@ -1184,10 +1269,6 @@ final class GameControls extends View implements SensorEventListener {
         float nx=clamp((x-safe.left)/width(),0,1),ny=clamp((y-safe.top)/height(),0,1);
         customX[control]=leftHanded&&TouchLayout.mirrored(control)?1-nx:nx;customY[control]=ny;
         layoutDirty=true;
-    }
-    private void tool(int tool) {
-        if(tool==TOOL_DONE)finishEditing();
-        else if(tool==TOOL_RESET)resetLayout();
     }
 
     // ------------------------------------------------------------------- gyro
@@ -1219,7 +1300,7 @@ final class GameControls extends View implements SensorEventListener {
         default:pitchRate=event.values[0];yawRate=event.values[1];
         }
         // Counts per degree are calibrated independently of render FPS.
-        input.relativeLook(-gyroDelta(yawRate,dt)*10*gyroSensitivity,gyroDelta(pitchRate,dt)*10*gyroSensitivity);
+        input.relativeLook(gyroDelta(yawRate,dt)*10*gyroSensitivity,gyroDelta(pitchRate,dt)*10*gyroSensitivity);
     }
     static float gyroDelta(float rate,double dt) {
         if(!Float.isFinite(rate)||dt<=0||dt>.1)return 0;
@@ -1458,23 +1539,31 @@ final class GameControls extends View implements SensorEventListener {
         }
         return false;
     }
+    static boolean externalInputAttached() {
+        if(gamepadAttached())return true;
+        boolean keyboard=false,mouse=false;
+        for(int id:InputDevice.getDeviceIds()) {
+            InputDevice device=InputDevice.getDevice(id);
+            if(device==null||device.isVirtual())continue;
+            keyboard|=device.getKeyboardType()==InputDevice.KEYBOARD_TYPE_ALPHABETIC;
+            mouse|=device.supportsSource(InputDevice.SOURCE_MOUSE);
+        }
+        return keyboard&&mouse;
+    }
 
     // ---------------------------------------------------------- accessibility
-    private static final int NODE_PIE=100,NODE_PIE_CENTER=120,NODE_TOOL=200;
+    private static final int NODE_PIE=100,NODE_PIE_CENTER=120;
     private String nodeLabel(int id) {
-        if(id>=NODE_TOOL)return id==NODE_TOOL+TOOL_DONE?text("Done","Готово"):text("Reset layout, tap twice","Сбросить раскладку, нажмите дважды");
         if(id==NODE_PIE_CENTER)return text("Close","Закрыть");
         if(id>=NODE_PIE)return pieLabel(pieItems[id-NODE_PIE],true);
-        return accessibilityLabel(id);
+        return editing?editLabel(id):accessibilityLabel(id);
     }
     private boolean nodeValid(int id) {
         if(pieOpen)return id==NODE_PIE_CENTER||(id>=NODE_PIE&&id<NODE_PIE+pieItems.length);
-        if(editing&&id>=NODE_TOOL&&id<NODE_TOOL+tools.length)return tools[id-NODE_TOOL]!=null;
         return id>=0&&id<TouchLayout.COUNT&&shown[id];
     }
     private Rect nodeBounds(int id) {
         float x,y,r;
-        if(id>=NODE_TOOL){float[] t=tools[id-NODE_TOOL];return new Rect((int)t[0],(int)t[1],(int)t[2],(int)t[3]);}
         if(id==NODE_PIE_CENTER){x=pieX;y=pieY;r=pieR*.36f;}
         else if(id>=NODE_PIE) {
             double a=TouchLayout.sectorAngle(id-NODE_PIE,pieItems.length);
@@ -1483,8 +1572,8 @@ final class GameControls extends View implements SensorEventListener {
         return new Rect((int)(x-r),(int)(y-r),(int)(x+r),(int)(y+r));
     }
     private void accessibilityClick(int id) {
-        if(id>=NODE_TOOL)tool(id-NODE_TOOL);
-        else if(id==NODE_PIE_CENTER)closePie();
+        if(editing&&id>=0&&id<TouchLayout.COUNT) { editSelect(id);activity().refreshLayoutEditor();return; }
+        if(id==NODE_PIE_CENTER)closePie();
         else if(id>=NODE_PIE){int item=pieItems[id-NODE_PIE];closePie();pieSelect(item);}
         else {
             int a=action(id);
@@ -1502,7 +1591,6 @@ final class GameControls extends View implements SensorEventListener {
             int hit=TouchLayout.pieHit(x,y,pieX,pieY,pieR*.36f,pieR,pieItems.length);
             return hit==TouchLayout.CENTER?NODE_PIE_CENTER:hit>=0?NODE_PIE+hit:-1;
         }
-        if(editing){int tool=toolHit(x,y);if(tool>=0)return NODE_TOOL+tool;}
         return hit(x,y);
     }
     private void accessibilityEvent(int id,int type) {
@@ -1533,7 +1621,6 @@ final class GameControls extends View implements SensorEventListener {
                     info.addChild(GameControls.this,NODE_PIE_CENTER);
                 } else {
                     for(int i=0;i<TouchLayout.COUNT;++i)if(shown[i])info.addChild(GameControls.this,i);
-                    if(editing)for(int i=0;i<tools.length;++i)if(tools[i]!=null)info.addChild(GameControls.this,NODE_TOOL+i);
                 }
                 return info;
             }

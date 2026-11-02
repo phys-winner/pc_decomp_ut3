@@ -95,6 +95,7 @@
                        "pl": "DXVK na dołączonym sterowniku Mesa Turnip: Vulkan 1.3 na Adreno 6xx/7xx, nawet gdy sterownik systemu jest starszy."}}
     ]
   },
+  "textures": {"backend": "org.ut3.port.TextureConverter"},
   "cleanup": {
     "categories": [
       {"id": "installers", "part": "game",

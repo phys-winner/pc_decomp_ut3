@@ -37,9 +37,9 @@ final class Texts {
         R_CHECKING = 141, R_CRASH = 142, R_ERROR = 143, R_BC = 144, R_ROBUSTNESS = 145, R_PRESENT = 146, R_FEATURES = 147,
         R_NOT_TURNIP = 148, R_VULKAN13 = 149, R_UNFIT = 150, N_UNCHECKED = 151, TEX_REMOVE = 152, TEX_REMOVE_ASK = 153,
         TEX_GONE = 154, TURNIP_DRIVER = 155, TURNIP_BUILTIN = 156, TURNIP_CHOOSE = 157, TURNIP_RESET = 158,
-        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161;
+        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161, TEX_SCANNING = 162, TEX_RESCAN = 163;
     /** The last id: the table has one row per id (the selfcheck verifies it). */
-    static final int LAST = E_TURNIP;
+    static final int LAST = TEX_RESCAN;
 
     private static final String[][] TEXTS = {
         {"Play", "Играть", "Spielen", "Graj"},
@@ -184,18 +184,10 @@ final class Texts {
         {"Port update %s is available: see the launcher.", "Доступно обновление порта %s — подробности в лаунчере.",
          "Port-Update %s ist verfügbar: Details im Launcher.", "Dostępna aktualizacja portu %s — szczegóły w launcherze."},
         {"Textures", "Текстуры", "Texturen", "Tekstury"},
-        {"This GPU cannot read the format of the game's textures: the processor unpacks every texture while a screen "
-             + "loads, and in video memory it takes 4–8 times more room. Converted once into a format the GPU reads, "
-             + "the textures load at once and need less memory.",
-         "Видеочип не умеет читать формат текстур игры: каждую текстуру при загрузке распаковывает процессор, и в "
-             + "видеопамяти она занимает в 4–8 раз больше места. Один раз сконвертированные в формат видеочипа, "
-             + "текстуры загружаются сразу и требуют меньше памяти.",
-         "Die GPU kann das Texturformat des Spiels nicht lesen: Der Prozessor entpackt jede Textur beim Laden, und im "
-             + "Grafikspeicher braucht sie 4–8-mal mehr Platz. Einmal in ein GPU-Format konvertiert, laden die Texturen "
-             + "sofort und brauchen weniger Speicher.",
-         "GPU nie odczytuje formatu tekstur gry: procesor rozpakowuje każdą teksturę przy wczytywaniu, a w pamięci "
-             + "wideo zajmuje ona 4–8 razy więcej miejsca. Raz skonwertowane do formatu GPU tekstury wczytują się od razu "
-             + "i zajmują mniej pamięci."},
+        {"Optional conversion to ASTC or ETC2 can reduce loading pauses and video memory use. Originals are kept; the conversion can be removed.",
+         "Предварительная конвертация в ASTC или ETC2 может уменьшить паузы загрузки и расход видеопамяти. Оригиналы сохраняются; конвертацию можно удалить.",
+         "Die optionale Konvertierung in ASTC oder ETC2 kann Ladepausen und Grafikspeicherbedarf verringern. Originale bleiben erhalten; die Konvertierung kann entfernt werden.",
+         "Opcjonalna konwersja do ASTC lub ETC2 może zmniejszyć przerwy przy wczytywaniu i zużycie pamięci wideo. Oryginały zostają; konwersję można usunąć."},
         {"Convert to %s", "Сконвертировать в %s", "In %s konvertieren", "Konwertuj do %s"},
         {"Delete the converted textures", "Удалить сконвертированные текстуры", "Konvertierte Texturen löschen",
          "Usuń skonwertowane tekstury"},
@@ -331,6 +323,8 @@ final class Texts {
          "Ein Turnip-Treiberpaket für adrenotools (ein ZIP mit meta.json) oder seine .so-Bibliothek. Die Treiberprüfung läuft dafür erneut.",
          "Pakiet sterownika Turnip dla adrenotools (ZIP z meta.json) albo jego biblioteka .so. Sprawdzenie sterownika odbędzie się dla niego ponownie."},
         {"This is no Turnip driver: %s", "Это не драйвер Turnip: %s", "Das ist kein Turnip-Treiber: %s", "To nie jest sterownik Turnip: %s"},
+        {"Reading textures…", "Читаю текстуры…", "Texturen werden gelesen…", "Odczytuję tekstury…"},
+        {"Try again", "Повторить", "Erneut versuchen", "Spróbuj ponownie"},
     };
 
     private static int column = -1;

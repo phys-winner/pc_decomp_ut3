@@ -13,6 +13,10 @@ struct PortWidgetScale
     var EPositionEvalType BottomType;
     var float FitTop;
     var int FitCount;
+    var EUITabAutosizeType TabMode;
+    var float RowValue;
+    var EUIExtentEvalType RowType;
+    var UIList.ECellAutoSizeMode RowMode;
 };
 
 struct PortTextScale
@@ -21,6 +25,7 @@ struct PortTextScale
     var UIScene Scene;
     var Vector2D Scale;
     var UITextStyleOverride Customization;
+    var bool AutoSizeX;
     var float AppliedScale;
 };
 
@@ -60,6 +65,7 @@ function ScaleText(UIComp_DrawString Component, UIScene Scene, float Scale)
 {
     local int Index;
     local UICombinedStyleData Style;
+    local bool TabCaption, FixedCaption, PolicyMatches;
     if (Component == None)
         return;
     for (Index = 0; Index < Texts.Length; ++Index)
@@ -76,18 +82,37 @@ function ScaleText(UIComp_DrawString Component, UIScene Scene, float Scale)
         Texts[Index].Scene = Scene;
         Texts[Index].Scale = Style.TextScale;
         Texts[Index].Customization = Component.TextStyleCustomization;
+        Texts[Index].AutoSizeX = Component.IsAutoSizeEnabled(UIORIENT_Horizontal);
     }
+    TabCaption = UITabButton(Component.Outer) != None;
+    FixedCaption = UILabel(Component.Outer) != None || UTUIButtonBarButton(Component.Outer) != None;
+    PolicyMatches = true;
+    if (Scale > 1.0 && TabCaption)
+        PolicyMatches = !Component.IsAutoSizeEnabled(UIORIENT_Horizontal) && Component.TextStyleCustomization.bOverrideAutoScale
+            && Component.TextStyleCustomization.AutoScaling.AutoScaleMode == UIAUTOSCALE_Justified;
+    else if (Scale > 1.0 && FixedCaption)
+        PolicyMatches = Component.TextStyleCustomization.bOverrideAutoScale
+            && Component.TextStyleCustomization.AutoScaling.AutoScaleMode == UIAUTOSCALE_None;
     if (Texts[Index].AppliedScale == Scale
         && (Scale == 1.0 || (Component.TextStyleCustomization.DrawScale[UIORIENT_Horizontal] == Texts[Index].Scale.X * Scale
-            && Component.TextStyleCustomization.DrawScale[UIORIENT_Vertical] == Texts[Index].Scale.Y * Scale
-            && (UILabel(Component.Outer) == None || (Component.TextStyleCustomization.bOverrideAutoScale
-                && Component.TextStyleCustomization.AutoScaling.AutoScaleMode == UIAUTOSCALE_None)))))
+            && Component.TextStyleCustomization.DrawScale[UIORIENT_Vertical] == Texts[Index].Scale.Y * Scale && PolicyMatches)))
         return;
     Component.SetScale(UIORIENT_Horizontal, Texts[Index].Scale.X * Scale);
     Component.SetScale(UIORIENT_Vertical, Texts[Index].Scale.Y * Scale);
-    if (UILabel(Component.Outer) != None)
+    if (TabCaption)
     {
-        // Auto-fit replaces explicit label scaling in the original formatter.
+        Component.EnableAutoSizing(UIORIENT_Horizontal, Scale > 1.0 ? false : Texts[Index].AutoSizeX);
+        if (Scale > 1.0)
+            Component.SetAutoScaling(UIAUTOSCALE_Justified);
+        else if (Texts[Index].Customization.bOverrideAutoScale)
+            Component.SetAutoScaling(Texts[Index].Customization.AutoScaling.AutoScaleMode,
+                Texts[Index].Customization.AutoScaling.MinScale);
+        else
+            Component.DisableCustomAutoScaling();
+    }
+    else if (FixedCaption)
+    {
+        // Auto-fit replaces explicit label and button-callout scaling in the original formatter.
         if (Scale > 1.0)
             Component.SetAutoScaling(UIAUTOSCALE_None);
         else if (Texts[Index].Customization.bOverrideAutoScale)
@@ -115,13 +140,11 @@ function ScaleWidget(UIObject Widget, UIScene Scene, float Scale)
     List = UIList(Widget);
     Tabs = UITabControl(Widget);
     Bar = UTUIButtonBar(Widget);
-    // The original button bar applies its own text scale while laying out buttons.
-    if (UTUIButtonBarButton(Widget) == None)
-        for (ComponentIndex = 0; ComponentIndex < Widget.StyleSubscribers.Length; ++ComponentIndex)
-        {
-            StyleObject = Widget.StyleSubscribers[ComponentIndex];
-            ScaleText(UIComp_DrawString(StyleObject), Scene, Scale);
-        }
+    for (ComponentIndex = 0; ComponentIndex < Widget.StyleSubscribers.Length; ++ComponentIndex)
+    {
+        StyleObject = Widget.StyleSubscribers[ComponentIndex];
+        ScaleText(UIComp_DrawString(StyleObject), Scene, Scale);
+    }
     if (Simple == None && Options == None && List == None && Tabs == None && Bar == None)
         return;
     for (Index = 0; Index < Widgets.Length; ++Index)
@@ -143,12 +166,18 @@ function ScaleWidget(UIObject Widget, UIScene Scene, float Scale)
         }
         else if (List != None)
         {
-            Widgets[Index].Height = List.RowHeight.Value;
+            Widgets[Index].Height = List.GetRowHeight(0, false, true);
+            Widgets[Index].RowValue = List.RowHeight.Value;
+            Widgets[Index].RowType = List.RowHeight.ScaleType;
+            Widgets[Index].RowMode = List.RowAutoSizeMode;
             Widgets[Index].Padding = List.CellPadding.Value;
             Widgets[Index].Spacing = List.CellSpacing.Value;
         }
         else if (Tabs != None)
+        {
             Widgets[Index].Height = Tabs.TabButtonSize.Value;
+            Widgets[Index].TabMode = Tabs.TabSizeMode;
+        }
         else if (Bar != None)
         {
             Widgets[Index].Height = Bar.ButtonStringScale.X;
@@ -160,6 +189,11 @@ function ScaleWidget(UIObject Widget, UIScene Scene, float Scale)
         FitSimpleList(Simple, Scene, Index, Scale);
         return;
     }
+    if (List != None)
+    {
+        FitCellList(List, Index, Scale);
+        return;
+    }
     if (Widgets[Index].AppliedScale == Scale && (Bar == None || !Bar.bResetButtonScale))
         return;
     if (Options != None)
@@ -169,17 +203,11 @@ function ScaleWidget(UIObject Widget, UIScene Scene, float Scale)
         if (Options.BGPrefabInstance != None && Options.GeneratedObjects.Length > 0)
             Options.RepositionOptions();
     }
-    else if (List != None)
-    {
-        List.RowHeight.Value = Widgets[Index].Height * Scale;
-        List.CellPadding.Value = Widgets[Index].Padding * Scale;
-        List.CellSpacing.Value = Widgets[Index].Spacing * Scale;
-        if (List.CellDataComponent != None)
-            List.CellDataComponent.bReapplyFormatting = true;
-    }
     else if (Tabs != None)
     {
         Tabs.TabButtonSize.Value = Widgets[Index].Height * Scale;
+        // Keep all settings tabs reachable when their enlarged captions outgrow the row.
+        Tabs.TabSizeMode = Scale > 1.0 ? TAST_Fill : Widgets[Index].TabMode;
         Tabs.RequestLayoutUpdate();
     }
     else if (Bar != None)
@@ -192,15 +220,51 @@ function ScaleWidget(UIObject Widget, UIScene Scene, float Scale)
     Widgets[Index].AppliedScale = Scale;
 }
 
+function FitCellList(UIList List, int Index, float Scale)
+{
+    local float Height;
+    local bool Changed;
+    if (Scale == 1.0 && Widgets[Index].AppliedScale == 1.0)
+        return;
+    Changed = Widgets[Index].AppliedScale != Scale || (Scale > 1.0 && List.RowAutoSizeMode != CELLAUTOSIZE_None);
+    List.CellPadding.Value = Widgets[Index].Padding * Scale;
+    List.CellSpacing.Value = Widgets[Index].Spacing * Scale;
+    if (Scale == 1.0)
+    {
+        List.RowHeight.Value = Widgets[Index].RowValue;
+        List.RowHeight.ScaleType = Widgets[Index].RowType;
+        List.RowAutoSizeMode = Widgets[Index].RowMode;
+    }
+    else
+    {
+        // Font metrics omit resolved UI scaling; the native content measure uses the formatted cells.
+        List.RowAutoSizeMode = CELLAUTOSIZE_Constrain;
+        Height = FMax(List.GetRowHeight(0), Widgets[Index].Height * Scale);
+        if (List.Index > 0)
+            Height = FMax(Height, List.GetRowHeight(List.Index));
+        Changed = Changed || List.RowHeight.ScaleType != UIEXTENTEVAL_Pixels
+            || Abs(List.RowHeight.Value - Height) > 0.01;
+        List.RowAutoSizeMode = CELLAUTOSIZE_None;
+        List.RowHeight.ScaleType = UIEXTENTEVAL_Pixels;
+        List.RowHeight.Value = Height;
+    }
+    if (Changed)
+    {
+        if (List.CellDataComponent != None)
+            List.CellDataComponent.bReapplyFormatting = true;
+        List.RequestSceneUpdate(false, true, true);
+    }
+    Widgets[Index].AppliedScale = Scale;
+}
+
 /**
  * A simple list draws its rows from its top but takes taps only inside its
  * bounds, and it scrolls once the rows outgrow them. A list whose rows fit at
- * 1.0 keeps fitting: it grows down into the free space below it, and its rows
- * grow only as far as that room allows.
+ * 1.0 grows down into free space below it; fixed bounds use scrolling.
  */
 function FitSimpleList(UTSimpleList Simple, UIScene Scene, int Index, float Scale)
 {
-    local float Top, Window, Content, Room, Fit;
+    local float Top, Window, Content, Room;
     local Vector2D Viewport;
     local int Item;
     if (Scale == 1.0)
@@ -212,7 +276,8 @@ function FitSimpleList(UTSimpleList Simple, UIScene Scene, int Index, float Scal
     }
     Top = Simple.GetPosition(UIFACE_Top, EVALPOS_PixelViewport);
     if (Widgets[Index].AppliedScale == Scale && Widgets[Index].FitCount == Simple.List.Length
-        && Abs(Top - Widgets[Index].FitTop) < 1)
+        && Abs(Top - Widgets[Index].FitTop) < 1
+        && Abs(Simple.DefaultCellHeight - Widgets[Index].Height * Scale) < 0.01)
         return;
     if (Widgets[Index].bGrown)
     {
@@ -235,13 +300,12 @@ function FitSimpleList(UTSimpleList Simple, UIScene Scene, int Index, float Scal
     for (Item = 0; Item < Simple.List.Length; ++Item)
         Content += Simple.GetItemScale(Item, Simple.List.Length / 2);
     Content *= Widgets[Index].Height * Viewport.Y / 768.0;
-    Fit = Scale;
     Room = Window;
     if (Content > 0 && Content <= Window + 0.5 && Content * Scale > Window + 0.5)
     {
         if (!IsDockedBelow(Simple, Scene))
             Room = FClamp(RoomBelow(Simple, Scene, Top, Viewport.Y) - Top, Window, Content * Scale);
-        Fit = FClamp(Room / Content, 1.0, Scale);
+        // A fixed-height map or game-mode list scrolls when enlarged.
     }
     if (Room > Window + 0.5)
     {
@@ -250,7 +314,7 @@ function FitSimpleList(UTSimpleList Simple, UIScene Scene, int Index, float Scal
         Widgets[Index].bGrown = true;
         Simple.SetPosition(Top + Room, UIFACE_Bottom, EVALPOS_PixelViewport);
     }
-    SetSimpleRows(Simple, Widgets[Index].Height * Fit);
+    SetSimpleRows(Simple, Widgets[Index].Height * Scale);
     Simple.RequestSceneUpdate(false, true, true);
     Widgets[Index].AppliedScale = Scale;
     Widgets[Index].FitCount = Simple.List.Length;

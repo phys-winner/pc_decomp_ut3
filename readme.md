@@ -14,7 +14,7 @@ Unreal Tournament 3. Unreal Tournament 3 and its content belong to their respect
 
 ## Status and features
 
-Current version: **0.1-dev** (versionCode 1). Versions are numbered `0.N-dev`, the versionCode counts builds.
+Current version: **0.2-dev** (versionCode 5). The versionCode also counts internal test builds.
 
 - The original game code runs as statically recompiled native code; the PE images it was recompiled from are
   made at start from the game's own `Binaries` (relocated to the port's bases, size and CRC-32 checked). The
@@ -27,15 +27,39 @@ Current version: **0.1-dev** (versionCode 1). Versions are numbered `0.N-dev`, t
   (English, Russian, German, Polish), update checks through GitHub releases, cleanup of unused files.
 - Touch controls with an analog stick, swipe look, weapon bar selection, vehicle profiles, an editable layout and
   an optional gyroscope; physical gamepads as XInput controller 0 with the original bindings and rumble.
-- Hor+ widescreen camera, HUD and menu scaling for phones, an `ANDROID` tab in the original settings menu.
+- Optional ASTC/ETC2 texture conversion in the launcher, with an undo action and runtime DXT decoding for
+  cache misses and modded textures, including games played directly from a stored ZIP. The launcher shows
+  the scan while it runs and offers retry after a read failure. Original game packages are retained.
+- Drag, resize and hide individual touch controls; floating or fixed movement stick, movement while holding
+  left fire, swipe/tap weapon selection and separate weapon bar/wheel sizes. Global touch visibility includes
+  a startup suggestion based on connected input devices and a “don't ask again” choice.
+  Hold the on-screen Pause button to open the layout editor; a short tap opens the original pause menu.
+- Hor+ widescreen camera, HUD and menu scaling including button callouts, tabs, game modes and map lists;
+  an `ANDROID` tab in the original settings menu. Touching an option preserves the list's scroll position.
+- Touch selection in the original command menu, including categories, commands and recipients. The Scorpion
+  uses direct stick steering with an axial dead zone, so a small sideways drift of the movement finger does
+  not lock its wheels. Throttle remains analog, and physical gamepad axes retain their original behavior.
+- Tapping an editable text field opens the Android keyboard after the original UI consumes the click.
+  Tabs and bottom action buttons have taller touch targets, with gaps assigned to the nearest button.
+  Long tab captions fit their width; the Android page's button caption uses the selected localization.
+  Seat switching is hidden in one-seat vehicles; its wheel shows available seats and permitted bot swaps.
+- The first start uses an installed localization matching the system language, with English as fallback;
+  the FPS selector lists the display's supported refresh rates at its current resolution.
 - LAN games between the PC game and the port, both ways.
+- OpenSpy service and authentication compatibility, adapted from `mods/fix_mp/dinput8.dll` to the pinned Steam
+  executable. The original login/profile menu is available; an OpenSpy account is needed for online play.
+- Profile writes before sign-in are rejected, so startup defaults cannot overwrite saved settings or campaign
+  progress. ZIP installations create physical save directories beneath virtual archive parents as needed.
 - Bink movies with sound (intro, loading, campaign), skippable by tap or gamepad.
 
-Known limitations: a stable 60 FPS at the display's native resolution is not reached on the tested phones; online
-services of the original game are not available; the port needs Android 11 or newer on 64-bit ARM.
+Known limitations: a stable 60 FPS at the display's native resolution is not reached on the tested phones;
+the port needs Android 11 or newer on 64-bit ARM. OpenSpy endpoint initialization, protocol boundaries and an
+authenticated Internet match on the Ural BTFA server have been checked. Account creation and every server/mod
+combination have not been verified.
 
 Tested devices: Google Pixel 10a (Mali-G715, Android 17), Google Pixel 10 (PowerVR, Android 17), and a Snapdragon
-870 phone (Adreno 650, Android 15) for the Turnip renderers.
+870 phone (Adreno 650, Android 15) for the Turnip renderers. This update's GLES, texture-cache, menu and touch
+checks also ran on a BOOX GALILEO3 tablet with Android 11.
 
 ## Requirements
 
@@ -51,6 +75,7 @@ Tested devices: Google Pixel 10a (Mali-G715, Android 17), Google Pixel 10 (Power
 From the root of a clone:
 
 ```powershell
+git submodule update --init -- reference/astcenc reference/etcpak
 python -m pip install -r requirements.txt
 $env:ANDROID_SDK_ROOT = Join-Path $env:LOCALAPPDATA "Android\Sdk"
 $env:JAVA_HOME = "C:\Path\To\JDK"
@@ -73,6 +98,10 @@ bundled Turnip driver (`reference/adrenotools`, `reference/turnip-android`). Eve
 SHA-256 in the `dependencies-*.json` files; `tools/build_dxvk.py --rebuild` and `tools/build_native_audio.py
 --rebuild` rebuild DXVK and OpenAL from upstream sources at the pinned revisions.
 
+The optional converter, `libtexconv.so`, is built with `tools/build_texconv.py` from the upstream ASTC/ETC2
+submodules in `reference/astcenc` and `reference/etcpak`. Their revisions are pinned by Git; source hashes in
+`dependencies-textures.json` use LF line endings so validation also accepts Windows CRLF checkouts.
+
 `build_apk.py` signs with the signer configured in `PORT_SIGNING_CONFIG`, else with a local debug key
 (`build/android/debug.keystore`). An APK installs as an update only over one with the same signer.
 
@@ -90,12 +119,28 @@ Release APKs are additionally built with profile-guided optimization from a prof
    goes back to the bundled one.
 4. **Play**. The game's settings, saves and logs are in `Android/data/org.ut3.port/files/userdata`.
 
+The launcher's **Textures** card can create an ASTC or ETC2 cache for game folders or a ZIP played in place.
+Stored ZIP entries are read through the same index and descriptor as the game, including archives opened
+by Android's document picker; extracted sidecar files take precedence. The cache is
+`UTGame/port-textures.tvt`; conversion requires additional storage and preserves the original packages.
+It is used by the GLES renderer. DXVK uses the device's native BC texture support. Missing or changed DXT
+data is always accepted through the ordinary loader, including partial texture updates made by mods.
+The cache stores original mip data so such updates also retain previously uploaded levels and cube faces.
+
+In the game's **ANDROID** settings, **Control layout** opens the editor: drag a control, pinch or use the
+size slider, select hidden controls from the list, and choose **Save** or **Cancel**. The tools panel can be
+dragged by its heading. Weapon-bar swiping starts enabled; icon taps start disabled. Bar size is 50–100%,
+wheel size 50–150%, both multiplied by the interface scale. The renderer is chosen in the launcher.
+
 ## Checks
 
 ```powershell
 python -m unittest tests.test_pe_images        # PE images made from the Steam files equal the recompiled ones
 python tests/test_game_settings.py
 python tests/test_touch_controls.py
+python tests/test_native_settings.py          # original UE3 VM and SaveConfig
+python -m unittest tests.test_openspy tests.test_native_bundle tests.test_ui_hud tests.test_ui_list_scale
+python tools/check_texture_cache.py --device DEVICE_SERIAL --game /sdcard/UT3/texture-qa
 python android/launcher/tests/run_tests.py     # the launcher base
 ```
 

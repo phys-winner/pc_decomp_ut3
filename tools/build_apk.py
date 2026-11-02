@@ -117,7 +117,8 @@ def main():
         native_licenses = assets / "native-licenses"
         native_licenses.mkdir()
         for source in licenses:
-            target = native_licenses / LICENSE_TITLES.get(source.name, source.name)
+            title = source.parent.name + ".txt" if source.parent.name in ("astcenc", "etcpak") else LICENSE_TITLES.get(source.name, source.name)
+            target = native_licenses / title
             if target.exists():
                 parser.error(f"Two native licenses would share the name {target.name}")
             shutil.copy2(source, target)

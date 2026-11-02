@@ -47,10 +47,30 @@ int main(void)
         assert(api(wide ? "RegQueryValueExW" : "RegQueryValueExA", 6, query) == 0);
         char *value = wide ? void_wstr_utf8(storage + 32) : void_astr_utf8(storage + 32);
         assert(!strcmp(value, "C:\\Games\\UT3")); free(value);
+        uint32_t set[6] = {key, name, 0, REG_SZ_, storage + 32, needed};
+        assert(api(wide ? "RegSetValueExW" : "RegSetValueExA", 6, set) == 5);
+        uint32_t remove[2] = {key, name};
+        assert(api(wide ? "RegDeleteValueW" : "RegDeleteValueA", 2, remove) == 5);
+        assert(api(wide ? "RegDeleteKeyW" : "RegDeleteKeyA", 2, remove) == 5);
+        assert(api("RegFlushKey", 1, &key) == 0);
+        uint32_t enumeration[8] = {key, 0, storage + 64, storage + 20, 0, storage + 16, 0, storage + 24};
+        MEM32(storage + 20) = 32;
+        assert(api(wide ? "RegEnumValueW" : "RegEnumValueA", 8, enumeration) == 0);
+        assert(MEM32(storage + 20) == strlen("InstalledDirectory") && MEM32(storage + 24) == needed);
+        value = wide ? void_wstr_utf8(storage + 64) : void_astr_utf8(storage + 64);
+        assert(!strcmp(value, "InstalledDirectory")); free(value);
+        enumeration[1] = 1;
+        assert(api(wide ? "RegEnumValueW" : "RegEnumValueA", 8, enumeration) == 259);
+        uint32_t info[12] = {key, 0, 0, 0, storage + 40, storage + 44, storage + 48,
+            storage + 52, storage + 56, storage + 60, 0, storage + 112};
+        assert(api(wide ? "RegQueryInfoKeyW" : "RegQueryInfoKeyA", 12, info) == 0);
+        assert(MEM32(storage + 40) == 0 && MEM32(storage + 52) == 1 &&
+            MEM32(storage + 56) == strlen("InstalledDirectory") && MEM32(storage + 60) == needed && MEM64(storage + 112) == 0);
         query[2] = storage; assert(api(wide ? "RegQueryValueExW" : "RegQueryValueExA", 6, query) == 87);
         query[2] = 0; query[3] = 0x1000;
         assert(api(wide ? "RegQueryValueExW" : "RegQueryValueExA", 6, query) == 998);
         assert(api("RegCloseKey", 1, &key) == 0 && api("RegCloseKey", 1, &key) == 6);
+        assert(api(wide ? "RegSetValueExW" : "RegSetValueExA", 6, set) == 6);
         create[1] = sub; create[5] = REG_READ_;
         assert(api(wide ? "RegCreateKeyExW" : "RegCreateKeyExA", 9, create) == 0);
         assert(MEM32(disposition) == 2); key = MEM32(out); assert(api("RegCloseKey", 1, &key) == 0);
@@ -64,6 +84,15 @@ int main(void)
     create[1] = empty; create[5] = REG_READ_;
     assert(api("RegCreateKeyExA", 9, create) == 0 && MEM32(out) != HKEY_LOCAL_MACHINE_ && MEM32(disposition) == 2);
     uint32_t key = MEM32(out); assert(api("RegCloseKey", 1, &key) == 0);
+    for (unsigned wide = 0; wide < 2; ++wide) {
+        uint32_t enumerate[8] = {HKEY_LOCAL_MACHINE_, 0, storage + 64, storage + 20, 0, 0, 0, storage + 112};
+        MEM32(storage + 20) = 32;
+        assert(api(wide ? "RegEnumKeyExW" : "RegEnumKeyExA", 8, enumerate) == 0);
+        char *value = wide ? void_wstr_utf8(storage + 64) : void_astr_utf8(storage + 64);
+        assert(!strcmp(value, "Software") && MEM32(storage + 20) == 8); free(value);
+        enumerate[1] = 1;
+        assert(api(wide ? "RegEnumKeyExW" : "RegEnumKeyExA", 8, enumerate) == 259);
+    }
     create[1] = 0; assert(api("RegCreateKeyExA", 9, create) == 1010);
     create[1] = empty; create[2] = 1; assert(api("RegCreateKeyExA", 9, create) == 87); create[2] = 0;
     create[4] = 0x80000000; assert(api("RegCreateKeyExA", 9, create) == 87); create[4] = 0;

@@ -290,12 +290,14 @@ class NativeOptionWidgets(unittest.TestCase):
         self.assertEqual(self.native_order([0] * 14), list(range(1, 15)))
         for language in ("AndroidPortOptions.ini", "AndroidPortOptions-RUS.ini"):
             text = (ROOT / "android/uscript/AndroidPort" / language).read_text(encoding="utf-8")
-            self.assertEqual(re.findall(r"^OptionIndex=(\d+)$", text, re.M), ["0"] * 15)
+            self.assertEqual(re.findall(r"^OptionIndex=(\d+)$", text, re.M), ["0"] * 20)
             self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPortValues:(\w+)>", text),
                 ["touchSensitivity", "touchAltSensitivity", "touchScale", "uiScale", "touchOpacity",
-                 "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity", "renderScale"])
+                 "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity", "renderScale",
+                 "touchVisible", "touchStaticStick", "touchWeaponSwipe", "touchWeaponTap",
+                 "weaponBarScale", "weaponWheelScale"])
             self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPort:(\w+)>", text),
-                ["touchVehicleProfile", "touchGyro", "language", "fpsLimit", "renderer"])
+                ["touchVehicleProfile", "touchGyro", "language", "fpsLimit"])
             if language == "AndroidPortOptions.ini":
                 labels = next(line for line in text.splitlines() if 'Tag="language",Labels=' in line)
                 self.assertTrue(labels.isascii(), "INT stock fonts require ASCII language labels")

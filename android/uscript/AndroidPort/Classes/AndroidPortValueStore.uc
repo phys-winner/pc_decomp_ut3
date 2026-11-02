@@ -28,6 +28,12 @@ event GetSupportedScriptFields(out array<UIDataProviderField> out_Fields)
     AddScriptField(out_Fields, 'touchLeftHanded', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchInvertY', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchWasd', DATATYPE_Property);
+    AddScriptField(out_Fields, 'touchVisible', DATATYPE_Property);
+    AddScriptField(out_Fields, 'touchWeaponSwipe', DATATYPE_Property);
+    AddScriptField(out_Fields, 'touchWeaponTap', DATATYPE_Property);
+    AddScriptField(out_Fields, 'touchStaticStick', DATATYPE_Property);
+    AddScriptField(out_Fields, 'weaponBarScale', DATATYPE_RangeProperty);
+    AddScriptField(out_Fields, 'weaponWheelScale', DATATYPE_RangeProperty);
 }
 
 function bool ReadRange(name Field, out UIRangeData Range)
@@ -56,6 +62,12 @@ function bool ReadRange(name Field, out UIRangeData Range)
     case 'renderScale':
         Range.MinValue = 0.25; Range.MaxValue = 1.0; Range.NudgeValue = 0.05;
         Range.CurrentValue = Settings.renderScale / 100.0; break;
+    case 'weaponBarScale':
+        Range.MinValue = 0.5; Range.MaxValue = 1.0; Range.NudgeValue = 0.05;
+        Range.CurrentValue = Settings.weaponBarScale; break;
+    case 'weaponWheelScale':
+        Range.MinValue = 0.5; Range.MaxValue = 1.5; Range.NudgeValue = 0.05;
+        Range.CurrentValue = Settings.weaponWheelScale; break;
     default: return false;
     }
     Range.CurrentValue = FClamp(Range.CurrentValue, Range.MinValue, Range.MaxValue);
@@ -83,6 +95,10 @@ event bool GetFieldValue(string FieldName, out UIProviderScriptFieldValue FieldV
     case 'touchLeftHanded': FieldValue.StringValue = Settings.touchLeftHanded ? "1" : "0"; return true;
     case 'touchInvertY': FieldValue.StringValue = Settings.touchInvertY ? "1" : "0"; return true;
     case 'touchWasd': FieldValue.StringValue = Settings.touchWasd ? "1" : "0"; return true;
+    case 'touchVisible': FieldValue.StringValue = Settings.touchVisible ? "1" : "0"; return true;
+    case 'touchWeaponSwipe': FieldValue.StringValue = Settings.touchWeaponSwipe ? "1" : "0"; return true;
+    case 'touchWeaponTap': FieldValue.StringValue = Settings.touchWeaponTap ? "1" : "0"; return true;
+    case 'touchStaticStick': FieldValue.StringValue = Settings.touchStaticStick ? "1" : "0"; return true;
     }
     return false;
 }
@@ -110,6 +126,8 @@ event bool SetFieldValue(string FieldName, const out UIProviderScriptFieldValue 
         case 'touchGyroSensitivity': Settings.touchGyroSensitivity = Value; break;
         case 'uiScale': Settings.uiScale = Value; break;
         case 'renderScale': Settings.renderScale = Clamp(Round(Value * 100.0), 25, 100); break;
+        case 'weaponBarScale': Settings.weaponBarScale = Value; break;
+        case 'weaponWheelScale': Settings.weaponWheelScale = Value; break;
         }
     }
     else
@@ -120,6 +138,10 @@ event bool SetFieldValue(string FieldName, const out UIProviderScriptFieldValue 
         case 'touchLeftHanded': Settings.touchLeftHanded = Enabled; break;
         case 'touchInvertY': Settings.touchInvertY = Enabled; break;
         case 'touchWasd': Settings.touchWasd = Enabled; break;
+        case 'touchVisible': Settings.touchVisible = Enabled; break;
+        case 'touchWeaponSwipe': Settings.touchWeaponSwipe = Enabled; break;
+        case 'touchWeaponTap': Settings.touchWeaponTap = Enabled; break;
+        case 'touchStaticStick': Settings.touchStaticStick = Enabled; break;
         default: return false;
         }
     }

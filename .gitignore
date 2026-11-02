@@ -3,6 +3,7 @@
 /*
 !/.gitignore
 !/.gitattributes
+!/.gitmodules
 !/readme.md
 !/LICENSE
 !/THIRD_PARTY_NOTICES.md
@@ -12,6 +13,7 @@
 !/dependencies-dxvk.json
 !/dependencies-host.json
 !/dependencies-turnip.json
+!/dependencies-textures.json
 
 !/android/
 /android/**
@@ -46,6 +48,10 @@
 !/tests/*.cpp
 !/tests/*.inc
 !/tests/*.py
+!/tests/uscript/
+!/tests/uscript/AndroidPortChecks/
+!/tests/uscript/AndroidPortChecks/Classes/
+!/tests/uscript/AndroidPortChecks/Classes/*.uc
 
 !/reference/
 /reference/*
@@ -58,6 +64,8 @@
 !/reference/audio-runtime/
 !/reference/dxvk-runtime/
 !/reference/dxvk/
+!/reference/astcenc/
+!/reference/etcpak/
 /reference/dxvk/**
 !/reference/dxvk/**/
 !/reference/dxvk/LICENSE

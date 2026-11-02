@@ -1,6 +1,11 @@
 /* Direct3D 9 resources: surfaces, textures, buffers, vertex declarations,
  * queries, state blocks and the implicit swap chain. */
 #include "d3d9_internal.h"
+#include "../texconv/ut3tx.h"
+
+extern const utx_entry *void_texture_cache_find(uint32_t,uint32_t,uint32_t,uint32_t,const uint8_t*,uint32_t);
+extern const uint8_t *void_texture_cache_raw(const utx_entry*);
+extern const uint8_t *void_texture_cache_data(const utx_entry*);
 
 
 /* ------------------------------------------------------------------ util */
@@ -172,7 +177,7 @@ static void texture_set_storage(d3d_texture *t, const d3d_native_format *native)
 {
     if (t->native == native) return;
     if (!t->gl) { t->native = native; return; }     /* a system copy only remembers it */
-    if (t->target != GL_TEXTURE_2D) return;          /* never converted */
+    if (t->target != GL_TEXTURE_2D && t->target != GL_TEXTURE_CUBE_MAP) return;
     GLuint old = t->gl;
     glGenTextures(1, &t->gl);
     d3d_gl_upload_unit();
@@ -190,6 +195,21 @@ static void texture_set_storage(d3d_texture *t, const d3d_native_format *native)
     t->native_lock_logged = 0;
 }
 
+static void texture_cache_restore(d3d_texture *t)
+{
+    const utx_entry *saved[6];memcpy(saved,t->cached_faces,sizeof saved);
+    t->cache_active=0;t->cache_disabled=1;memset(t->cached_faces,0,sizeof t->cached_faces);
+    texture_set_storage(t,NULL);
+    for(int face=0;face<t->faces;face++)if(saved[face]) {
+        const uint8_t *raw=void_texture_cache_raw(saved[face]);
+        for(uint32_t level=0;level<t->levels;level++) {
+            uint32_t w,h;level_dims(t->width,t->height,level,&w,&h);
+            d3d_texture_upload_level(t,(uint32_t)face,level,raw,d3d_format_pitch(t->fmt,w));
+            raw+=utx_level_size(t->format,w,h);
+        }
+    }
+}
+
 COM_METHOD(surf, LockRect, 4)
 {
     d3d_surface *s = (d3d_surface *)void_com_host(THIS_);
@@ -201,6 +221,17 @@ COM_METHOD(surf, LockRect, 4)
     s->lock_mem = mem;
     s->lock_flags = flags;
     s->locked = persistent ? 1 : 2;
+    if(!persistent&&!(flags&D3DLOCK_DISCARD)&&s->container&&s->container->cache_active) {
+        const utx_entry *e=s->container->cached_faces[s->face];
+        if(e) {
+            const uint8_t *raw=void_texture_cache_raw(e);
+            for(uint32_t level=0;level<s->level;level++) {
+                uint32_t w,h;level_dims(s->container->width,s->container->height,level,&w,&h);
+                raw+=utx_level_size(s->format,w,h);
+            }
+            memcpy(GPTR(mem),raw,(size_t)utx_level_size(s->format,s->width,s->height));
+        }
+    }
     uint32_t x = 0, y = 0;
     s->lock_whole = !rect;
     if (rect) {
@@ -483,6 +514,35 @@ void d3d_texture_upload_rect(d3d_texture *t, uint32_t face, uint32_t level, uint
     const uint8_t *data, uint32_t pitch)
 {
     if (!t->gl || !w || !h) return;
+    if(face<(uint32_t)t->faces&&!t->cache_disabled&&t->fmt->block_bytes&&
+       (t->target==GL_TEXTURE_2D||t->target==GL_TEXTURE_CUBE_MAP)&&
+       !(t->usage&(D3DUSAGE_DYNAMIC|D3DUSAGE_RENDERTARGET|D3DUSAGE_DEPTHSTENCIL|D3DUSAGE_AUTOGENMIPMAP))) {
+        uint32_t lw,lh;level_dims(t->width,t->height,level,&lw,&lh);
+        int whole=!x&&!y&&w==lw&&h==lh&&pitch==d3d_format_pitch(t->fmt,lw);
+        const utx_entry *e=t->cached_faces[face];
+        if(t->cache_active&&e&&whole) {
+            const uint8_t *raw=void_texture_cache_raw(e);
+            for(uint32_t l=0;l<level;l++){uint32_t a,b;level_dims(t->width,t->height,l,&a,&b);raw+=utx_level_size(t->format,a,b);}
+            if(!memcmp(raw,data,(size_t)utx_level_size(t->format,w,h)))return;
+        } else if(!e&&!(t->cache_attempted&(1u<<face))&&whole&&level==0) {
+            e=void_texture_cache_find(t->format,w,h,t->levels,data,pitch);
+            uint32_t fourcc=e?(e->gl_format==TVTX_GL_ASTC_4x4?FOURCC('H','5','A','4'):
+                e->gl_format==TVTX_GL_ETC2_RGB8?FOURCC('H','5','E','1'):FOURCC('H','5','E','2')):0;
+            const d3d_native_format *native=e?d3d_native_find(fourcc):NULL;
+            if(e&&d3d_native_supported(native)&&(!t->cache_active||t->native==native)) {
+                texture_set_storage(t,native);t->cache_active=1;t->cached_faces[face]=e;t->cache_attempted|=1u<<face;
+                const uint8_t *encoded=void_texture_cache_data(e);
+                for(uint32_t l=0;l<t->levels;l++) {
+                    uint32_t a,b;level_dims(t->width,t->height,l,&a,&b);uint32_t size=d3d_native_size(native,a,b);
+                    d3d_texture_upload_native(t,face,l,encoded,size);encoded+=size;
+                }
+                return;
+            }
+        }
+        t->cache_attempted|=1u<<face;
+        if(t->cache_active)texture_cache_restore(t);
+        else t->cache_disabled=1; /* Later cube faces must not replace storage holding an uncached face. */
+    }
     if (t->native) {
         uint32_t lw, lh;
         level_dims(t->width, t->height, level, &lw, &lh);
@@ -691,7 +751,9 @@ void d3d_update_surface(d3d_surface *src, uint32_t src_rect, d3d_surface *dst, u
 void d3d_update_texture(d3d_texture *src, d3d_texture *dst)
 {
     if (!src->sysmem) { void_log("[d3d9] UpdateTexture from a non-system texture"); return; }
-    if (src->fmt->block_bytes && dst->fmt == src->fmt) texture_set_storage(dst, src->native);
+    if(dst->cache_active)texture_cache_restore(dst);
+    dst->cache_disabled=dst->cache_attempted=0;
+    if (src->fmt->block_bytes && dst->fmt == src->fmt) texture_set_storage(dst, src->cache_active?NULL:src->native);
     for (int f = 0; f < src->faces; ++f) {
         for (uint32_t l = 0; l < src->levels && l < dst->levels; ++l) {
             uint32_t mem = src->sysmem[f * (int)src->levels + (int)l];

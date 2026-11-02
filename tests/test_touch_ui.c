@@ -201,6 +201,8 @@ static void scroll_probe_and_delivery(void)
     void_input_pump();cursor(100,120);assert(ui_control(context)==0 && scroll_target);
     scroll_mailbox=0;void_input_pump();assert(!ui_scroll_pending && !scroll_target && !messages(DOWN) && !messages(UP));
     cursor(300,320);ack(300,320);void_input_pump();assert(ui_control(context)==1);
+    assert(ui_scroll(0,context));assert(ui_control(context)==1);
+    void_input_pump();assert(ui_control(context)==-2 && !ui_scroll(0,context));
     context=fixture();control_kind=2;assert(ui_begin(context));void_input_pump();assert(ui_scroll(-8,context));
     void_input_touch_reset();void_input_pump();assert(!scroll_total && !scroll_target && ui_control(context)<0);
     context=fixture();control_kind=2;void_input_mouse_warp(100,120);assert(ui_begin(context));

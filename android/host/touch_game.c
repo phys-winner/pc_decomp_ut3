@@ -65,7 +65,7 @@ static int touch_class(uint32_t cls, const char *expected)
     return 0;
 }
 
-static uint32_t touch_property(uint32_t cls, const char *name, const char *type)
+static uint32_t touch_field(uint32_t cls, const char *name, const char *type)
 {
     unsigned budget=2048;
     for (unsigned depth=0; cls && depth<32; ++depth) {
@@ -78,7 +78,7 @@ static uint32_t touch_property(uint32_t cls, const char *name, const char *type)
                 if (!touch_member(field, CLASS_OFFSET, &kind) || !touch_class(kind, type) ||
                     !touch_member(field, PROPERTY_OFFSET, &offset) || offset < 0x3C ||
                     offset > 65536-4 || (offset&3)) return 0;
-                return offset;
+                return field;
             }
             uint32_t next;
             if (!touch_member(field, NEXT_OFFSET, &next) || next == field) return 0;
@@ -90,6 +90,19 @@ static uint32_t touch_property(uint32_t cls, const char *name, const char *type)
         cls=next;
     }
     return 0;
+}
+
+static uint32_t touch_property(uint32_t cls,const char *name,const char *type)
+{
+    uint32_t field=touch_field(cls,name,type),offset=0;
+    return field && touch_member(field,PROPERTY_OFFSET,&offset) ? offset : 0;
+}
+
+static int touch_editable(uint32_t object,uint32_t cls)
+{
+    uint32_t field=touch_field(cls,"bReadOnly","BoolProperty"),offset,mask,value;
+    return field && touch_member(field,PROPERTY_OFFSET,&offset) && touch_member(field,0x84,&mask) &&
+        mask && !(mask&(mask-1)) && touch_member(object,offset,&value) && !(value&mask);
 }
 
 /* -1: not a VM-owned call; 0: no valid publisher; 1: mode/epoch/profile/identity.
@@ -169,7 +182,7 @@ static int touch_game_read(uint32_t out[4],int deliver_menu)
         void_touch_menu_pending() && touch_metadata.menu<=UINT32_MAX-viewport) {
         uint32_t address=viewport+touch_metadata.menu;
         if (void_vm_writable(address,4)) {
-            uint32_t request=1;memcpy(GPTR(address),&request,4);
+            uint32_t request=(uint32_t)void_touch_menu_pending();memcpy(GPTR(address),&request,4);
             void_touch_menu_delivered();
         }
     }
@@ -249,6 +262,19 @@ int void_touch_ui_list_scale(uint32_t string,float *scale)
     *scale=value;return 1;
 }
 
+float void_touch_weapon_wheel_scale(void)
+{
+    uint32_t context[4],store,settings,cls,bits;
+    float ui=1,value;
+    if(touch_game_read(context,0)!=1||context[0]!=1||touch_settings_scale(context[3],&ui)!=1||
+       !isfinite(ui)||ui<1||ui>1.5f||!touch_member(context[3],touch_metadata.hud_store,&store)||
+       !touch_member(store,touch_metadata.hud_settings,&settings)||!touch_member(settings,CLASS_OFFSET,&cls))return 1;
+    uint32_t offset=touch_property(cls,"weaponWheelScale","FloatProperty");
+    if(!offset||!touch_member(settings,offset,&bits))return ui;
+    memcpy(&value,&bits,4);
+    return isfinite(value)&&value>=.5f&&value<=1.5f ? ui*value : ui;
+}
+
 /* UI pointer acknowledgement, read on the window's VM-owned input pump only.
  * 1: capturing scene's cached IntPoint; 2: console-only UI needs no hover;
  * 0: unavailable/invalid metadata; -1: caller does not own the machine.
@@ -316,7 +342,7 @@ int void_touch_ui_mouse(uint32_t out[2])
 static int touch_ui_target(uint32_t *target)
 {
     uint32_t xy[2],scene=0,object=0,list=0,first=0;
-    int drag=0,keep=0,edit=0,combo=0,option=0;
+    int drag=0,keep=0,edit=0,combo=0,option=0,text=0;
     int result=touch_ui_scene(xy,&scene);
     if (result<0)return -1;
     if (result!=1 || !touch_metadata.scroll_target || !touch_metadata.scroll_steps)return 1;
@@ -327,7 +353,7 @@ static int touch_ui_target(uint32_t *target)
         if (!depth)first=cls;
         if (touch_class(cls,"UISlider") || touch_class(cls,"UIScrollbar"))drag=1;
         if (touch_class(cls,"UICheckbox"))keep=1;
-        if (!list && touch_class(cls,"UIEditBox"))edit=1;
+        if (!list && touch_class(cls,"UIEditBox")) { edit=1;text=touch_editable(object,cls); }
         if (!list && touch_class(cls,"UIComboBox")) {
             combo=1;
             if (depth==1 && touch_class(first,"UIButton"))keep=1;
@@ -342,11 +368,12 @@ static int touch_ui_target(uint32_t *target)
         object=next;
     }
     if (object)return -1; /* Cycles and unbounded ancestry never become scroll targets. */
-    if (!list)return drag ? 4|1 : 1;
+    int keyboard=text && !combo ? 16 : 0;
+    if (!list)return (drag ? 4|1 : 1)|keyboard;
     *target=list;
     if (drag)return 2|4|1;
     if (edit && !combo)keep=1;
-    return 2|(option && !keep ? 8 : 1);
+    return 2|(option && !keep ? 8 : 1)|keyboard;
 }
 
 static int touch_ui_mailbox(uint32_t *target_address,uint32_t *step_address,int require_ui)
@@ -422,9 +449,9 @@ int void_touch_game_details(uint32_t out[2])
     if (!touch_metadata.weapon_slots || !touch_viewport(&viewport) ||
         !touch_member(viewport,touch_metadata.weapon_slots,&out[0]) ||
         !touch_member(viewport,touch_metadata.vehicle_flags,&out[1])) { out[0]=out[1]=0;return 0; }
-    /* Slots 0-9, selected slot 10-13 (0-9), bar shown 14, minimap 15; six vehicle flags. */
+    /* HUD bits 0-15; vehicle actions/seats 0-12 and Scorpion steering 13. */
     if ((out[0]>>16) || ((out[0]>>10)&15)>9) out[0]=0;
-    if (out[1]>>6) out[1]=0;
+    if (out[1]>>14) out[1]=0;
     return 1;
 }
 
@@ -459,7 +486,13 @@ int void_touch_steer(float out[3],uint32_t *flags)
 {
     uint32_t viewport,bits,value[3];
     if (!touch_metadata.steer || !touch_viewport(&viewport) ||
-        !touch_member(viewport,touch_metadata.vehicle_flags,&bits) || (bits>>6) || !(bits&8) ||
+        !touch_member(viewport,touch_metadata.vehicle_flags,&bits) || (bits>>14)) return 0;
+    if (bits&8192u) {
+        if (bits&8u) return 0;
+        out[0]=out[1]=0;out[2]=1;*flags=bits;
+        return 1;
+    }
+    if (!(bits&8) ||
         !touch_member(viewport,touch_metadata.steer,&value[0]) ||
         !touch_member(viewport,touch_metadata.steer_reverse,&value[1]) ||
         !touch_member(viewport,touch_metadata.steer_scale,&value[2])) return 0;

@@ -13,7 +13,7 @@ var transient bool PortPageReady;
 var transient int PortInputMode;
 var transient int PortInputEpoch;
 var transient int PortVehicleProfile;
-// Host-to-script mailbox: any nonzero requests the Android settings page.
+// Host mailbox: 1 opens Android settings, 2 hides controls, 3 shows them.
 // Script acknowledges receipt with zero; no config persistence is involved.
 var transient int PortMenuRequest;
 var transient bool PortMenuPending;
@@ -37,7 +37,9 @@ var transient int PortWeaponRequest;
 var transient Weapon PortWeaponPreview;
 // Vehicle details which keep the input context: 1 Jump deploys/undeploys,
 // 2 deployed, 4 a gunner seat passing Jump on, 8 look steering, 16 its
-// stick deflection throttle, 32 moving backwards.
+// stick deflection throttle, 32 moving backwards, 64 board/translocator,
+// 128 multiple seats, bits 8-12 seats this player can switch to.
+// 8192 Scorpion driver: axial steering dead zone prevents slight stick drift locking its wheels.
 var transient int PortVehicleFlags;
 // Console look steering (UTVehicle.SetInputs for UTVC_Simple): the steering
 // toward the view and the vehicle's own reverse threshold and stick scale.
@@ -54,17 +56,35 @@ var transient int PortHoverX, PortHoverY;
 // own pixels, the first visible row, the selection and the row under the
 // finger then. The view follows the finger; the selection stays.
 var transient UIObject PortDragTarget;
-var transient float PortDragY;
+var transient float PortDragX, PortDragY;
 var transient int PortDragTop, PortDragIndex, PortDragRow;
 var transient bool PortDragMoved;
+var transient bool PortDragSlider;
 var transient float PortLastTapTime;
 // An option list whose view a drag moved away from its focused option: the
 // focused row keeps its lit label and the selection bar waits for the view.
 var transient UTUIOptionList PortScrolledOptions;
+var transient int PortOptionFocused;
+var transient UTUIOptionList PortOffsetOptions;
+struct PortFocusOffset
+{
+    var UIObject Widget;
+    var vector Offset;
+};
+var transient array<PortFocusOffset> PortFocusOffsets;
+struct PortCommandColumn
+{
+    var float Left, Top, Width, RowHeight;
+    var int Column, Count;
+};
+var transient UTDrawCommandPanel PortCommandPanel;
+var transient array<PortCommandColumn> PortCommandColumns;
+var transient int PortCommandPress;
 // Checks of the shown settings page until its combo texts are refreshed (2).
 var transient int PortComboWait;
 // A press beside the settings tabs, on the tab it is nearest to; -1 none.
 var transient int PortTabPress;
+var transient UTUIButtonBarButton PortButtonPress;
 var transient bool PortTabsHooked;
 // The mouse cursor drawn transparent, the skin it came from and its style.
 var transient UITexture PortHiddenCursor;
@@ -184,6 +204,8 @@ function UpdatePortInputContext()
         PortDragTarget = None;
         PortScrolledOptions = None;
         PortTabPress = -1;
+        PortButtonPress = None;
+        PortCommandPress = 0;
         PortWeaponRequest = 0;
         PortWeaponPreview = None;
     }
@@ -227,6 +249,8 @@ function UpdatePortWeaponBar(PlayerController CurrentController, Pawn CurrentPaw
     local int Slots, Count, Slot, Map;
     if (CurrentController != None)
         Hud = UTHUD(CurrentController.myHUD);
+    if (Hud != None && PortStore != None && PortStore.Settings != None)
+        Hud.WeaponBarScale = Hud.default.WeaponBarScale * FClamp(PortStore.Settings.weaponBarScale, 0.5, 1.0);
     if (Hud != None && Hud.bHasMap && Hud.bShowMap)
         Map = 1 << 15;
     if (PortInputMode == 1 && Hud != None && Hud.bShowHUD && Hud.bShowWeaponBar && CurrentPawn != None
@@ -295,6 +319,41 @@ function HandlePortWeaponRequest(Pawn CurrentPawn)
         Inventory.SetCurrentWeapon(Target);
 }
 
+/** Available seat keys; the server remains authoritative if occupancy changes before the tap. */
+static function int PortSeatFlags(UTVehicle V, PlayerController PC, int CurrentSeat, bool bClient)
+{
+    local int Index, Flags;
+    local UTVehicle_SPMA Artillery;
+    local Controller Occupant;
+    local PlayerReplicationInfo SeatPRI;
+    if (V == None || PC == None || V.Seats.Length < 2 || CurrentSeat < 0 || CurrentSeat >= V.Seats.Length)
+        return 0;
+    Flags = 128;
+    Artillery = UTVehicle_SPMA(V);
+    for (Index = 0; Index < Min(5, V.Seats.Length); ++Index)
+    {
+        if (Index == CurrentSeat)
+            continue;
+        // The mobile SPMA driver cannot switch to its artillery seat until deployment.
+        if (Artillery != None && CurrentSeat == 0 && Artillery.DeployedState != EDS_Deployed
+            && Artillery.DeployedState != EDS_Deploying)
+            continue;
+        if (!bClient)
+        {
+            Occupant = V.GetControllerForSeatIndex(Index);
+            if (Occupant == None || V.HasPriority(PC, Occupant))
+                Flags = Flags | (1 << (8 + Index));
+        }
+        else
+        {
+            SeatPRI = V.Seats[Index].SeatPawn != None ? V.Seats[Index].SeatPawn.PlayerReplicationInfo : None;
+            if ((V.SeatMask & (1 << Index)) == 0 || (SeatPRI != None && SeatPRI.bBot))
+                Flags = Flags | (1 << (8 + Index));
+        }
+    }
+    return Flags;
+}
+
 /** Deployment, gunner Jump and the console's look steering for the touch stick. */
 function UpdatePortVehicle(Pawn CurrentPawn)
 {
@@ -305,6 +364,10 @@ function UpdatePortVehicle(Pawn CurrentPawn)
     local vector AngVel;
     local float Delta, Steer;
     local int Flags;
+    local UTPlayerController PC;
+    local UTPawn P;
+    local array<UIObject> CommandWidgets;
+    local int Index;
     if (PortInputMode == 1 && CurrentPawn != None && CurrentPawn.Health > 0)
     {
         Seat = UTWeaponPawn(CurrentPawn);
@@ -314,6 +377,37 @@ function UpdatePortVehicle(Pawn CurrentPawn)
             V = UTVehicle(CurrentPawn);
     }
     Deployable = UTVehicle_Deployable(V);
+    P = UTPawn(CurrentPawn);
+    if (P != None && P.Health > 0 && (P.bHasHoverboard || P.FindInventoryType(class'UTWeap_Translocator') != None))
+        Flags = Flags | 64;
+    if (GamePlayers.Length > 0 && GamePlayers[0] != None)
+        PC = UTPlayerController(GamePlayers[0].Actor);
+    if (V != None)
+        Flags = Flags | PortSeatFlags(V, PC, Seat != None ? Seat.MySeatIndex : 0, V.WorldInfo.NetMode == NM_Client);
+    if (Seat == None && UTVehicle_Scorpion(V) != None)
+        Flags = Flags | 8192;
+    if (PC != None && PC.CommandMenu != None)
+    {
+        PC.CommandMenu.bDisplayCursor = true;
+        PC.CommandMenu.OnPreRenderCallback = PortCommandCursor;
+        if (PortCommandPanel == None || PortCommandPanel.GetScene() != PC.CommandMenu)
+        {
+            CommandWidgets = PC.CommandMenu.GetChildren(true);
+            for (Index = 0; Index < CommandWidgets.Length; ++Index)
+                if (UTDrawCommandPanel(CommandWidgets[Index]) != None)
+                {
+                    PortCommandPanel = UTDrawCommandPanel(CommandWidgets[Index]);
+                    PortCommandPanel.DrawDelegate = PortCommandDraw;
+                    break;
+                }
+        }
+    }
+    else
+    {
+        PortCommandPanel = None;
+        PortCommandColumns.Length = 0;
+        PortCommandPress = 0;
+    }
     // UTVehicle_Deployable.DoJump toggles; UTWeaponPawn.DoJump forwards only with bAcceptTurretJump.
     if (Deployable != None && (Seat == None || V.bAcceptTurretJump))
         Flags = Flags | 1;
@@ -321,7 +415,8 @@ function UpdatePortVehicle(Pawn CurrentPawn)
         Flags = Flags | 2;
     if (Seat != None && V != None && V.bAcceptTurretJump)
         Flags = Flags | 4;
-    if (Seat == None && V != None && V.bLookSteerOnSimpleControls && PlayerController(V.Controller) != None
+    // Scorpion's PC driver needs direct stick steering; look feedback can hold its wheels at full lock.
+    if (Seat == None && V != None && UTVehicle_Scorpion(V) == None && V.bLookSteerOnSimpleControls && PlayerController(V.Controller) != None
         && (Deployable == None || !Deployable.DeployActivated()))
     {
         // The original console branch of UTVehicle.SetInputs, with the view
@@ -353,6 +448,103 @@ function UpdatePortVehicle(Pawn CurrentPawn)
     if ((Flags & 8) == 0 && PortInputMode == 1 && PortScoped(CurrentPawn))
         Flags = Flags | 48;
     PortVehicleFlags = Flags;
+}
+
+function PortCommandCursor()
+{
+    local UTPlayerController PC;
+    if (GamePlayers.Length > 0 && GamePlayers[0] != None)
+        PC = UTPlayerController(GamePlayers[0].Actor);
+    if (PC != None && PC.CommandMenu != None)
+        PC.CommandMenu.bDisplayCursor = true;
+}
+
+/** Record the original canvas lists while their font, clipping and panel origin are valid. */
+function float PortCommandBounds(Canvas C, int Column, float X)
+{
+    local int Index, Count, At;
+    local float W, H, Width, Height, Gap;
+    local string Caption;
+    Count = Min(10, PortCommandPanel.MyLists[Column].Values.Length - PortCommandPanel.MyLists[Column].Top);
+    if (Count <= 0)
+        return 0;
+    for (Index = 0; Index < Count; ++Index)
+    {
+        Caption = string(Index + 1) $ ". " $ PortCommandPanel.MyLists[Column].Values[PortCommandPanel.MyLists[Column].Top + Index].Caption;
+        C.StrLen(Caption, W, H);
+        Width = FMax(Width, W);
+        Height += H;
+    }
+    if (H <= 0 || Width <= 0)
+        return 0;
+    At = PortCommandColumns.Length;
+    PortCommandColumns.Length = At + 1;
+    PortCommandColumns[At].Left = X + (PortCommandPanel.bUseFullViewport ? 0.0 : PortCommandPanel.pLeft);
+    PortCommandColumns[At].Top = (C.ClipY - Height) * 0.5 + (PortCommandPanel.bUseFullViewport ? 0.0 : PortCommandPanel.pTop);
+    PortCommandColumns[At].Width = Width;
+    PortCommandColumns[At].RowHeight = H;
+    PortCommandColumns[At].Column = Column;
+    PortCommandColumns[At].Count = Count;
+    C.StrLen("WW", Gap, H);
+    return Width + Gap;
+}
+
+function bool PortCommandDraw(Canvas C)
+{
+    local float X;
+    PortCommandColumns.Length = 0;
+    if (PortCommandPanel == None || C == None)
+        return false;
+    PortCommandPanel.Canvas = C;
+    PortCommandPanel.DrawPanel();
+    if (PortCommandPanel == None || PortCommandPanel.TransitionTimer > 0 || PortCommandPanel.MyPawn() == None)
+        return true;
+    X = C.ClipX * 0.02;
+    X += PortCommandBounds(C, PortCommandPanel.FocusedList, X);
+    if (PortCommandPanel.FocusedList < 1 || PortCommandPanel.NeedsPRIList())
+        PortCommandBounds(C, PortCommandPanel.FocusedList + 1, X);
+    return true;
+}
+
+function int PortCommandHit(float X, float Y)
+{
+    local int Index, Row;
+    for (Index = 0; Index < PortCommandColumns.Length; ++Index)
+        if (PortCommandColumns[Index].RowHeight > 0 && X >= PortCommandColumns[Index].Left
+            && X < PortCommandColumns[Index].Left + PortCommandColumns[Index].Width
+            && Y >= PortCommandColumns[Index].Top)
+        {
+            Row = int((Y - PortCommandColumns[Index].Top) / PortCommandColumns[Index].RowHeight);
+            if (Row >= 0 && Row < PortCommandColumns[Index].Count)
+                return PortCommandColumns[Index].Column * 16 + Row + 1;
+        }
+    return 0;
+}
+
+function bool PortCommandChoose(UTDrawCommandPanel Panel, int Column, int Row)
+{
+    local int Actual;
+    if (Panel == None || Column < 0 || Column > 2 || Row < 0 || Row >= 10)
+        return false;
+    Actual = Panel.MyLists[Column].Top + Row;
+    if (Actual < 0 || Actual >= Panel.MyLists[Column].Values.Length || Panel.MyLists[Column].Values[Actual].bDisabled)
+        return false;
+    Panel.FocusedList = Column;
+    Panel.MyLists[Column].Selection = Row;
+    if (Column == 0)
+        Panel.FillEmoteList(Panel.MyLists[0].Values[Actual].EmoteTag);
+    if (Column == 2 || Panel.EndOfChain())
+    {
+        if (Panel.PerformCommand() && Panel.UTHudScene != None)
+            Panel.UTHudScene.CloseScene(Panel.UTHudScene);
+    }
+    else if (Column < 1 || Panel.NeedsPRIList())
+    {
+        Panel.LastFocusedList = Column;
+        Panel.FocusedList = Min(Column + 1, 2);
+        Panel.TransitionTimer = Panel.TransitionTime;
+    }
+    return true;
 }
 
 /** Looking through a scope (UTWeapon zoom) or steering a Redeemer missile. */
@@ -480,6 +672,8 @@ function ScrollPortOptions(UTUIOptionList Options, int Top)
     Anchor = Clamp(Top, 0, Count - Most) + Most / 2;
     if (Anchor == Options.CurrentIndex)
         return;
+    if (PortScrolledOptions != Options)
+        PortOptionFocused = Options.CurrentIndex;
     Options.SetSelectedOptionIndex(Anchor);
     PortScrolledOptions = Options;
     KeepPortFocusLit(Options);
@@ -488,16 +682,20 @@ function ScrollPortOptions(UTUIOptionList Options, int Top)
 /**
  * The native SetSelectedOptionIndex lights the label of the view's row
  * (SetEnabled, vtable 0x124) and the selection bar follows that row. While the
- * view is away from the focused option, its label stays lit and the bar is
- * hidden; both return when the focused row is the view's row again.
+ * view is away from the focused option, the bar follows its visible row
+ * without asking SetSelectedOptionIndex to recenter the list.
  */
 function KeepPortFocusLit(UTUIOptionList Options)
 {
     local int Index, Focused;
     local UIObject Control;
     local bool bLit;
+    local vector Offset;
+    local array<UIObject> Background;
+    local float Delta;
     Control = Options.GetFocusedControl(false, 0);
-    Focused = Control != None ? Options.GetObjectInfoIndexFromObject(Control) : INDEX_NONE;
+    Focused = PortScrolledOptions == Options ? PortOptionFocused :
+        (Control != None ? Options.GetObjectInfoIndexFromObject(Control) : INDEX_NONE);
     if (Focused == INDEX_NONE)
         Focused = Options.CurrentIndex;
     for (Index = 0; Index < Options.GeneratedObjects.Length; ++Index)
@@ -506,10 +704,50 @@ function KeepPortFocusLit(UTUIOptionList Options)
         if (Options.GeneratedObjects[Index].LabelObj != None && Options.GeneratedObjects[Index].LabelObj.IsEnabled(0) != bLit)
             Options.GeneratedObjects[Index].LabelObj.SetEnabled(bLit, 0);
     }
-    if (Options.BGPrefabInstance != None && Options.BGPrefabInstance.IsVisible() != (Focused == Options.CurrentIndex))
-        Options.BGPrefabInstance.SetVisibility(Focused == Options.CurrentIndex);
+    if (Options.BGPrefabInstance != None && Focused >= 0 && Focused < Options.GeneratedObjects.Length)
+    {
+        if (PortOffsetOptions != Options)
+        {
+            RestorePortFocusBar();
+            PortOffsetOptions = Options;
+            Background = Options.BGPrefabInstance.GetChildren(true);
+            for (Index = 0; Index < Background.Length; ++Index)
+            {
+                PortFocusOffsets.Length = Index + 1;
+                PortFocusOffsets[Index].Widget = Background[Index];
+                PortFocusOffsets[Index].Offset = Background[Index].RenderOffset;
+            }
+        }
+        Options.bAnimatingBGPrefab = false;
+        bLit = Options.GeneratedObjects[Focused].OptionObj.IsVisible();
+        Options.BGPrefabInstance.SetVisibility(bLit);
+        // Prefab artwork has its own transforms; its empty root's offset does not move it.
+        if (bLit && Options.CurrentIndex >= 0 && Options.CurrentIndex < Options.GeneratedObjects.Length)
+            Delta = Options.GeneratedObjects[Focused].OptionY
+                - Options.GeneratedObjects[Options.CurrentIndex].OptionY;
+        for (Index = 0; Index < PortFocusOffsets.Length; ++Index)
+        {
+            Offset = PortFocusOffsets[Index].Offset;
+            Offset.Y += Delta;
+            PortFocusOffsets[Index].Widget.RenderOffset = Offset;
+            PortFocusOffsets[Index].Widget.UpdateRotationMatrix();
+        }
+    }
     if (Focused == Options.CurrentIndex)
         PortScrolledOptions = None;
+}
+
+function RestorePortFocusBar()
+{
+    local int Index;
+    for (Index = 0; Index < PortFocusOffsets.Length; ++Index)
+        if (PortFocusOffsets[Index].Widget != None)
+        {
+            PortFocusOffsets[Index].Widget.RenderOffset = PortFocusOffsets[Index].Offset;
+            PortFocusOffsets[Index].Widget.UpdateRotationMatrix();
+        }
+    PortFocusOffsets.Length = 0;
+    PortOffsetOptions = None;
 }
 
 /** A finger comes down on a list: what a drag starts from, and what a tap would press. */
@@ -517,8 +755,10 @@ function BeginPortDrag(UIObject Target, UTUIOptionList Options, UIList List, UTS
 {
     PortDragTarget = Target;
     PortDragMoved = false;
+    PortDragSlider = false;
     PortDragRow = -1;
     PortDragY = PortCursor(Target).Y;
+    PortDragX = PortCursor(Target).X;
     if (Options != None)
     {
         PortDragTop = PortOptionTop(Options);
@@ -617,6 +857,8 @@ function HoverPortRow(UTUIOptionList Options, UIList List, UTSimpleList Simple)
     local int X, Y, Rows, Most;
     local float Pitch, Moved;
     local bool bMoved;
+    local UISlider Slider;
+    local float Horizontal, Left, Width;
     class'UIRoot'.static.GetCursorPosition(X, Y);
     bMoved = X != PortHoverX || Y != PortHoverY;
     PortHoverX = X;
@@ -624,7 +866,22 @@ function HoverPortRow(UTUIOptionList Options, UIList List, UTSimpleList Simple)
     if (Options != None && Options.GeneratedObjects.Length > 0)
     {
         Pitch = PortOptionPitch(Options);
-        Moved = PortDragY - PortCursor(Options).Y;
+        Cursor = PortCursor(Options);
+        Moved = PortDragY - Cursor.Y;
+        Horizontal = Cursor.X - PortDragX;
+        if (PortDragRow >= 0 && PortDragRow < Options.GeneratedObjects.Length)
+            Slider = UISlider(Options.GeneratedObjects[PortDragRow].OptionObj);
+        if (Slider != None && !PortDragMoved && Abs(Horizontal) > FMax(8, Abs(Moved)))
+            PortDragSlider = true;
+        if (PortDragSlider && Slider != None)
+        {
+            // Keep drag updates on their original slider even when focus would recenter its list.
+            Left = Slider.GetPosition(UIFACE_Left, EVALPOS_PixelViewport);
+            Width = Slider.GetBounds(UIORIENT_Horizontal, EVALPOS_PixelViewport);
+            if (Width > 1 && Slider.IsEnabled(0) && Slider.SetValue(FClamp((X - Left) / Width, 0.0, 1.0), true))
+                Slider.NotifyValueChanged(0);
+            return;
+        }
         if (!PortDragMoved && Abs(Moved) < FMax(8, Pitch * 0.35))
             return;
         PortDragMoved = true;
@@ -677,6 +934,8 @@ function TapPortOption(UTUIOptionList Options)
     local UTUIOptionButton Button;
     local UIComboBox Combo;
     local int Item;
+    if (TapPortChrome())
+        return;
     Index = PortOptionRow(Options);
     if (Index < 0)
         return;
@@ -729,9 +988,8 @@ function UITabControl PortActiveTabs()
 
 /**
  * The tab a press beside the original tab row belongs to: the row is a thin
- * line of captions, so it reaches its own height (at least 4.5% of the screen)
- * above and below, and every gap goes to the nearest button. -1 elsewhere,
- * and on a button itself, which keeps its original click.
+ * line of captions, so it reaches its own height (at least 8% of the screen)
+ * above and below, and every gap goes to the nearest button. -1 elsewhere.
  */
 function int PortNearTab(UITabControl Tabs)
 {
@@ -760,8 +1018,6 @@ function int PortNearTab(UITabControl Tabs)
         Top = Button.GetPosition(UIFACE_Top, EVALPOS_PixelViewport);
         Right = Button.GetPosition(UIFACE_Right, EVALPOS_PixelViewport);
         Bottom = Button.GetPosition(UIFACE_Bottom, EVALPOS_PixelViewport);
-        if (X >= Left && X <= Right && Y >= Top && Y <= Bottom)
-            return -1;
         RowTop = FMin(RowTop, Top);
         RowBottom = FMax(RowBottom, Bottom);
         RowLeft = FMin(RowLeft, Left);
@@ -774,11 +1030,93 @@ function int PortNearTab(UITabControl Tabs)
         }
     }
     GetViewportSize(Size);
-    Reach = FMax(RowBottom - RowTop, Size.Y * 0.045);
+    Reach = FMax(RowBottom - RowTop, Size.Y * 0.08);
     if (Best < 0 || RowBottom <= RowTop || Y < RowTop - Reach || Y > RowBottom + Reach
         || X < RowLeft - Reach || X > RowRight + Reach)
         return -1;
     return Best;
+}
+
+function UTUIButtonBarButton PortNearButtonBar()
+{
+    local UIScene Scene;
+    local array<UIObject> Children;
+    local UTUIButtonBar Bar;
+    local UTUIButtonBarButton Button, Best;
+    local int Index, Item, X, Y;
+    local float Left, Right, Top, Bottom, RowTop, RowBottom, RowLeft, RowRight, Reach;
+    local float Distance, BestDistance, CenterDistance, BestCenter;
+    local vector2D Size;
+    if (UIController == None || UIController.SceneClient == None)
+        return None;
+    Scene = UIController.SceneClient.GetActiveScene();
+    if (Scene == None)
+        return None;
+    class'UIRoot'.static.GetCursorPosition(X, Y);
+    Children = Scene.GetChildren(true);
+    for (Item = 0; Item < Children.Length; ++Item)
+    {
+        Bar = UTUIButtonBar(Children[Item]);
+        if (Bar == None || !Bar.IsVisible())
+            continue;
+        Best = None;
+        BestDistance = 1000000;
+        RowTop = 1000000;
+        RowBottom = -1000000;
+        RowLeft = 1000000;
+        RowRight = -1000000;
+        for (Index = 0; Index < 6; ++Index)
+        {
+            Button = Bar.Buttons[Index];
+            if (Button == None || !Button.IsVisible() || !Button.IsEnabled(0) || Button.OnClicked == None)
+                continue;
+            Left = Button.GetPosition(UIFACE_Left, EVALPOS_PixelViewport);
+            Right = Button.GetPosition(UIFACE_Right, EVALPOS_PixelViewport);
+            Top = Button.GetPosition(UIFACE_Top, EVALPOS_PixelViewport);
+            Bottom = Button.GetPosition(UIFACE_Bottom, EVALPOS_PixelViewport);
+            RowTop = FMin(RowTop, Top);
+            RowBottom = FMax(RowBottom, Bottom);
+            RowLeft = FMin(RowLeft, Left);
+            RowRight = FMax(RowRight, Right);
+            Distance = X < Left ? Left - X : (X > Right ? X - Right : 0.0);
+            CenterDistance = Abs(X - (Left + Right) * 0.5);
+            if (Distance < BestDistance || (Distance == BestDistance && CenterDistance < BestCenter))
+            {
+                Best = Button;
+                BestDistance = Distance;
+                BestCenter = CenterDistance;
+            }
+        }
+        GetViewportSize(Size);
+        Reach = FMax(RowBottom - RowTop, Size.Y * 0.08);
+        if (Best != None && RowBottom > RowTop && Y >= RowTop - Reach && Y <= RowBottom + Reach
+            && X >= RowLeft - Reach && X <= RowRight + Reach)
+            return Best;
+    }
+    return None;
+}
+
+function bool TapPortChrome()
+{
+    local UTUIButtonBarButton Button;
+    local UITabControl Tabs;
+    local UITabPage Page;
+    local int Index;
+    Button = PortNearButtonBar();
+    if (Button != None)
+    {
+        Button.PlayUISound(Button.ClickedCue, 0);
+        Button.OnClicked(Button, 0);
+        return true;
+    }
+    Tabs = PortActiveTabs();
+    Index = PortNearTab(Tabs);
+    if (Index < 0)
+        return false;
+    Page = Tabs.GetPageAtIndex(Index);
+    if (Page != None && Page != Tabs.ActivePage && Tabs.ActivatePage(Page, 0, true))
+        Page.GetTabButton().PlayUISound(Page.GetTabButton().ClickedCue, 0);
+    return true;
 }
 
 /** HandleInputKey, before the UI: a press beside the tab row switches the nearest tab. */
@@ -787,12 +1125,44 @@ function bool PortTabKey(int ControllerId, name Key, EInputEvent EventType, floa
     local UITabControl Tabs;
     local UITabPage Page;
     local UITabButton Button;
+    local UTUIButtonBarButton BarButton;
     local int Index;
+    local int X, Y, Hit;
     if (Key != 'LeftMouseButton' || PortInputMode != 2)
         return false;
+    if (PortCommandPanel != None && UIController != None && UIController.SceneClient != None
+        && UIController.SceneClient.GetActiveScene() == PortCommandPanel.GetScene())
+    {
+        class'UIRoot'.static.GetCursorPosition(X, Y);
+        Hit = PortCommandHit(X, Y);
+        if (EventType == IE_Pressed || EventType == IE_DoubleClick)
+        {
+            PortCommandPress = Hit;
+            return Hit > 0;
+        }
+        if (EventType == IE_Released)
+        {
+            Index = PortCommandPress;
+            PortCommandPress = 0;
+            if (Index > 0 && Index == Hit)
+                PortCommandChoose(PortCommandPanel, (Index - 1) / 16, (Index - 1) % 16);
+            return Index > 0;
+        }
+    }
     Tabs = PortActiveTabs();
     if (EventType == IE_Released)
     {
+        BarButton = PortButtonPress;
+        PortButtonPress = None;
+        if (BarButton != None)
+        {
+            if (PortNearButtonBar() == BarButton)
+            {
+                BarButton.PlayUISound(BarButton.ClickedCue, 0);
+                BarButton.OnClicked(BarButton, 0);
+            }
+            return true;
+        }
         // The UI never saw this press, so it gets no release either.
         Index = PortTabPress;
         PortTabPress = -1;
@@ -806,6 +1176,9 @@ function bool PortTabKey(int ControllerId, name Key, EInputEvent EventType, floa
     }
     if (EventType != IE_Pressed && EventType != IE_DoubleClick)
         return false;
+    PortButtonPress = PortNearButtonBar();
+    if (PortButtonPress != None)
+        return true;
     PortTabPress = PortNearTab(Tabs);
     return PortTabPress >= 0;
 }
@@ -839,6 +1212,15 @@ function HandlePortMenuRequest(float DeltaTime)
     local UIScene OpenedScene;
     local UTUIScene_MidGameMenu MidGameMenu;
     local UTUITabPage_MidGameSettings MidGameSettings;
+    if (PortMenuRequest == 2 || PortMenuRequest == 3)
+    {
+        if (PortStore == None || PortStore.Settings == None)
+            return;
+        PortStore.Settings.touchVisible = PortMenuRequest == 3;
+        PortStore.Settings.SaveConfig();
+        PortMenuRequest = 0;
+        return;
+    }
     if (PortMenuRequest != 0)
     {
         PortMenuRequest = 0;
@@ -1115,6 +1497,80 @@ function RefreshPortCombos()
     }
 }
 
+/** A finger can focus any visible option without moving the list's scroll anchor. */
+function PortOptionState(UIScreenObject Sender, int PlayerIndex, UIState NewlyActiveState, optional UIState PreviouslyActiveState)
+{
+    local UIObject Widget;
+    local UTUIOptionList Options;
+    local array<UIObject> Children;
+    local int Index;
+    Widget = UIObject(Sender);
+    if (Widget == None || NewlyActiveState == None)
+        return;
+    // Generated options can be siblings of the list in the scene's widget tree.
+    Options = UTUIOptionList(PortScrollTarget);
+    if (Options == None || Options.GetObjectInfoIndexFromObject(Widget) == INDEX_NONE)
+        Options = UTUIOptionList(PortDragTarget);
+    if ((Options == None || Options.GetObjectInfoIndexFromObject(Widget) == INDEX_NONE) && Widget != None && Widget.GetScene() != None)
+    {
+        Children = Widget.GetScene().GetChildren(true);
+        for (Index = 0; Index < Children.Length; ++Index)
+        {
+            Options = UTUIOptionList(Children[Index]);
+            if (Options != None && Options.GetObjectInfoIndexFromObject(Widget) != INDEX_NONE)
+                break;
+            Options = None;
+        }
+    }
+    if (Options == None)
+        return;
+    Index = Options.GetObjectInfoIndexFromObject(UIObject(Sender));
+    if (Index == INDEX_NONE)
+        return;
+    if (NewlyActiveState.IsA('UIState_Focused') && (PortScrollTarget == Options || PortDragTarget == Options))
+    {
+        Options.OnOptionFocused(Sender, Options.GeneratedObjects[Index].OptionProvider);
+        PortOptionFocused = Index;
+        PortScrolledOptions = Options;
+        KeepPortFocusLit(Options);
+    }
+    else
+    {
+        if (NewlyActiveState.IsA('UIState_Focused') && PortScrolledOptions == Options)
+            PortScrolledOptions = None;
+        Options.OnOption_NotifyActiveStateChanged(Sender, PlayerIndex, NewlyActiveState, PreviouslyActiveState);
+    }
+}
+
+function PreparePortWidgets()
+{
+    local array<UIObject> Children;
+    local UTUIOptionList Options;
+    local UIComboBox Combo;
+    local int SceneIndex, WidgetIndex, Index;
+    local string Value;
+    for (SceneIndex = 0; SceneIndex < UIController.SceneClient.ActiveScenes.Length; ++SceneIndex)
+    {
+        Children = UIController.SceneClient.ActiveScenes[SceneIndex].GetChildren(true);
+        for (WidgetIndex = 0; WidgetIndex < Children.Length; ++WidgetIndex)
+        {
+            Options = UTUIOptionList(Children[WidgetIndex]);
+            if (Options != None)
+                for (Index = 0; Index < Options.GeneratedObjects.Length; ++Index)
+                    if (Options.GeneratedObjects[Index].OptionObj != None)
+                        Options.GeneratedObjects[Index].OptionObj.NotifyActiveStateChanged = PortOptionState;
+            Combo = UIComboBox(Children[WidgetIndex]);
+            if (Combo == None || Combo.ComboEditbox == None || !Combo.IsVisible()
+                || Combo.GetBounds(UIORIENT_Horizontal, EVALPOS_PixelViewport) < 1)
+                continue;
+            // Read-only combo captions are reformatted after scrolling and tab layout, too.
+            Value = Combo.ComboEditbox.GetValue();
+            Combo.ComboEditbox.SetValue("", , true);
+            Combo.ComboEditbox.SetValue(Value, , true);
+        }
+    }
+}
+
 /**
  * A finger is the pointer on Android. The original UI tracks the pointer and
  * its clicks only while it shows a mouse cursor (bDisplayCursor and a cursor
@@ -1151,7 +1607,6 @@ event Tick(float DeltaTime)
         HandleInputKey = PortTabKey;
         PortTabsHooked = true;
     }
-    HandlePortStartupLogin(DeltaTime);
     UpdatePortInputContext();
     HidePortCursor();
     HandlePortScrollRequest();
@@ -1163,6 +1618,8 @@ event Tick(float DeltaTime)
         else
             KeepPortFocusLit(PortScrolledOptions);
     }
+    if (PortOffsetOptions != PortScrolledOptions)
+        RestorePortFocusBar();
     HandlePortMenuRequest(DeltaTime);
     NextPanelCheck -= DeltaTime;
     if (NextPanelCheck > 0 || UIController == None || UIController.SceneClient == None)
@@ -1170,6 +1627,7 @@ event Tick(float DeltaTime)
     NextPanelCheck = 0.25;
     if (!PreparePortStores())
         return;
+    PreparePortWidgets();
     for (Index = UIController.SceneClient.ActiveScenes.Length - 1; Index >= 0; --Index)
         if (AcceptStartupCDKey(UTUIFrontEnd_CDKey(UIController.SceneClient.ActiveScenes[Index])))
             break;
@@ -1194,7 +1652,7 @@ event Tick(float DeltaTime)
             TemplatePage = UTUITabPage_Options(TemplateScene.FindChild('pnlHUDSettings', true));
             if (TemplatePage == None || TemplatePage == Panels.HUDTab || TemplatePage.IsInitialized())
                 return;
-            PortPage = UTUITabPage_Options(Panels.TabControl.CreateTabPage(class'UTUITabPage_HUDSettings', TemplatePage));
+            PortPage = UTUITabPage_Options(Panels.TabControl.CreateTabPage(class'AndroidPortOptionsPage', TemplatePage));
             if (PortPage == None)
                 return;
             PortPageReady = false;

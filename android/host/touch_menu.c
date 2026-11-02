@@ -22,4 +22,9 @@ JNIEXPORT void JNICALL Java_org_ut3_port_GameActivity_nativeSettings(JNIEnv *env
     (void)env;(void)cls;
     __atomic_store_n(&port_menu_requested,1,__ATOMIC_RELEASE);
 }
+JNIEXPORT void JNICALL Java_org_ut3_port_GameActivity_nativeControlsVisible(JNIEnv *env,jclass cls,jboolean visible)
+{
+    (void)env;(void)cls;
+    __atomic_store_n(&port_menu_requested,visible?3:2,__ATOMIC_RELEASE);
+}
 #endif

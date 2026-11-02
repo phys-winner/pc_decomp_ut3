@@ -23,8 +23,15 @@ public interface TextureBackend {
     /** Blocking: what there is to convert in the game folder. */
     Scan scan(File game);
 
+    /** A stored ZIP: index is ZMI1, archiveFd stays open until the blocking call returns. */
+    default Scan scan(File game, File index, int archiveFd) { return scan(game); }
+
     /** Blocking: converts, reporting through progress(); 0 when done, else message() says why. */
     int convert(File game, int format, int threads);
+
+    default int convert(File game, int format, int threads, File index, int archiveFd) {
+        return convert(game, format, threads);
+    }
 
     /** Blocking: removes a conversion; 0 when done. */
     int undo(File game);

@@ -130,20 +130,18 @@ public class SettingsCheck {
         assert entries(text,"Engine.Engine","LightComplexityColors").size()==6;
         assert !GameSettings.legacySeed(text);
     }
-    static void minimumBuckets(String text, String profile, int width) {
-        String minimum=GameSettings.minimum("",profile,width);
-        boolean active=false; int keys=0;
-        for(String line:minimum.split("\r?\n")) {
+    static void originalBuckets(String text, String profile) {
+        String section="";int checked=0;
+        for(String line:profile.split("\r?\n")) {
             String t=line.trim();
-            if(t.startsWith("[") && t.endsWith("]")) active=t.equals("[SystemSettings]");
-            else if(active && t.indexOf('=')>0) {
-                String key=t.substring(0,t.indexOf('=')).trim();
-                for(int bucket=1;bucket<=5;bucket++)
-                    assert entries(text,"AppCompatBucket"+bucket,key).equals(Arrays.asList(t.substring(t.indexOf('=')+1).trim())):key+" bucket"+bucket;
-                keys++;
+            if(t.startsWith("[")&&t.endsWith("]")) section=t.substring(1,t.length()-1);
+            else if(section.startsWith("AppCompatBucket")&&t.indexOf('=')>0&&!t.startsWith(";")) {
+                int equals=t.indexOf('=');String key=t.substring(0,equals).trim();
+                assert entries(text,section,key).equals(Arrays.asList(t.substring(equals+1).trim())):section+" "+key;
+                ++checked;
             }
         }
-        assert keys==57:keys;
+        assert checked>200:checked;
     }
     public static void main(String[] args) throws Exception {
         assert GameSettings.renderWidth(2780,1264)==1056;
@@ -156,14 +154,14 @@ public class SettingsCheck {
         String result=GameSettings.minimum(current,profile,1056);
         assert result.contains("ResX=1056\r\n") && result.contains("ResY=480\r\n");
         assert result.contains("ScreenPercentage=100\r\n") && result.contains("UseVsync=False\r\n");
-        assert result.contains("DetailMode=0\r\n") && !result.contains("DetailMode=2");
+        assert !result.contains("DetailMode="):"Existing graphics must not be replaced by the minimum preset";
         assert result.contains("MaxSmoothedFrameRate=60\r\n") && result.contains("bSmoothFrameRate=TRUE\r\n");
         assert result.contains("BasedOn=original.ini") && result.contains("Volume=0.75") && result.contains("Name=Игрок");
         assert result.contains("UnknownOption=stay") && result.contains("; preserved comment");
         assert !result.contains("rESx=1920") && !result.contains("ResX=800");
         assert GameSettings.minimum(result,profile,1056).equals(result);
         assert GameSettings.minimum("",profile,1056).contains("[SystemSettings]");
-        try{GameSettings.minimum(current,"[Other]\nResX=640",1056);throw new AssertionError();}catch(IllegalArgumentException expected){}
+        try{GameSettings.minimum("","[Other]\nResX=640",1056);throw new AssertionError();}catch(IllegalArgumentException expected){}
         Path folder=Paths.get(args[0]);File ini=folder.resolve("UTEngine.ini").toFile();
         Files.write(ini.toPath(),current.getBytes(StandardCharsets.UTF_8));
         GameSettings.write(ini,result);
@@ -181,6 +179,27 @@ public class SettingsCheck {
         String base=GameSettings.read(game.resolve("Engine/Config/BaseEngine.ini").toFile());
         String defaults=GameSettings.read(game.resolve("UTGame/Config/DefaultEngine.ini").toFile());
         String compatibility=GameSettings.read(game.resolve("UTGame/Config/DefaultCompat.ini").toFile());
+        assert GameSettings.defaultLanguage(game.toFile(),Locale.forLanguageTag("ru-RU")).equals("RUS");
+        assert GameSettings.defaultLanguage(game.toFile(),Locale.GERMAN).equals("DEU");
+        assert GameSettings.defaultLanguage(game.toFile(),Locale.JAPANESE).equals("INT");
+        int[] rates=GameSettings.displayRates(new float[]{120.00001f,60.000004f,90,90.01f,Float.NaN,Float.POSITIVE_INFINITY,-1});
+        assert Arrays.equals(rates,new int[]{60,90,120});
+        assert GameSettings.nearestRate(0,rates)==120&&GameSettings.nearestRate(100,rates)==90&&GameSettings.nearestRate(45,rates)==60;
+        String rateOptions=GameSettings.displayOptions("base",rates);
+        assert rateOptions.contains(".DisplayFps=60\n.DisplayFps=90\n.DisplayFps=120\n");
+        File migrated=folder.resolve("legacy-quality/UTEngine.ini").toFile();migrated.getParentFile().mkdirs();
+        GameSettings.write(migrated,"[SystemSettings]\nDetailMode=2\nDynamicShadows=True\n");
+        String low=GameSettings.minimum("",compatibility,1080);
+        String lowSystem=low.substring(low.indexOf("[SystemSettings]")+"[SystemSettings]".length(),low.indexOf("[Engine.GameEngine]"));
+        StringBuilder allLow=new StringBuilder("[AppCompat]\nCPUScore1=1234\n");
+        for(int bucket=1;bucket<=5;bucket++)allLow.append("[AppCompatBucket").append(bucket).append("]").append(lowSystem);
+        File migratedCompat=new File(migrated.getParentFile(),"UTCompat.ini");GameSettings.write(migratedCompat,allLow.toString());
+        GameSettings.prepare(migrated,game.toFile(),1080);
+        originalBuckets(GameSettings.read(migratedCompat),compatibility);
+        assert entries(GameSettings.read(migrated),"SystemSettings","DetailMode").equals(Arrays.asList("2"));
+        assert entries(GameSettings.read(migrated),"SystemSettings","DynamicShadows").equals(Arrays.asList("True"));
+        assert entries(GameSettings.read(migratedCompat),"AppCompat","CPUScore1").equals(Arrays.asList("1234"));
+
         String fresh=GameSettings.bootstrap(null,base,defaults);
         inherited(fresh);
         assert entries(fresh,"TextureStreaming","PoolSize").equals(Arrays.asList("158"));
@@ -228,7 +247,7 @@ public class SettingsCheck {
         assert !new File(newIni.getParentFile(),"UTEngine.before-bootstrap-repair.ini.bak").exists();
         File freshCompat=new File(newIni.getParentFile(),"UTCompat.ini");
         String freshCompatText=GameSettings.read(freshCompat);
-        minimumBuckets(freshCompatText,compatibility,1080);
+        originalBuckets(freshCompatText,compatibility);
         String baseCompat=GameSettings.read(game.resolve("Engine/Config/BaseCompat.ini").toFile());
         assert entries(freshCompatText,"AppCompat","CPUScore1").equals(entries(baseCompat,"AppCompat","CPUScore1"));
         assert entries(baseCompat,"AppCompatGPU-0x10DE","0x0162").size()==2;
@@ -274,7 +293,7 @@ public class SettingsCheck {
         Files.deleteIfExists(new File(validIni.getParentFile(),"UTCompat.before-widescreen-120.ini.bak").toPath());
         GameSettings.prepare(validIni,game.toFile(),1056);
         String updatedCompat=GameSettings.read(existingCompat);
-        minimumBuckets(updatedCompat,compatibility,1056);
+        assert entries(updatedCompat,"AppCompatBucket3","StaticDecals").equals(entries(editedCompat,"AppCompatBucket3","StaticDecals"));
         assert entries(updatedCompat,"AppCompat","CPUScore1").equals(Arrays.asList("1234"));
         assert entries(updatedCompat,"AppCompat","CompatLevelComposite").equals(entries(editedCompat,"AppCompat","CompatLevelComposite"));
         assert entries(updatedCompat,"Custom","Entry").equals(Arrays.asList("a","a"));
@@ -295,7 +314,7 @@ public class SettingsCheck {
         GameSettings.prepare(validIni,game.toFile(),2400,1080,60,"RUS");
         assert entries(GameSettings.read(validIni),"Engine.Engine","Language").equals(Arrays.asList("RUS"));
         assert entries(GameSettings.read(validIni),"SystemSettings","ScreenPercentage").equals(Arrays.asList("100"));
-        assert entries(GameSettings.read(existingCompat),"AppCompatBucket5","ResY").equals(Arrays.asList("1080"));
+        assert entries(GameSettings.read(existingCompat),"AppCompatBucket5","ResY").equals(entries(updatedCompat,"AppCompatBucket5","ResY"));
         byte[] script=Files.readAllBytes(project.resolve("build/uscript/AndroidPort.u"));
         String options=new String(Files.readAllBytes(project.resolve("android/uscript/AndroidPort/AndroidPortOptions.ini")),StandardCharsets.UTF_8);
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,options);
@@ -304,6 +323,7 @@ public class SettingsCheck {
         assert entries(uiEngine,"Engine.DataStoreClient","GlobalDataStoreClasses").contains("AndroidPort.AndroidPortDataStore");
         assert entries(uiEngine,"Engine.DataStoreClient","GlobalDataStoreClasses").contains("AndroidPort.AndroidPortValueStore");
         assert entries(uiEngine,"Core.System","Paths").size()==entries(prepared,"Core.System","Paths").size()+1;
+        assert entries(uiEngine,"Core.System","Paths").get(0).endsWith("Published\\CookedPC\\Script");
         String uiGame=GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini"));
         assert uiGame.contains("OptionSet=AndroidPort") && uiGame.contains("<AndroidPort:language>");
         assert entries(uiGame,"UTGame.UTPlayerController","ForceFeedbackManagerClassName").equals(Arrays.asList("WinDrv.XnaForceFeedbackManager"));
@@ -312,7 +332,7 @@ public class SettingsCheck {
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,options);
         assert GameSettings.read(validIni).equals(uiEngine):"Native UI engine config must be idempotent";
         assert GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini")).equals(uiGame):"Native options config must be idempotent";
-        assert entries(uiGame,"AndroidPort.AndroidPortDataStore","Choices").size()==5;
+        assert entries(uiGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
         assert entries(uiGame,"AndroidPort.AndroidPortDataStore","StringData").isEmpty();
         File runtimeOptions=new File(validIni.getParentFile(),"UTGame.ini");
         GameSettings.write(runtimeOptions,uiGame+"[AndroidPort_editLayout UTUIDataProvider_MenuOption]\nOptionSet=AndroidPort\n"+
@@ -322,11 +342,13 @@ public class SettingsCheck {
         String russianOptions=new String(Files.readAllBytes(project.resolve("android/uscript/AndroidPort/AndroidPortOptions-RUS.ini")),StandardCharsets.UTF_8);
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,russianOptions);
         String russianGame=GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini"));
-        assert entries(russianGame,"AndroidPort.AndroidPortDataStore","Choices").size()==5;
-        assert russianGame.contains("Частота дисплея");
+        assert entries(russianGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
+        assert russianGame.contains("Размер полосы оружия");
+        assert entries(russianGame,"AndroidPort.AndroidPortDataStore","LayoutCaption").equals(Collections.singletonList("РЕДАКТОР УПРАВЛЕНИЯ"));
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,options);
         String englishGame=GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini"));
-        assert !englishGame.contains("Частота дисплея") && entries(englishGame,"AndroidPort.AndroidPortDataStore","Choices").size()==5;
+        assert !englishGame.contains("Размер полосы оружия") && entries(englishGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
+        assert entries(englishGame,"AndroidPort.AndroidPortDataStore","LayoutCaption").equals(Collections.singletonList("CONTROL LAYOUT"));
         Path legacyProvider=validIni.toPath().resolveSibling("UTGame.before-widescreen-120.ini");
         Path retiredProvider=validIni.toPath().resolveSibling("UTGame.before-widescreen-120.ini.bak");
         Files.deleteIfExists(retiredProvider);
@@ -339,7 +361,7 @@ public class SettingsCheck {
         assert Files.exists(legacyProvider) && Arrays.equals(Files.readAllBytes(retiredProvider),oldProvider):"Conflicting backups must never overwrite data";
         try{GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),new byte[32],options);throw new AssertionError();}catch(IOException expected){}
         System.out.println("PASS: full-width/native resolution, minimum profile/100% scale, default cap60 and45 override, all9 installed language inputs, Russian selector, analog input, preservation and idempotence");
-        System.out.println("PASS: BaseCompat inheritance, all5 buckets/57 minimum settings, measured thresholds/history/custom values preserved, immutable backups and atomic writes");
+        System.out.println("PASS: BaseCompat inheritance, five original quality presets and legacy-minimum repair, measured thresholds/history/custom values preserved, immutable backups and atomic writes");
     }
 }
 '''

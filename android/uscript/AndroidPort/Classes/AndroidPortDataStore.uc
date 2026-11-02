@@ -11,6 +11,8 @@ struct PortChoices
     var array<string> Labels;
 };
 var config array<PortChoices> Choices;
+var config array<int> DisplayFps;
+var config string LayoutCaption;
 
 function EnsureSettings()
 {
@@ -45,19 +47,36 @@ function PrepareSelections()
     local int Index;
     EnsureSettings();
     FillChoices();
-    SetCurrentValueIndex('renderer', Settings.renderer ~= "dxvk-turnip" ? 2 : (Settings.renderer ~= "dxvk" ? 1 : 0));
     Index = LanguageCodes.Find(Caps(Settings.language));
     SetCurrentValueIndex('language', Max(0, Index));
-    switch (Settings.fpsLimit)
-    {
-    case 30: Index = 0; break;
-    case 45: Index = 1; break;
-    case 0: Index = 3; break;
-    default: Index = 2; break;
-    }
-    SetCurrentValueIndex('fpsLimit', Index);
+    FieldFps();
     SetCurrentValueIndex('touchGyro', Settings.GyroMode());
     SetCurrentValueIndex('touchVehicleProfile', Clamp(Settings.touchVehicleProfile, 0, 4));
+}
+
+function FieldFps()
+{
+    local int Index, Best, Count;
+    if (DisplayFps.Length == 0)
+        DisplayFps.AddItem(60);
+    Count = GetFieldIndex('fpsLimit');
+    if (Count == INDEX_NONE)
+        return;
+    RemoveStrByIndex('fpsLimit', 0, StringData[Count].Strings.Length, true);
+    Best = DisplayFps.Length - 1;
+    for (Index = 0; Index < DisplayFps.Length; ++Index)
+    {
+        InsertStr('fpsLimit', string(DisplayFps[Index]), Index, true);
+        if (Abs(DisplayFps[Index] - Settings.fpsLimit) < Abs(DisplayFps[Best] - Settings.fpsLimit)
+            || Settings.fpsLimit == 0)
+            Best = Index;
+    }
+    SetCurrentValueIndex('fpsLimit', Best);
+    if (Settings.fpsLimit != DisplayFps[Best])
+    {
+        Settings.fpsLimit = DisplayFps[Best];
+        Settings.SaveConfig();
+    }
 }
 
 function CommitCollection(name Field)
@@ -70,13 +89,14 @@ function CommitCollection(name Field)
         return;
     switch (Field)
     {
-    case 'renderer': Settings.renderer = Index == 2 ? "dxvk-turnip" : (Index == 1 ? "dxvk" : "gles"); break;
     case 'language':
         if (Index >= LanguageCodes.Length)
             return;
         Settings.language = LanguageCodes[Index];
         break;
-    case 'fpsLimit': Settings.fpsLimit = Index == 3 ? 0 : int(Value); break;
+    case 'fpsLimit':
+        if (Index >= DisplayFps.Length) return;
+        Settings.fpsLimit = DisplayFps[Index]; break;
     case 'touchGyro': Settings.touchGyroMode = Clamp(Index, 0, 3); break;
     case 'touchVehicleProfile': Settings.touchVehicleProfile = Clamp(Index, 0, 4); break;
     default: return;
@@ -86,6 +106,7 @@ function CommitCollection(name Field)
 
 defaultproperties
 {
+    LayoutCaption="CONTROL LAYOUT"
     Tag=AndroidPort
     WriteAccessType=ACCESS_WriteAll
     LanguageCodes(0)="INT"
@@ -97,9 +118,8 @@ defaultproperties
     LanguageCodes(6)="CZE"
     LanguageCodes(7)="HUN"
     LanguageCodes(8)="POL"
-    StringData(0)=(Tag="renderer",Strings=("OpenGL ES","Vulkan (DXVK)","Vulkan (Turnip)"),DefaultValueIndex=0)
-    StringData(1)=(Tag="language",Strings=("English","Russian","German","French","Italian","Spanish","Czech","Hungarian","Polish"),DefaultValueIndex=0)
-    StringData(2)=(Tag="fpsLimit",Strings=("30","45","60","Display refresh rate"),DefaultValueIndex=2)
-    StringData(3)=(Tag="touchGyro",Strings=("Off","Sniper mode","While firing","Always"),DefaultValueIndex=0)
-    StringData(4)=(Tag="touchVehicleProfile",Strings=("On foot","Ground vehicle / walker","Aircraft","Hoverboard","Turret"),DefaultValueIndex=0)
+    StringData(0)=(Tag="language",Strings=("English","Russian","German","French","Italian","Spanish","Czech","Hungarian","Polish"),DefaultValueIndex=0)
+    StringData(1)=(Tag="fpsLimit",Strings=("60"),DefaultValueIndex=0)
+    StringData(2)=(Tag="touchGyro",Strings=("Off","Sniper mode","While firing","Always"),DefaultValueIndex=0)
+    StringData(3)=(Tag="touchVehicleProfile",Strings=("On foot","Ground vehicle / walker","Aircraft","Hoverboard","Turret"),DefaultValueIndex=0)
 }

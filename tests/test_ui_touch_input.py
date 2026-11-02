@@ -4,11 +4,27 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from tests.host_environment import CLANG, environment
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class UiTouchTest(unittest.TestCase):
+    def test_native_gesture_retirement_ack(self):
+        out = ROOT / 'build/ui-touch-retirement'
+        out.mkdir(parents=True, exist_ok=True)
+        env, linker = environment('x64')
+        commands = [[str(CLANG), '/nologo', '/O2', '/std:c11', '/D_CRT_SECURE_NO_WARNINGS',
+                     '/clang:--target=x86_64-pc-windows-msvc', '/c', str(ROOT/'tests/test_touch_ui.c'),
+                     '/Fo'+str(out/'check.obj')],
+                    [str(linker), '/nologo', str(out/'check.obj'), '/OUT:'+str(out/'check.exe')],
+                    [str(out/'check.exe')]]
+        for command in commands:
+            result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=45)
+            self.assertEqual(result.returncode,0,(result.stdout+result.stderr).decode(errors='replace'))
+        (out/'result.log').write_bytes(result.stdout+result.stderr)
+        print(result.stdout.decode().strip())
+
     def test_hover_tap_option_drag_and_ack(self):
         java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
         program = r'''
@@ -16,7 +32,7 @@ package org.ut3.port;
 import java.util.ArrayList;
 public final class UiTouchCheck {
     static final class Capture implements UiTouchInput.Sink {
-        int kind,downs,ups,resets,hovers,taps,ends;boolean reject,held;
+        int kind,downs,ups,resets,hovers,taps,ends,keyboards;boolean reject,held;
         float x,y;final ArrayList<String> events=new ArrayList<>();
         public boolean begin(float x,float y){events.add("begin");this.x=x;this.y=y;return !reject;}
         public int control(){return kind;}
@@ -27,6 +43,7 @@ public final class UiTouchCheck {
             if(request==0)++ends;else if(request==UiTouchInput.HOVER)++hovers;else ++taps;
             events.add(request==0?"end":request==UiTouchInput.HOVER?"hover":"tap");return !reject;}
         public void reset(){held=false;++resets;}
+        public void keyboard(){assert !held&&events.get(events.size()-1).equals("end");++keyboards;}
     }
     static void same(float a,float b){assert Math.abs(a-b)<.001f;}
     public static void main(String[] args){
@@ -69,6 +86,10 @@ public final class UiTouchCheck {
         c.reject=true;assert !t.begin(1,1);assert c.resets==2;
         c.reject=false;assert t.begin(1,100);c.reject=true;t.move(1,0);assert !t.active()&&c.resets==3;
         c.reject=false;c.kind=TAP;assert t.begin(1,100);c.reject=true;t.end(1,100);assert !t.active()&&c.resets==4;
+        c.reject=false;c.kind=TAP|UiTouchInput.TEXT;assert t.begin(20,40);t.end(20,40);assert c.keyboards==1;
+        assert t.begin(20,40);t.move(20,80);t.end(20,80);assert c.keyboards==1;
+        assert t.begin(20,40);t.cancel();assert c.keyboards==1;
+        c.kind=TAP;assert t.begin(20,40);t.end(20,40);assert c.keyboards==1;
         System.out.println("PASS production UI gestures: swipes only point and highlight list rows, taps click or change option rows, one pointing request per gesture, sideways slider drags adjust, delayed hover ACK/UP, cancel/stale/invalid/rejected input");
     }
 }

@@ -19,8 +19,8 @@ extensions. They are an altered source snapshot and must not be represented as
 an unmodified upstream release. This UT3 adaptation removes the H5-specific
 guest-address overrides and uses the same general Win32 and graphics mechanisms.
 
-The current host does not include bcdec, etcpak or astcenc. The D3D9 texture decoder
-used here is part of the copied compatibility host. Android system libraries,
+The D3D9 fallback texture decoder is part of the copied compatibility host; the optional
+texture converter uses the codecs described below. Android system libraries,
 the NDK, Java, Python and installed Python packages are separate development/runtime
 dependencies with their own notices.
 
@@ -109,3 +109,23 @@ retained license notices.
 `tools/build_turnip.py` builds libadrenotools and its hooks from these sources with
 the NDK and packages the driver as `libut3_turnip.so`. A Turnip driver the player
 chooses in the launcher is the player's own file and is not distributed with the port.
+
+## Optional texture conversion
+
+`libtexconv.so` uses Arm's astc-encoder (Apache-2.0,
+`reference/astcenc/LICENSE.txt`) and Bartosz Taudul's etcpak (BSD-3-Clause,
+`reference/etcpak/LICENSE.txt`). These are upstream Git submodules at the same revisions
+used by the author's The Void port: astc-encoder `baff485b0ff36d2f95d28961605106502c653966`
+and etcpak `3d716e1550023dc5ff8b602636af8b76584e0b66`. Their URLs are in `.gitmodules`;
+source hashes in `dependencies-textures.json` use LF line endings.
+`tools/build_texconv.py` builds them with Android NDK 27.2.12479018. The UT3 package
+reader and cache writer are in `android/texconv/`; the shared codec wrapper derives
+from that port. The APK includes both upstream notices under `native-licenses/`.
+
+## OpenSpy compatibility
+
+The port implements the service endpoint, authentication key and lowercase MD5
+changes identified in the user's `mods/fix_mp/dinput8.dll` (the UT3 OpenSpy proxy).
+The implementation is `android/host/openspy.c`; no code from the DLL is loaded or
+distributed. The original game files remain unchanged. Upstream project:
+<https://github.com/openspy/ut3-proxy>.

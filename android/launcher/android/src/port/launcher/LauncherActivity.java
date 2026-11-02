@@ -52,6 +52,8 @@ public final class LauncherActivity extends Activity {
     private boolean checking;
     private TextureBackend textures;
     private TextureBackend.Scan textureScan;
+    private String textureSource;
+    private boolean textureScanning;
     private Object backCallback;
     /** A job waiting for the answer to the notification permission, asked just before it starts. */
     private Work.Job pendingJob;
@@ -934,7 +936,9 @@ public final class LauncherActivity extends Activity {
 
     /* --------------------------------------------------------- renderer */
 
-    private boolean convertedTextures() { return textureScan != null && textureScan.converted != 0; }
+    private boolean convertedTextures() {
+        return textureScan != null && textureScan.converted != 0 && textureSourceKey().equals(textureSource);
+    }
 
     private void refreshRenderer() {
         renderer.removeAllViews();
@@ -1059,9 +1063,40 @@ public final class LauncherActivity extends Activity {
         return Install.folder(this, spec, selected, first);
     }
 
+    private String textureSourceKey() {
+        return selected.id + "\n" + textureRoot().getAbsolutePath() + "\n"
+            + Install.mount(this, selected, selected.parts.get(0));
+    }
+
+    private void textureScanFinished(String source, TextureBackend.Scan scan) {
+        textureScanning = false;
+        if (source.equals(textureSource)) textureScan = scan;
+        refresh();
+    }
+
+    private interface TextureOperation<T> { T run(File index, int archiveFd); }
+
+    private <T> T withTextureArchive(Spec.Distribution distribution, TextureOperation<T> operation) throws IOException {
+        Spec.Part part = distribution.parts.get(0);
+        String mount = Install.mount(this, distribution, part);
+        if (mount.isEmpty()) return operation.run(null, -1);
+        File index = new File(State.folder(this), "mount-" + distribution.id + "-" + part.id + ".zmi");
+        try (ParcelFileDescriptor fd = mount.startsWith("content:")
+                ? getContentResolver().openFileDescriptor(Uri.parse(mount), "r")
+                : ParcelFileDescriptor.open(new File(mount), ParcelFileDescriptor.MODE_READ_ONLY)) {
+            if (fd == null) throw new IOException("Cannot open game archive");
+            return operation.run(index, fd.getFd());
+        }
+    }
+
     private void refreshTextures(boolean idle) {
         texturesBox.removeAllViews();
         if (spec.textureBackend.isEmpty() || gpu == null || !Install.ready(this, spec, selected)) return;
+        String source = textureSourceKey();
+        if (!source.equals(textureSource)) {
+            textureSource = source;
+            textureScan = null;
+        }
         if (textures == null) {
             try {
                 textures = (TextureBackend) Class.forName(spec.textureBackend).getDeclaredConstructor().newInstance();
@@ -1071,20 +1106,38 @@ public final class LauncherActivity extends Activity {
             }
         }
         if (textureScan == null) {
-            if (busy == null && !Work.busy()) {
+            if (!textureScanning && idle) {
                 File root = textureRoot();
-                textureScan = new TextureBackend.Scan();
-                background(() -> textures.scan(root), scan -> { textureScan = scan; refreshTextures(busy == null && !Work.busy()); refreshRenderer(); }, null);
+                Spec.Distribution distribution = selected;
+                TextureBackend backend = textures;
+                textureScanning = true;
+                background(() -> withTextureArchive(distribution, (index, fd) -> backend.scan(root, index, fd)),
+                    scan -> textureScanFinished(source, scan), failure -> {
+                        TextureBackend.Scan scan = new TextureBackend.Scan();
+                        scan.failure = failure.getMessage() != null ? failure.getMessage() : failure.toString();
+                        textureScanFinished(source, scan);
+                    });
+            }
+            if (textureScanning) {
+                LinearLayout card = ui.card(texturesBox);
+                card.addView(ui.heading(Texts.t(this, Texts.TEXTURES)));
+                card.addView(ui.label(Texts.t(this, Texts.TEX_SCANNING), 13, ui.muted));
             }
             return;
         }
         TextureBackend.Scan s = textureScan;
         boolean converted = s.converted != 0;
-        /* An unreadable game folder is told where conversion matters (no DXT in the GPU). */
-        if (s.failure != null ? gpu.s3tc : (gpu.s3tc && !converted) || (s.textures == 0 && !converted)) return;
+        if (s.failure == null && s.textures == 0 && !converted) return;
         LinearLayout card = ui.card(texturesBox);
         card.addView(ui.heading(Texts.t(this, Texts.TEXTURES)));
-        if (s.failure != null) { card.addView(ui.label(s.failure, 13, ui.error)); return; }
+        if (s.failure != null) {
+            card.addView(ui.label(s.failure, 13, ui.error));
+            TextView retry = ui.button(Texts.t(this, Texts.TEX_RESCAN), Ui.SECONDARY,
+                () -> { textureScan = null; refresh(); });
+            Ui.enable(retry, idle);
+            card.addView(ui.buttons(retry));
+            return;
+        }
         if (converted) {
             card.addView(ui.label(Texts.fmt(this, Texts.TEX_DONE, s.converted == TextureBackend.ASTC ? "ASTC" : "ETC2",
                 Texts.size(this, s.convertedBytes)), 14, ui.text));
@@ -1112,6 +1165,7 @@ public final class LauncherActivity extends Activity {
     /** format 0 removes the conversion, TEX_REMOVE_ORIGINALS the originals it replaced. */
     private void startTextures(int format) {
         File root = textureRoot();
+        Spec.Distribution distribution = selected;
         TextureBackend backend = textures;
         confirmJob(new Work.Job(Texts.t(this, Texts.JOB_TEXTURES), root) {
             @Override void work() throws Exception {
@@ -1124,7 +1178,8 @@ public final class LauncherActivity extends Activity {
                 }, "texture-progress");
                 poll.start();
                 int result = format == 0 ? backend.undo(root) : format == TEX_REMOVE_ORIGINALS ? backend.removeOriginals(root)
-                    : backend.convert(root, format, Runtime.getRuntime().availableProcessors());
+                    : withTextureArchive(distribution,
+                        (index, fd) -> backend.convert(root, format, Runtime.getRuntime().availableProcessors(), index, fd));
                 poll.interrupt();
                 check();
                 if (result != 0) throw new Failure(Failure.IO, backend.message());

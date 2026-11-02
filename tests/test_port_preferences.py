@@ -41,11 +41,14 @@ public class PreferencesCheck {
         assert !new File(ini.getPath()+".tmp").exists();
         loaded.put("touchX0",.4f); loaded.put("lastLayoutRevision",3); loaded.save();
         byte[] nativeBefore=java.nio.file.Files.readAllBytes(ini.toPath());
-        loaded.put("touchX0",.5f); loaded.save();
+        loaded.put("touchX0",.5f); loaded.put("touchSizeFire",96); loaded.put("touchHiddenJump",true);
+        loaded.put("touchInputPromptDisabled",true); loaded.save();
         assert java.util.Arrays.equals(nativeBefore,java.nio.file.Files.readAllBytes(ini.toPath())):"Layout must not overwrite Unreal's cached config";
         PortPreferences withLayout=new PortPreferences(root);
         assert withLayout.getFloat("touchX0",0)==.5f;
         assert withLayout.getInt("lastLayoutRevision",0)==3;
+        assert withLayout.getInt("touchSizeFire",0)==96 && withLayout.getBoolean("touchHiddenJump",false);
+        assert withLayout.getBoolean("touchInputPromptDisabled",false);
         String changed=GameSettings.read(ini).replace("language=FRA","Language=RUS").replace("touchlefthanded=true","TouchLeftHanded=True");
         GameSettings.write(ini,changed+"\r\n[Other]\r\nPreserve=1\r\n");
         assert withLayout.reloadIfChanged();

@@ -60,7 +60,8 @@ final class PortPreferences {
     /** Android-only touch state: never part of the game's own config section. */
     private static boolean layoutKey(String name) {
         String field = key(name);
-        return field.startsWith("touchx") || field.startsWith("touchy") || field.equals("lastlayoutrevision") ||
+        return field.startsWith("touchx") || field.startsWith("touchy") || field.startsWith("touchsize") ||
+            field.startsWith("touchhidden") || field.equals("touchinputpromptdisabled") || field.equals("lastlayoutrevision") ||
             field.equals("touchhints") || field.equals("touchinterfacedefault");
     }
     synchronized void put(String name, Object value) {
