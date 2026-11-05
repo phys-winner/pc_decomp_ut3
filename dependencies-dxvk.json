@@ -961,11 +961,16 @@
   },
   "prebuilt": {
     "path": "reference/dxvk-runtime/libdxvk_d3d9.so",
-    "sha256": "789944e8d70b5ff054f661085361db002d5eb33ada9df6888d26214665e9f943",
-    "bytes": 4364360,
+    "sha256": "2d2724a49ea2e01e235056c6a0a149b2caf3f0c3419a3624d6afdce70a5ae2fe",
+    "bytes": 4409224,
     "wsi_sha256": "6e2a15a46055dd2809dc3ccea868be27bf1bbaba384616b26fccc05ea948a39b",
     "built_by": "tools/build_dxvk.py --rebuild (meson release, aarch64-linux-android29, NDK 27.2.12479018)",
-    "built_sha256": "034384d5636eeb3f02b8e2d2daee4307c60bff1b981cb15b9e3d0c91a34cb0ec",
-    "note": "embedded NDK header path strings (__FILE__ diagnostics) carry 'C:/Users/builder/...' in place of the build machine's user name: equal length, no other byte differs from the built library"
+    "built_sha256": "2d2724a49ea2e01e235056c6a0a149b2caf3f0c3419a3624d6afdce70a5ae2fe",
+    "note": "built with -ffile-prefix-map=<home>=C:/Users/builder and git describe confined to the source copy, so NDK header path strings carry 'C:/Users/builder/...' and the version is DXVK's own v2.4.1; the prebuilt is the built library byte for byte",
+    "overlay_sha256": {
+      "android/dxvk/scaled_vertex_formats.inc": "6d413d67d0de6069cc75bc24ed7a866ecd2726de3324290400083b0d8f23a5f4",
+      "android/dxvk/scaled_vertex_spirv.inc": "de25ef08e5846b47f0bcc904c86ab9f0e85a8dc82a1a155b67889a111506f2ec",
+      "android/dxvk/pipeline_cache.inc": "ee09d1a071a36804557c71004cf921bca89bf9bf05bb53686de0d0f3e2e860fd"
+    }
   }
 }

@@ -37,9 +37,9 @@ final class Texts {
         R_CHECKING = 141, R_CRASH = 142, R_ERROR = 143, R_BC = 144, R_ROBUSTNESS = 145, R_PRESENT = 146, R_FEATURES = 147,
         R_NOT_TURNIP = 148, R_VULKAN13 = 149, R_UNFIT = 150, N_UNCHECKED = 151, TEX_REMOVE = 152, TEX_REMOVE_ASK = 153,
         TEX_GONE = 154, TURNIP_DRIVER = 155, TURNIP_BUILTIN = 156, TURNIP_CHOOSE = 157, TURNIP_RESET = 158,
-        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161, TEX_SCANNING = 162, TEX_RESCAN = 163;
+        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161, TEX_SCANNING = 162, TEX_RESCAN = 163, TEX_ESTIMATE = 164;
     /** The last id: the table has one row per id (the selfcheck verifies it). */
-    static final int LAST = TEX_RESCAN;
+    static final int LAST = TEX_ESTIMATE;
 
     private static final String[][] TEXTS = {
         {"Play", "Играть", "Spielen", "Graj"},
@@ -325,6 +325,8 @@ final class Texts {
         {"This is no Turnip driver: %s", "Это не драйвер Turnip: %s", "Das ist kein Turnip-Treiber: %s", "To nie jest sterownik Turnip: %s"},
         {"Reading textures…", "Читаю текстуры…", "Texturen werden gelesen…", "Odczytuję tekstury…"},
         {"Try again", "Повторить", "Erneut versuchen", "Spróbuj ponownie"},
+        {"Original game: about %1$d textures, %2$s to convert.", "Оригинальная игра: примерно %1$d текстур, %2$s для конвертации.",
+         "Originalspiel: etwa %1$d Texturen, %2$s zum Konvertieren.", "Oryginalna gra: około %1$d tekstur, %2$s do konwersji."},
     };
 
     private static int column = -1;

@@ -30,6 +30,7 @@ void *ut3_dxvk_unwrap_guest(uint32_t);
 uint32_t ut3_dxvk_wrap_native(unsigned,void *);
 void *ut3_dxvk_native_window();
 void void_android_frame_presented();
+void void_perf_frame_end(uint32_t);
 void void_input_set_screen_size(int,int);
 int void_android_render_ready();
 void void_android_window_ack(uint32_t);
@@ -254,6 +255,8 @@ void presented(const void *presenter,uint64_t id,int32_t result) {
   presented_ids[presenter]=id;
   auto now=std::chrono::steady_clock::now();if(!present_frames){present_sample=now;sample_start=perf_sample();}
   ++present_frames;void_android_frame_presented();
+  /* Frames over 70 ms with what the host did meanwhile ([hitch], as the GLES renderer logs). */
+  void_perf_frame_end(static_cast<uint32_t>(present_frames));
   double seconds=std::chrono::duration<double>(now-present_sample).count();
   if(seconds>=5){
     char text[512];double frames=double(present_frames-present_sample_frames);auto current=perf_sample();double scale=1e-6/frames;

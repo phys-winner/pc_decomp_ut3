@@ -109,6 +109,7 @@ static int fixture_rename(const char *from,const char *to) {
 #include "../../android/texconv/ut3tex.cpp"
 extern "C" int texconv_convert_dds(const uint8_t *data,uint64_t size,int family,uint8_t **out,
     uint64_t *bytes,uint32_t *format,uint32_t *flags) {
+    assert(bytes_total>0 && total>0);
     tvtx_dds d;assert(tvtx_dds_bytes(data,size,&d));
     *format=family==1?TVTX_GL_ETC2_RGB8:TVTX_GL_ASTC_4x4;*flags=0;*bytes=0;
     for(uint32_t l=0;l<d.mips;++l)*bytes+=tvtx_level_bytes(*format,std::max(1u,d.width>>l),std::max(1u,d.height>>l));
@@ -119,15 +120,29 @@ int main(int argc,char **argv) {
     assert(argc==8);std::string root=argv[1],index=argv[2];int fd=open(argv[3],O_RDONLY);assert(fd>=0);
     assert(!fs::exists(root));
     auto a=scan(root,index,fd);assert(a[0]==2&&a[1]==16&&a[2]==0&&!fs::exists(root));
+    auto fast=quick_scan(root);assert(fast[0]==34833&&fast[1]==2879901632LL&&fast[2]==0&&!fs::exists(root));
     Game source(root,index,fd);auto paths=packages(source);assert(paths.size()==2);
     for(const auto &p:paths)assert(source.read(p).exports.size()==1);
     // The Windows ZIP fixture uses a seek; Android's real implementation uses thread-safe pread.
     for(int family:{1,2}) {
+        total=bytes_total=0;
         assert(convert(root,family,1,index,fd)==0);
+        assert(total==done && bytes_total==bytes_done);
         auto after=scan(root,index,fd);assert(after[0]==2&&after[2]==family&&after[3]==2&&after[4]>0);
+        fast=quick_scan(root);assert(fast[2]==family&&fast[3]==after[3]&&fast[4]==after[4]);
         assert(!fs::exists(pack(root)+".part"));
     }
     auto previous=Package::read(pack(root));bool refused=false;
+    std::ofstream(pack(root)+".part",std::ios::binary)<<"incomplete";
+    assert(quick_scan(root)[2]==2);
+    unlink((pack(root)+".part").c_str());
+    for(size_t offset:{size_t(0),offsetof(tvtx_header,count),offsetof(tvtx_header,payload_bytes)}) {
+        auto broken=previous;broken[offset]^=0x7f;
+        std::ofstream(pack(root),std::ios::binary).write((const char*)broken.data(),broken.size());
+        assert(quick_scan(root)[2]==0);
+    }
+    std::ofstream(pack(root),std::ios::binary).write((const char*)previous.data(),previous.size());
+    assert(quick_scan(root)[2]==2);
     try{convert(root,1,1,argv[5],fd);}catch(const std::exception&){refused=true;}
     assert(refused&&Package::read(pack(root))==previous);close(fd);
     auto folder=scan(argv[4]);assert(folder[0]==2&&folder[1]==16);

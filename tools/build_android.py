@@ -136,6 +136,8 @@ def main():
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1))
     parser.add_argument("--shared", action="store_true", help="Build the APK's libut3.so")
     parser.add_argument("--diagnostics", action="store_true", help="Record guest function/call rings for crash investigations")
+    parser.add_argument("--rt-check", action="store_true",
+                        help="Check that every GL call of the D3D9 files runs on the render thread (d3d9_thread.inc)")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
@@ -181,6 +183,8 @@ def main():
         flags = common + ["-std=gnu11", "-Wall", "-Wno-unused-function", "-Wno-unused-variable"]
         if source.name == "openal.c":
             flags.append("-Ireference/openal-soft/source/include")
+        if args.rt_check and source.name.startswith("d3d9_"):
+            flags.append("-DVOID_RT_CHECK")
         tasks.append((source, flags))
     mojo_flags = common + ["-w", "-DMOJOSHADER_FLIP_RENDERTARGET", "-DMOJOSHADER_DEPTH_CLIPPING",
         "-DSUPPORT_PROFILE_HLSL=0", "-DSUPPORT_PROFILE_ARB1=0", "-DSUPPORT_PROFILE_ARB1_NV=0",
@@ -201,6 +205,15 @@ def main():
                              sorted((ROOT / "reference/openal-soft/source/include").rglob("*.h")))
         if source.name == "d3d9_dxvk.c":
             extra = (ROOT / "build/dxvk/guest_methods.inc").read_bytes() + (ROOT / "android/dxvk/query_wait.inc").read_bytes()
+        if source.parent == ROOT / "android/host":
+            # Host .inc files are part of the objects that include them (headers are hashed for all).
+            text = source.read_bytes()
+            for name in sorted(set(re.findall(rb'#include "([A-Za-z0-9_]+\.inc)"', text))):
+                included = source.parent / name.decode()
+                if included.is_file():
+                    extra += included.read_bytes()
+                    if name == b"d3d9_thread.inc":
+                        extra += (source.parent / "d3d9_thread_check.inc").read_bytes()
         digest = hashlib.sha256(base_digest + source.read_bytes() + json.dumps(flags).encode() + extra).hexdigest()
         if stamp.exists() and obj.exists():
             cached = json.loads(stamp.read_text())

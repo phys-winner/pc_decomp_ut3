@@ -23,6 +23,8 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     assert(void_guest_reserve());
     void_threads_init(); void_dispatch_init(); void_machine_enter();
+    /* This test compiles on its own thread: the GL calls run inline (d3d9_thread.c). */
+    setenv("VOID_RENDER_THREAD", "0", 1);
     assert(d3d_gl_init());
     FILE *corpus = fopen(argv[1], "rb"); assert(corpus);
     uint32_t count; assert(fread(&count, 4, 1, corpus) == 1 && count == 27892);

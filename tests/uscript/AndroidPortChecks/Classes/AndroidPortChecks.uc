@@ -51,6 +51,8 @@ event int Main(string Params)
     local UIState_Focused FocusState;
     local UISlider TestSlider;
     local AndroidPortCommandFixture CommandPanel;
+    local string LongText, FieldText;
+    local int TextIndex;
     Store = new(None) class'AndroidPortDataStore';
     if (!Check(Len(Store.LayoutCaption) == 19 && Asc(Left(Store.LayoutCaption, 1)) == 1056
         && Asc(Right(Store.LayoutCaption, 1)) == 1071, "localized layout caption preserves Unicode")) return 1;
@@ -142,7 +144,16 @@ event int Main(string Params)
     if (!Check(ValueStore.SetFieldValue("weaponBarScale", Value) && Store.Settings.weaponBarScale == 0.5, "bar lower clamp")) return 1;
     Value.RangeValue.CurrentValue = 150;
     if (!Check(ValueStore.SetFieldValue("weaponWheelScale", Value) && Store.Settings.weaponWheelScale == 1.5, "wheel scale")) return 1;
-    if (!Check(Store.Settings.touchWeaponSwipe && !Store.Settings.touchWeaponTap && Store.Settings.touchVisible, "touch defaults")) return 1;
+    if (!Check(Store.Settings.touchWeaponSwipe && Store.Settings.touchWeaponButtonSwipe
+        && !Store.Settings.touchWeaponTap && Store.Settings.touchVisible, "touch defaults")) return 1;
+    Value.StringValue = "0";
+    if (!Check(ValueStore.SetFieldValue("touchWeaponSwipe", Value) && !Store.Settings.touchWeaponSwipe
+        && Store.Settings.touchWeaponButtonSwipe, "bar swipe does not disable button swipe")) return 1;
+    Value.StringValue = "1";
+    if (!Check(ValueStore.SetFieldValue("touchWeaponSwipe", Value), "restore bar swipe")) return 1;
+    Value.StringValue = "0";
+    if (!Check(ValueStore.SetFieldValue("touchWeaponButtonSwipe", Value) && Store.Settings.touchWeaponSwipe
+        && !Store.Settings.touchWeaponButtonSwipe, "button swipe does not disable bar swipe")) return 1;
     if (!Check(ValueStore.GetFieldValue("renderScale", Value) && Value.PropertyType == DATATYPE_RangeProperty
         && Value.RangeValue.CurrentValue == 100 && Value.RangeValue.MinValue == 25
         && Value.RangeValue.MaxValue == 100 && Value.RangeValue.NudgeValue == 5, "render scale percent range")) return 1;
@@ -164,7 +175,7 @@ event int Main(string Params)
     Store.CommitCollection('touchVehicleProfile');
     if (!Check(Store.Settings.touchVehicleProfile == 4, "turret profile")) return 1;
     ValueStore.GetSupportedScriptFields(Fields);
-    if (!Check(Fields.Length == 16, "scalar fields discoverable")) return 1;
+    if (!Check(Fields.Length == 17, "scalar fields discoverable")) return 1;
     if (!Check(ValueStore.GetFieldValue("uiScale", Value)
         && Value.RangeValue.CurrentValue == 100 && Value.RangeValue.MinValue == 100
         && Value.RangeValue.MaxValue == 150 && Value.RangeValue.NudgeValue == 5,
@@ -467,6 +478,72 @@ event int Main(string Params)
     Viewport.ViewportConsole.GotoState('Typing');
     Viewport.UpdatePortInputContext();
     if (!Check(Viewport.PortInputMode == 2, "original typing console captures without UIScene")) return 1;
+    // Native text dialog requests: the console's line, field limits, passwords, longer texts.
+    if (!Check(class'AndroidPortViewportClient'.static.PortTextRequest(8, 0, false, true) == (4 | (256 << 8))
+        && class'AndroidPortViewportClient'.static.PortTextRequest(5, 12, true, false) == (1 | (12 << 8))
+        && class'AndroidPortViewportClient'.static.PortTextRequest(12, 12, false, false) == (12 << 8)
+        && class'AndroidPortViewportClient'.static.PortTextRequest(0, 300, false, false) == (256 << 8)
+        && class'AndroidPortViewportClient'.static.PortTextRequest(13, 12, false, false) == (2 | 8 | (256 << 8))
+        && class'AndroidPortViewportClient'.static.PortTextRequest(300, 0, true, false) == (1 | 2 | 8 | (256 << 8))
+        && class'AndroidPortViewportClient'.static.PortTextRequest(300, 0, false, true) == (2 | 8 | (256 << 8)),
+        "text requests: console line, field limits, password, texts longer than the dialog shows")) return 1;
+    // Chat types into the same line: the original StartTyping("Say ") of UTPlayerController.Talk.
+    Viewport.ViewportConsole.StartTyping("Say helo");
+    Viewport.PortTextCommand = 1;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.PortTextCommand == -1 && Viewport.PortTextTarget == None
+        && Viewport.PortTextFlags == (4 | (256 << 8)) && Viewport.PortTextValue == "Say helo"
+        && Len(Viewport.PortTextInput) == 256, "the console's line goes to the native dialog")) return 1;
+    Viewport.PortTextInput = "Say hello~ " $ Chr(0x43F) $ Chr(0x440) $ "`!";
+    Viewport.PortTextCommand = 2;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.PortTextCommand == 0 && Viewport.ViewportConsole.TypedStr == "Say hello !"
+        && Viewport.ViewportConsole.TypedStrPos == 11 && Viewport.PortTextFlags == 0,
+        "a commit replaces the console's line, typed as the original AppendInputText types")) return 1;
+    Viewport.PortTextCommand = 1;
+    Viewport.HandlePortText();
+    Viewport.PortTextInput = "";
+    Viewport.PortTextCommand = 2;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.ViewportConsole.TypedStr == "" && Viewport.ViewportConsole.TypedStrPos == 0,
+        "an empty commit clears the console's line")) return 1;
+    Viewport.ViewportConsole.SetInputText("say kept");
+    Viewport.ViewportConsole.SetCursorPos(8);
+    Viewport.PortTextCommand = 1;
+    Viewport.HandlePortText();
+    Viewport.PortTextEpoch = Viewport.PortInputEpoch + 1;
+    Viewport.PortTextInput = "say stale";
+    Viewport.PortTextCommand = 2;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.ViewportConsole.TypedStr == "say kept" && Viewport.PortTextCommand == 0,
+        "a commit of an older input context leaves the line")) return 1;
+    for (TextIndex = 0; TextIndex < 300; ++TextIndex)
+        LongText $= "a";
+    Viewport.ViewportConsole.SetInputText(LongText);
+    Viewport.PortTextCommand = 1;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.PortTextFlags == (2 | 8 | (256 << 8)) && Viewport.PortTextValue == ""
+        && Viewport.PortTextTarget == None && Viewport.PortTextCommand == -1,
+        "a 300-unit line opens the dialog empty, typed into the original InputChar")) return 1;
+    Viewport.PortTextInput = "x";
+    Viewport.PortTextCommand = 2;
+    Viewport.HandlePortText();
+    if (!Check(Viewport.ViewportConsole.TypedStr == LongText && Viewport.PortTextCommand == 0,
+        "no whole-line commit for a line the dialog does not show")) return 1;
+    Viewport.ViewportConsole.SetInputText("");
+    // The original UIEditBox.CharacterSet rule (UT3.exe 0x00FE2130), one string through each set.
+    FieldText = "Ab9.-+ _!" $ Chr(0xE9) $ Chr(0xD7) $ Chr(0x42F) $ Chr(0x20AC) $ Chr(0x2013);
+    if (!Check(class'AndroidPortCharacterSet'.static.Filter(FieldText, 0) == FieldText
+        && class'AndroidPortCharacterSet'.static.Filter(FieldText, 1) == ("Ab9 " $ Chr(0xE9) $ Chr(0x42F) $ Chr(0x20AC))
+        && class'AndroidPortCharacterSet'.static.Filter(FieldText, 2) == ("Ab" $ Chr(0xE9) $ Chr(0xD7))
+        && class'AndroidPortCharacterSet'.static.Filter(FieldText, 3) == "9.-+"
+        && class'AndroidPortCharacterSet'.static.Filter(FieldText, 4) == ("Ab9.-+" $ Chr(0xE9) $ Chr(0xD7))
+        && class'AndroidPortCharacterSet'.static.Filter(FieldText, 5) == "",
+        "original CharacterSet rule: All, NoSpecial, AlphaOnly, NumericOnly, AlphaNumeric, unknown")) return 1;
+    if (!Check(class'AndroidPortCharacterSet'.static.Filter(Chr(0x8C) $ Chr(0x152) $ Chr(0x9F) $ Chr(0x178), 2)
+        == (Chr(0x8C) $ Chr(0x9F)) && class'AndroidPortCharacterSet'.static.Filter("12:30", 3) == "1230"
+        && class'AndroidPortCharacterSet'.static.Filter("a" $ Chr(0x2019) $ Chr(0x2116) $ Chr(0xFF01), 1) == ("a" $ Chr(0x2116)),
+        "original Latin-1 letters, numeric fields, punctuation above U+00FF")) return 1;
     Viewport.ViewportConsole.GotoState('');
     Viewport.UpdatePortInputContext();
     if (!Check(Viewport.PortInputMode == 0 && Viewport.PortInputEpoch > Epoch,

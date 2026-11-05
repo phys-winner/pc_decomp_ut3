@@ -33,7 +33,7 @@ static void same_prefix(const void_input_event *expected,int count,uint32_t out)
 }
 int main(void)
 {
-    (void)ui_begin;(void)ui_control;(void)ui_scroll;(void)text_submit;(void)text_delete;(void)touch_stick;(void)touch_weapon;
+    (void)ui_begin;(void)ui_control;(void)ui_scroll;(void)text_submit;(void)pad_set;(void)touch_stick;(void)touch_weapon;
 #ifdef _WIN32
     assert(VirtualAlloc((void *)(uintptr_t)VOID_GUEST_BASE,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)(uintptr_t)VOID_GUEST_BASE);
 #else

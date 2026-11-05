@@ -15,6 +15,13 @@ uint64_t void_perf_now_ns(void) { return 0; }
 void void_perf_add(int kind,uint64_t ns,uint64_t bytes) { (void)kind;(void)ns;(void)bytes; }
 void void_log(const char *format,...) { va_list args;va_start(args,format);vprintf(format,args);putchar('\n');va_end(args); }
 char *void_path_to_host(const char *path) { (void)path;return NULL; }
+/* Host runtime of d3d9_thread.c. Run with VOID_RENDER_THREAD=0: no device starts the render
+ * thread here, every record runs inline in this test's GL context, and nothing holds a machine. */
+void void_blocking_begin(void) {}
+void void_blocking_end(void) {}
+const char *void_data_dir(void) { return "."; }
+uint64_t void_monotonic_ns(void) { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint64_t)t.tv_sec*1000000000u+(uint64_t)t.tv_nsec; }
+_Noreturn void void_fatal(const char *format,...) { va_list args;va_start(args,format);vfprintf(stderr,format,args);fputc('\n',stderr);va_end(args);abort(); }
 extern void void_texture_cache_init(const char*);
 extern const utx_entry *void_texture_cache_find(uint32_t,uint32_t,uint32_t,uint32_t,const uint8_t*,uint32_t);
 extern const uint8_t *void_texture_cache_raw(const utx_entry*);

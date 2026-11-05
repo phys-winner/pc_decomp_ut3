@@ -6,6 +6,7 @@
  * running the game there; the request then fails as a compile error would. */
 #define _GNU_SOURCE
 #include "d3d9_internal.h"
+#include "d3d9_thread.inc"
 #include <errno.h>
 #include <math.h>
 #include <sys/stat.h>
@@ -179,7 +180,8 @@ COM_METHOD(ct, GetConstantElement, 3)
     return 0;
 }
 
-extern uint32_t d3d_constant_generation;
+/* Constants reach the GL programs through the render thread's copy of the
+ * state (d3d9_thread.c), which counts their generation as they arrive. */
 
 /* Write float4 registers of the table's stage. */
 static void write_f(ctable_t *t, uint32_t reg, const float *v, uint32_t count)
@@ -187,25 +189,33 @@ static void write_f(ctable_t *t, uint32_t reg, const float *v, uint32_t count)
     d3d_device *d = g_d3d_device;
     if (!d) return;
     uint32_t limit = t->pixel ? 224 : 256;
-    for (uint32_t i = 0; i < count && reg + i < limit; ++i)
-        memcpy(t->pixel ? d->st.ps_f[reg + i] : d->st.vs_f[reg + i], v + 4 * i, 16);
-    ++d3d_constant_generation;
+    for (uint32_t i = 0; i < count && reg + i < limit; ++i) {
+        float *to = t->pixel ? d->st.ps_f[reg + i] : d->st.vs_f[reg + i];
+        memcpy(to, v + 4 * i, 16);
+        d3d_rt_dirty(d, to, 16);
+    }
 }
 
 static void write_i(ctable_t *t, uint32_t reg, const int32_t *v, uint32_t count)
 {
     d3d_device *d = g_d3d_device;
     if (!d) return;
-    for (uint32_t i = 0; i < count && reg + i < 16; ++i) memcpy(t->pixel ? d->st.ps_i[reg + i] : d->st.vs_i[reg + i], v + 4 * i, 16);
-    ++d3d_constant_generation;
+    for (uint32_t i = 0; i < count && reg + i < 16; ++i) {
+        int32_t *to = t->pixel ? d->st.ps_i[reg + i] : d->st.vs_i[reg + i];
+        memcpy(to, v + 4 * i, 16);
+        d3d_rt_dirty(d, to, 16);
+    }
 }
 
 static void write_b(ctable_t *t, uint32_t reg, const int32_t *v, uint32_t count)
 {
     d3d_device *d = g_d3d_device;
     if (!d) return;
-    for (uint32_t i = 0; i < count && reg + i < 16; ++i) (t->pixel ? d->st.ps_b : d->st.vs_b)[reg + i] = v[i] != 0;
-    ++d3d_constant_generation;
+    for (uint32_t i = 0; i < count && reg + i < 16; ++i) {
+        int32_t *to = &(t->pixel ? d->st.ps_b : d->st.vs_b)[reg + i];
+        *to = v[i] != 0;
+        d3d_rt_dirty(d, to, 4);
+    }
 }
 
 /* Set a constant from `n` floats laid out as D3DX does (row-major elements). */

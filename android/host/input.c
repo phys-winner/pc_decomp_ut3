@@ -41,6 +41,14 @@ static uint32_t touch_weapon_slots, touch_vehicle_flags;
 static uint32_t weapon_pending;
 static int weapon_previewing;
 extern int void_touch_game_details(uint32_t out[2]) __attribute__((weak));
+extern int void_touch_text_request(int,const uint16_t*,int,uint32_t) __attribute__((weak));
+extern int void_touch_text_snapshot(uint16_t[257],uint32_t*,uint32_t*) __attribute__((weak));
+static uint64_t dialog_context;
+static uint32_t dialog_serial,dialog_target,dialog_flags;
+static int dialog_command,dialog_active,dialog_ready,dialog_length;
+static uint16_t dialog_value[257],dialog_request[256];
+
+
 extern int void_touch_weapon_request(uint32_t request) __attribute__((weak));
 extern int void_touch_steer(float out[3], uint32_t *flags) __attribute__((weak));
 static uint32_t touch_packet, touch_held;
@@ -526,8 +534,37 @@ static void touch_weapon_deliver(void);
 
 extern void void_loading_movie_input(void) __attribute__((weak));
 
+static void text_dialog_pump(void)
+{
+    if(!void_machine_is_owned || !void_machine_is_owned() || !void_touch_text_request || !void_touch_text_snapshot)return;
+    uint16_t request[256],value[257]={0};uint32_t target,flags=0,serial;
+    int command,length,active;
+    pthread_mutex_lock(&input_lock);
+    command=dialog_command;active=dialog_active;length=dialog_length;target=dialog_target;serial=dialog_serial;
+    memcpy(request,dialog_request,sizeof request);
+    if(active && dialog_context!=touch_cursor_context)command=3;
+    if(dialog_ready>0 && !command)active=0;
+    pthread_mutex_unlock(&input_lock);
+    if(!active)return;
+    int result=command ? void_touch_text_request(command,request,length,target) : 1;
+    int ready=command!=2 && command!=3 && result && void_touch_text_snapshot(value,&target,&flags);
+    pthread_mutex_lock(&input_lock);
+    if(serial==dialog_serial) {
+        dialog_command=0;
+        if(!result || command==2 || command==3) {
+            dialog_active=0;dialog_ready=-1;
+            memset(dialog_value,0,sizeof dialog_value);memset(dialog_request,0,sizeof dialog_request);
+        } else if(ready) {
+            dialog_target=target;dialog_flags=flags;dialog_ready=1;
+            memcpy(dialog_value,value,sizeof value);
+        }
+    }
+    pthread_mutex_unlock(&input_lock);
+}
+
 void void_input_pump(void)
 {
+    text_dialog_pump();
     if (void_loading_movie_input && void_machine_is_owned && void_machine_is_owned()) void_loading_movie_input();
     touch_observe_game();
     touch_weapon_deliver();
@@ -673,7 +710,7 @@ static int text_queue(const uint16_t *text, int length, uint64_t context)
     pthread_mutex_unlock(&input_lock);return 1;
 }
 
-static int text_submit(const uint16_t *text, int length, uint64_t context)
+static int text_valid(const uint16_t *text, int length)
 {
     if (length<0 || length>256 || (length&&!text)) return 0;
     for (int i=0;i<length;++i) {
@@ -683,24 +720,11 @@ static int text_submit(const uint16_t *text, int length, uint64_t context)
             if (++i>=length || text[i]<0xDC00 || text[i]>0xDFFF) return 0;
         } else if (value>=0xDC00 && value<=0xDFFF) return 0;
     }
-    return text_queue(text,length,context);
+    return 1;
 }
 
-static int text_delete(int before, uint64_t context)
-{
-    if (before<0 || before>256) return 0;
-    pthread_mutex_lock(&input_lock);
-    uint64_t current=__atomic_load_n(&touch_cursor_context,__ATOMIC_RELAXED);
-    if (!touch_game_active || (current&3u)!=3u || context!=current || pending_count>512-before*2) {
-        pthread_mutex_unlock(&input_lock);return 0;
-    }
-    uint32_t parameter=1u|(void_vk_to_dik(8)<<16);
-    for (int i=0;i<before;++i) {
-        pending[pending_count++]=(pending_t){0x0100u,8,parameter,0,context};
-        pending[pending_count++]=(pending_t){0x0101u,8,parameter|0xC0000000u,0,context};
-    }
-    pthread_mutex_unlock(&input_lock);return 1;
-}
+static int text_submit(const uint16_t *text,int length,uint64_t context)
+{ return text_valid(text,length) && text_queue(text,length,context); }
 
 static void touch_key_locked(uint32_t vk, int down)
 {
@@ -1157,11 +1181,58 @@ JNIEXPORT jboolean JNICALL Java_org_ut3_port_GameActivity_nativeText(JNIEnv *env
     if ((*env)->ExceptionCheck(env)) return JNI_FALSE;
     return text_submit(text,length,(uint64_t)context) ? JNI_TRUE : JNI_FALSE;
 }
-JNIEXPORT jboolean JNICALL Java_org_ut3_port_GameActivity_nativeDelete(JNIEnv *env, jclass cls,
-    jint before, jlong context)
+JNIEXPORT jboolean JNICALL Java_org_ut3_port_GameActivity_nativeTextDialogRequest(JNIEnv *env,jclass cls,
+    jint command,jstring value,jlong context,jlong target)
 {
-    (void)env;(void)cls;
-    return text_delete(before,(uint64_t)context) ? JNI_TRUE : JNI_FALSE;
+    (void)cls;
+    uint16_t text[256]={0};int length=0;
+    if(command<1 || command>3 || target<0 || (uint64_t)target>UINT32_MAX)return JNI_FALSE;
+    if(command==2) {
+        if(!value)return JNI_FALSE;
+        length=(*env)->GetStringLength(env,value);
+        if(length<0 || length>256)return JNI_FALSE;
+        (*env)->GetStringRegion(env,value,0,length,(jchar*)text);
+        if((*env)->ExceptionCheck(env) || !text_valid(text,length))return JNI_FALSE;
+    }
+    pthread_mutex_lock(&input_lock);
+    int valid=command==3 || (touch_game_active && (touch_cursor_context&3u)==3u && (uint64_t)context==touch_cursor_context);
+    /* A commit goes to the field the dialog was opened for, or to the console's line (flag 4, no
+     * target); text typed into a receiver's InputChar (flag 2) goes through nativeText instead. */
+    if(command==2)valid=valid && dialog_active && dialog_ready==1 && dialog_context==(uint64_t)context &&
+        dialog_target==(uint32_t)target && (target || (dialog_flags&4u)) && !(dialog_flags&2u) &&
+        length<=(int)(dialog_flags>>8);
+    if(command==3 && dialog_context!=(uint64_t)context)valid=0;
+    if(valid) {
+        ++dialog_serial;dialog_context=(uint64_t)context;dialog_command=command;
+        dialog_active=1;dialog_ready=0;dialog_length=length;
+        if(command==1){dialog_target=0;dialog_flags=0;}
+        memcpy(dialog_request,text,sizeof text);memset(dialog_value,0,sizeof dialog_value);
+    }
+    pthread_mutex_unlock(&input_lock);
+    return valid ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT jobjectArray JNICALL Java_org_ut3_port_GameActivity_nativeTextDialogState(JNIEnv *env,jclass cls,jlong context)
+{
+    (void)cls;
+    uint16_t text[257];uint32_t target,flags;int ready;
+    pthread_mutex_lock(&input_lock);
+    ready=dialog_context==(uint64_t)context && touch_cursor_context==(uint64_t)context ? dialog_ready : -1;
+    target=dialog_target;flags=dialog_flags;memcpy(text,dialog_value,sizeof text);
+    pthread_mutex_unlock(&input_lock);
+    if(!ready)return NULL;
+    jclass string=(*env)->FindClass(env,"java/lang/String");if(!string)return NULL;
+    jobjectArray result=(*env)->NewObjectArray(env,ready>0?3:0,string,NULL);if(!result || ready<0)return result;
+    int length=0;while(length<256 && text[length])++length;
+    char numeric[32];
+    jstring value=(*env)->NewString(env,(jchar*)text,length);if(!value)return NULL;
+    (*env)->SetObjectArrayElement(env,result,0,value);(*env)->DeleteLocalRef(env,value);
+    snprintf(numeric,sizeof numeric,"%u",flags);value=(*env)->NewStringUTF(env,numeric);
+    if(!value)return NULL;
+    (*env)->SetObjectArrayElement(env,result,1,value);(*env)->DeleteLocalRef(env,value);
+    snprintf(numeric,sizeof numeric,"%u",target);value=(*env)->NewStringUTF(env,numeric);
+    if(!value)return NULL;
+    (*env)->SetObjectArrayElement(env,result,2,value);(*env)->DeleteLocalRef(env,value);
+    return result;
 }
 JNIEXPORT jboolean JNICALL Java_org_ut3_port_GameActivity_nativeTouch(JNIEnv *env, jclass cls,
     jfloat x, jfloat y, jfloat dx, jfloat dy, jint held, jlong context)

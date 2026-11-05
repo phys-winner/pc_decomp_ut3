@@ -1977,7 +1977,7 @@ class Lifter:
             lines.append(f"_st[0] = cos(_st[0]); _fpu_cmp = 1; {comment}")
 
         elif m == 'fsincos':
-            lines.append(f"{{ double _a = _st[0]; _st[0] = cos(_a); fp_push(sin(_a)); }} _fpu_cmp = 1; {comment}")
+            lines.append(f"{{ double _a = _st[0]; _st[0] = sin(_a); fp_push(cos(_a)); }} _fpu_cmp = 1; {comment}")
 
         elif m == 'fpatan':
             lines.append(f"{{ double _v = fp_pop(); _st[0] = atan2(_v, _st[0]); }} {comment}")

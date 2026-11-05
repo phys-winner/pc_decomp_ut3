@@ -21,6 +21,7 @@ using namespace ut3tex;
 namespace fs=std::filesystem;
 std::atomic<bool> cancelled{false};
 std::atomic<int64_t> done{0},total{0},bytes_done{0},bytes_total{0};
+constexpr int64_t ORIGINAL_TEXTURES=34833,ORIGINAL_MIPS=253302,ORIGINAL_BYTES=2879901632LL;
 std::mutex message_lock;
 std::string message;
 void error(const std::string &why) { std::lock_guard<std::mutex> guard(message_lock);message=why; }
@@ -114,8 +115,14 @@ bool read_header(const std::string &path,tvtx_header &h,uint64_t &size) {
     std::ifstream f(path,std::ios::binary|std::ios::ate);if(!f)return false;
     auto end=f.tellg();if(end<(std::streamoff)sizeof(h))return false;size=(uint64_t)end;f.seekg(0);f.read((char*)&h,sizeof(h));
     return (bool)f&&h.magic==TVTX_MAGIC&&h.version==TVTX_VERSION&&(h.family==1||h.family==2)&&
-        h.count<=2000000&&h.index_offset>=sizeof(h)&&h.index_offset<=size&&
+        h.count>0&&h.count<=2000000&&h.index_offset>=sizeof(h)&&h.index_offset<=size&&
+        h.payload_bytes==h.index_offset-sizeof(h)&&
         uint64_t(h.count)*sizeof(utx_entry)==size-h.index_offset;
+}
+std::vector<int64_t> quick_scan(const std::string &game) {
+    // Original retail corpus: 34,833 Texture2Ds, 253,302 mips; conversion still discovers the actual packages.
+    tvtx_header h{};uint64_t size=0;bool converted=read_header(pack(game),h,size);
+    return {ORIGINAL_TEXTURES,ORIGINAL_BYTES,converted?(int64_t)h.family:0,converted?(int64_t)h.count:0,converted?(int64_t)size:0};
 }
 std::vector<int64_t> scan(const std::string &game,const std::string &index="",int fd=-1) {
     done=total=bytes_done=bytes_total=0;cancelled=false;error("");
@@ -132,7 +139,7 @@ std::vector<int64_t> scan(const std::string &game,const std::string &index="",in
 }
 int convert(const std::string &game,int family,int threads,const std::string &archive_index="",int fd=-1) {
     require(family==1||family==2,"unknown texture format");
-    cancelled=false;done=bytes_done=0;error("");
+    cancelled=false;done=bytes_done=0;total=ORIGINAL_MIPS;bytes_total=ORIGINAL_BYTES;error("");
     Game source(game,archive_index,fd);
     auto paths=packages(source);require(!paths.empty(),"no UT3 packages found");
     std::string final=pack(game),temporary=final+".part";
@@ -184,6 +191,7 @@ int convert(const std::string &game,int family,int threads,const std::string &ar
         require(fsync(output.fd)==0,"cannot flush texture cache");
         require(rename(temporary.c_str(),final.c_str())==0,"cannot commit texture cache");
         require(close(output.fd)==0,"cannot close texture cache");output.fd=-1;
+        total=done.load();bytes_total=bytes_done.load();
         return 0;
     } catch(...) { unlink(temporary.c_str());throw; }
 }
@@ -193,8 +201,8 @@ std::string java_string(JNIEnv *env,jstring value) {
 }
 }
 
-extern "C" JNIEXPORT jlongArray JNICALL Java_org_ut3_port_TextureConverter_nativeScan(JNIEnv *env,jclass,jstring game,jstring index,jint fd) {
-    try { auto values=scan(java_string(env,game),index?java_string(env,index):"",fd);jlongArray out=env->NewLongArray(values.size());if(out)env->SetLongArrayRegion(out,0,values.size(),(const jlong*)values.data());return out; }
+extern "C" JNIEXPORT jlongArray JNICALL Java_org_ut3_port_TextureConverter_nativeScan(JNIEnv *env,jclass,jstring game) {
+    try { auto values=quick_scan(java_string(env,game));jlongArray out=env->NewLongArray(values.size());if(out)env->SetLongArrayRegion(out,0,values.size(),(const jlong*)values.data());return out; }
     catch(const std::exception &e){error(e.what());return nullptr;}
 }
 extern "C" JNIEXPORT jint JNICALL Java_org_ut3_port_TextureConverter_nativeConvert(JNIEnv *env,jclass,jstring game,jint family,jint threads,jstring index,jint fd) {

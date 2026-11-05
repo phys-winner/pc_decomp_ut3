@@ -14,7 +14,7 @@ Unreal Tournament 3. Unreal Tournament 3 and its content belong to their respect
 
 ## Status and features
 
-Current version: **0.2-dev** (versionCode 5). The versionCode also counts internal test builds.
+Current version: **0.3-dev** (versionCode 6). The versionCode also counts internal test builds.
 
 - The original game code runs as statically recompiled native code; the PE images it was recompiled from are
   made at start from the game's own `Binaries` (relocated to the port's bases, size and CRC-32 checked). The
@@ -23,6 +23,10 @@ Current version: **0.2-dev** (versionCode 5). The versionCode also counts intern
   driver, and **DXVK on Mesa Turnip** for Adreno 6xx/7xx, with the bundled Turnip build or **your own driver
   package** (an adrenotools ZIP with `meta.json`, or the driver `.so`). A driver check in a separate process tells
   which renderer can run on the device.
+- GLES rendering runs on a dedicated thread by default, with CPU core selection, asynchronous GPU query
+  polling, streaming uploads and shader program prelinking. Program binaries are cached with driver-change
+  invalidation; DXVK pipeline caches distinguish drivers and retain the current and newest other cache for
+  each driver. DXVK also supports scaled vertex formats through a shader fallback when needed.
 - Launcher: game files from a folder or a ZIP archive (a ZIP stored without compression plays in place), languages
   (English, Russian, German, Polish), update checks through GitHub releases, cleanup of unused files.
 - Touch controls with an analog stick, swipe look, weapon bar selection, vehicle profiles, an editable layout and
@@ -39,12 +43,16 @@ Current version: **0.2-dev** (versionCode 5). The versionCode also counts intern
 - Touch selection in the original command menu, including categories, commands and recipients. The Scorpion
   uses direct stick steering with an axial dead zone, so a small sideways drift of the movement finger does
   not lock its wheels. Throttle remains analog, and physical gamepad axes retain their original behavior.
-- Tapping an editable text field opens the Android keyboard after the original UI consumes the click.
+- Tapping an editable text field opens an Android text-editing dialog after the original UI consumes the
+  click. The keyboard control also edits console and chat lines; commits preserve the original character
+  filters, and cancelling keeps the original text.
   Tabs and bottom action buttons have taller touch targets, with gaps assigned to the nearest button.
   Long tab captions fit their width; the Android page's button caption uses the selected localization.
   Seat switching is hidden in one-seat vehicles; its wheel shows available seats and permitted bot swaps.
 - The first start uses an installed localization matching the system language, with English as fallback;
   the FPS selector lists the display's supported refresh rates at its current resolution.
+- The in-game Android settings support English, Russian, Czech, German, Spanish, French, Hungarian,
+  Italian and Polish. Weapon-button swipes and weapon-bar swipes can be configured separately.
 - LAN games between the PC game and the port, both ways.
 - OpenSpy service and authentication compatibility, adapted from `mods/fix_mp/dinput8.dll` to the pinned Steam
   executable. The original login/profile menu is available; an OpenSpy account is needed for online play.
@@ -58,8 +66,12 @@ authenticated Internet match on the Ural BTFA server have been checked. Account 
 combination have not been verified.
 
 Tested devices: Google Pixel 10a (Mali-G715, Android 17), Google Pixel 10 (PowerVR, Android 17), and a Snapdragon
-870 phone (Adreno 650, Android 15) for the Turnip renderers. This update's GLES, texture-cache, menu and touch
-checks also ran on a BOOX GALILEO3 tablet with Android 11.
+870 phone (Adreno 650, Android 15) for the Turnip renderers. Earlier GLES, texture-cache, menu and touch
+checks also ran on a BOOX GALILEO3 tablet with Android 11. The 0.3-dev changes were additionally checked on
+realme GT Neo 3T (Snapdragon 870, Android 15) and realme RMX3851 (Snapdragon 8s Gen 3, Android 16).
+The final version-bumped APK passed build, signature and alignment checks; it was not installed for a
+separate device run. The scaled-vertex fallback still needs testing on a proprietary Qualcomm Vulkan 1.3
+driver, and render-thread core selection needs a two-cluster device comparison.
 
 ## Requirements
 
@@ -105,8 +117,8 @@ submodules in `reference/astcenc` and `reference/etcpak`. Their revisions are pi
 `build_apk.py` signs with the signer configured in `PORT_SIGNING_CONFIG`, else with a local debug key
 (`build/android/debug.keystore`). An APK installs as an update only over one with the same signer.
 
-Release APKs are additionally built with profile-guided optimization from a profile recorded on a device and
-`-mtune=cortex-a77`; the code is the same.
+The 0.3-dev APK uses the standard `-O2` build above. Earlier release APKs also used profile-guided
+optimization from a profile recorded on a device and `-mtune=cortex-a77`.
 
 ## Install and supply the game
 
@@ -132,6 +144,10 @@ size slider, select hidden controls from the list, and choose **Save** or **Canc
 dragged by its heading. Weapon-bar swiping starts enabled; icon taps start disabled. Bar size is 50–100%,
 wheel size 50–150%, both multiplied by the interface scale. The renderer is chosen in the launcher.
 
+For GLES troubleshooting, a `render-thread` file in the userdata directory containing `0` disables the
+render thread; `1` enables it. An optional `rt-cores` file selects `auto` (the default), `big`, `next` or
+`any`. Environment variables `VOID_RENDER_THREAD` and `VOID_RT_CORES` override these files.
+
 ## Checks
 
 ```powershell
@@ -140,6 +156,8 @@ python tests/test_game_settings.py
 python tests/test_touch_controls.py
 python tests/test_native_settings.py          # original UE3 VM and SaveConfig
 python -m unittest tests.test_openspy tests.test_native_bundle tests.test_ui_hud tests.test_ui_list_scale
+python -m unittest tests.test_render_thread_cores tests.test_dxvk_scaled_spirv tests.test_dxvk_pipeline_cache_prune
+python -m unittest tests.test_text_dialog tests.test_weapon_gestures tests.test_localized_options tests.test_fsincos
 python tools/check_texture_cache.py --device DEVICE_SERIAL --game /sdcard/UT3/texture-qa
 python android/launcher/tests/run_tests.py     # the launcher base
 ```

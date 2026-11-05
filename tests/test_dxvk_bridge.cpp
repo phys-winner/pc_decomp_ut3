@@ -26,6 +26,7 @@ extern "C" void ANativeWindow_acquire(ANativeWindow *window){++reinterpret_cast<
 extern "C" void ANativeWindow_release(ANativeWindow *window){assert(reinterpret_cast<FixtureWindow*>(window)->refs>0);--reinterpret_cast<FixtureWindow*>(window)->refs;}
 extern "C" void *ut3_dxvk_native_window(){if(fixture_window)++fixture_window->refs;return fixture_window;}
 extern "C" void void_android_frame_presented(){}
+extern "C" void void_perf_frame_end(uint32_t){}
 extern "C" void void_input_set_screen_size(int,int){}
 extern "C" uint64_t void_lock_wait_ns(){return 0;}
 extern "C" void void_native_worker_affinity_begin(){}

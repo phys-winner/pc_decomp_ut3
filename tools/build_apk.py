@@ -123,8 +123,8 @@ def main():
                 parser.error(f"Two native licenses would share the name {target.name}")
             shutil.copy2(source, target)
         shutil.copy2(script, assets / "AndroidPort.u")
-        shutil.copy2(ROOT / "android/uscript/AndroidPort/AndroidPortOptions.ini", assets / "AndroidPortOptions.ini")
-        shutil.copy2(ROOT / "android/uscript/AndroidPort/AndroidPortOptions-RUS.ini", assets / "AndroidPortOptions-RUS.ini")
+        for options in (ROOT / "android/uscript/AndroidPort").glob("AndroidPortOptions*.ini"):
+            shutil.copy2(options, assets / options.name)
         # The launcher: its sources in this game's package, the manifest with its markers expanded,
         # assets/launcher (port.json, build.json) and the icons of android/app/res.
         if LAUNCHER is None:

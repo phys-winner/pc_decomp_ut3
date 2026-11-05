@@ -197,6 +197,7 @@ static void putf(uint32_t address,float value) { memcpy(GPTR(address),&value,4);
 static void detail_cases(void)
 {
     uint32_t out[3],snapshot[4],flags=0;float steer[3];
+    detail_fixture();
     /* PlayerDriving negates the pad's raw X before SetInputs. */
     int16_t turn,gas;float console_steer[3]={.5f,-.3f,1.1f};
     touch_look_steer(0,1,console_steer,8|16,&turn,&gas);
@@ -286,6 +287,58 @@ static void hud_settings_cases(void)
     fixture();hud_accept=1;assert(void_touch_game_read(out)==1&&hud_last==1);before=hud_observed;
     assert(void_touch_game_read(out)==1&&hud_observed==before); /* Older module without optional PortStore. */
     puts("PASS HUD settings observer: existing typed PortStore.Settings.uiScale, default/old modules, initialization/native readiness retries, epoch/UI-close updates, same-context skip, ownership/type/lost-publisher guards");
+}
+
+static void text_dialog_cases(void)
+{
+    enum { FIELDS=0x1B0000,VALUE=0x1C0000,CHARS=0x1D0000 };
+    static const char *names[]={"PortTextCommand","PortTextTarget","PortTextValue","PortTextFlags","PortTextInput"};
+    static const uint32_t offsets[]={0x400,0x404,0x408,0x414,0x418};
+    fixture();name(STRING_KIND,"StrProperty");
+    for(unsigned i=0;i<5;++i)
+        property(FIELDS+i*0x100,names[i],i==1?OBJECT_KIND:i==2||i==4?STRING_KIND:INT_KIND,
+                 offsets[i],i<4?FIELDS+(i+1)*0x100:MODE_PROPERTY);
+    put(PORT_CLASS+CHILDREN_OFFSET,FIELDS);touch_metadata.viewport_class=0;
+    uint32_t state[4],target,flags;uint16_t text[257];assert(void_touch_game_read(state)==1);
+    assert(void_touch_text_request(1,NULL,0,0)&&MEM32(VIEWPORT+0x400)==1);
+    put(VIEWPORT+0x400,UINT32_MAX);put(VIEWPORT+0x404,WIDGET);put(VIEWPORT+0x414,(32<<8)|1);
+    put(VIEWPORT+0x408,VALUE);put(VIEWPORT+0x40C,4);put(VIEWPORT+0x410,4);
+    memcpy(GPTR(VALUE),(uint16_t[]){'o','l','d',0},8);
+    put(VIEWPORT+0x418,CHARS);put(VIEWPORT+0x41C,257);put(VIEWPORT+0x420,257);
+    assert(void_touch_text_snapshot(text,&target,&flags)&&target==WIDGET&&flags==((32<<8)|1)&&text[2]=='d');
+    uint16_t value[]={'n',0x416,0xD83D,0xDE00};
+    assert(!void_touch_text_request(2,value,4,WIDGET+4));
+    readonly=CHARS;assert(!void_touch_text_request(2,value,4,WIDGET));readonly=0;
+    put(VIEWPORT+0x41C,255);assert(!void_touch_text_request(2,value,4,WIDGET));put(VIEWPORT+0x41C,257);
+    assert(void_touch_text_request(2,value,4,WIDGET)&&MEM32(VIEWPORT+0x400)==2&&MEM32(VIEWPORT+0x41C)==5);
+    for(unsigned i=0;i<4;++i)assert(*(uint16_t*)GPTR(CHARS+2*i)==value[i]);
+    assert(MEM32(CHARS+8)==0);
+    /* PortTextRequest flags: the console's line (4) has no target and takes a whole-line commit;
+     * text typed into the receiver's InputChar (2, 8 longer than shown) has no value and no commit. */
+    put(VIEWPORT+0x400,UINT32_MAX);put(VIEWPORT+0x41C,257);put(VIEWPORT+0x404,0);put(VIEWPORT+0x414,(256<<8)|4);
+    assert(void_touch_text_snapshot(text,&target,&flags)&&!target&&flags==((256<<8)|4)&&text[2]=='d');
+    assert(!void_touch_text_request(2,value,4,WIDGET));
+    assert(void_touch_text_request(2,value,4,0)&&MEM32(VIEWPORT+0x400)==2&&MEM32(VIEWPORT+0x41C)==5);
+    put(VIEWPORT+0x400,UINT32_MAX);put(VIEWPORT+0x41C,257);
+    put(VIEWPORT+0x404,WIDGET);assert(!void_touch_text_snapshot(text,&target,&flags));
+    put(VIEWPORT+0x404,0);put(VIEWPORT+0x414,(256<<8)|4|1);assert(!void_touch_text_snapshot(text,&target,&flags));
+    put(VIEWPORT+0x414,(256<<8)|8);assert(!void_touch_text_snapshot(text,&target,&flags));
+    put(VIEWPORT+0x414,(256<<8)|8|2|1);assert(!void_touch_text_snapshot(text,&target,&flags));
+    put(VIEWPORT+0x40C,0);
+    assert(void_touch_text_snapshot(text,&target,&flags)&&!target&&flags==((256<<8)|8|2|1)&&!text[0]);
+    assert(!void_touch_text_request(2,value,4,0));
+    put(VIEWPORT+0x404,WIDGET);assert(!void_touch_text_snapshot(text,&target,&flags));
+    put(VIEWPORT+0x40C,4);put(VIEWPORT+0x404,0);put(VIEWPORT+0x414,(32<<8)|1);
+    assert(!void_touch_text_request(2,value,4,0));
+    put(VIEWPORT+0x404,WIDGET);put(VIEWPORT+0x414,(3<<8)|1);assert(!void_touch_text_request(2,value,4,WIDGET));
+    put(VIEWPORT+0x414,(32<<8)|1);assert(MEM32(VIEWPORT+0x400)==UINT32_MAX);
+    put(VIEWPORT+0x400,UINT32_MAX);put(VIEWPORT+0x40C,258);
+    assert(!void_touch_text_snapshot(text,&target,&flags));put(VIEWPORT+0x40C,4);
+    put(FIELDS+0x300+PROPERTY_OFFSET,0x400);assert(!void_touch_text_request(3,NULL,0,0));
+    put(FIELDS+0x300+PROPERTY_OFFSET,0x414);
+    owned=0;assert(!void_touch_text_request(3,NULL,0,0));owned=1;
+    assert(void_touch_text_request(3,NULL,0,0));
+    puts("PASS text mailbox: typed/disjoint reflected fields, bounded UTF16 snapshot, captured target, owned preallocated FString, exact code units, console line without target, typed receivers without value or commit, limit, invalid flags/metadata/ownership fail closed");
 }
 
 int main(void)
@@ -399,6 +452,7 @@ int main(void)
     ui_fixture();capturing_scene();put(0x1DEB464,0);assert(!void_touch_ui_mouse(xy));
     scroll_bounds();
     detail_cases();
+    text_dialog_cases();
     hud_settings_cases();
     puts("PASS UI mouse acknowledgement: reflection-only controller/scene/IntPoint, empty console bypass, ownership and FString/type/offset/read bounds, no guest calls or writes");
     puts("PASS settings mailbox: JNI coalescing, missing/bad optional field preserves observer/pending request, bounds/alias/read-only/ownership checks, one checked write and acknowledgement per delivery");

@@ -65,8 +65,9 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     static native int nativeTouchVehicle();
     static native void nativeSettings();
     static native void nativeControlsVisible(boolean visible);
+    static native boolean nativeTextDialogRequest(int command, String value, long context, long target);
+    static native String[] nativeTextDialogState(long context);
     static native boolean nativeText(String text, long context);
-    static native boolean nativeDelete(int count, long context);
     static native int nativeConfigure(int fps, int queryWaitUs, int precacheWaitUs, boolean benchmark);
 
     private final Handler handler = new Handler();
@@ -322,7 +323,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if (focused) immersive();
-        else if (controls != null) { controls.release(); controls.releaseGamepad(true); }
+        else if (controls != null) { controls.windowFocusLost(); controls.releaseGamepad(true); }
     }
 
     /* A gamepad that goes away mid-press sends no further edges. */
@@ -457,7 +458,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             File engine = new File(userdata, "Documents/My Games/Unreal Tournament 3/UTGame/Config/UTEngine.ini");
             GameSettings.prepare(engine, game, renderWidth, renderHeight, fpsLimit(), portPreferences.getString("language", "INT"),
                 renderer, renderScale(displayHeight));
-            String options = "RUS".equals(portPreferences.getString("language", "INT")) ? "AndroidPortOptions-RUS.ini" : "AndroidPortOptions.ini";
+            String language = portPreferences.getString("language", "INT");
+            String options = "INT".equals(language) ? "AndroidPortOptions.ini" : "AndroidPortOptions-" + language + ".ini";
             GameSettings.prepareNativeUi(engine, game, userdata,
                 asset("AndroidPort.u"), GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()));
         } catch (IOException | IllegalArgumentException error) {

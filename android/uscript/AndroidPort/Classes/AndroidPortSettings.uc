@@ -3,7 +3,7 @@ class AndroidPortSettings extends Object config(AndroidPort);
 var config float touchSensitivity, touchAltSensitivity, touchScale, touchOpacity;
 var config float uiScale;
 var config float weaponBarScale, weaponWheelScale;
-var config bool touchVisible, touchWeaponSwipe, touchWeaponTap, touchStaticStick, touchEditLayout;
+var config bool touchVisible, touchWeaponSwipe, touchWeaponButtonSwipe, touchWeaponTap, touchStaticStick, touchEditLayout;
 var config bool touchLeftHanded, touchInvertY, touchWasd;
 var config int touchGyro, touchVehicleProfile;
 // Gyroscope aim: 0 off, 1 sniper mode (scope zoom, a steered Redeemer), 2 while firing,
@@ -31,6 +31,7 @@ defaultproperties
     weaponWheelScale=1.0
     touchVisible=true
     touchWeaponSwipe=true
+    touchWeaponButtonSwipe=true
     touchOpacity=0.65
     touchGyroMode=-1
     touchGyroSensitivity=1.0

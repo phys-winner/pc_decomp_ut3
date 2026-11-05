@@ -136,58 +136,12 @@ public class PieFitCheck {
                             ROOT / "android/app/src/org/ut3/port/TouchLayout.java", path], check=True)
             subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "org.ut3.port.PieFitCheck"], check=True)
 
-    def test_closed_ime_retires_served_connection_before_hiding(self):
-        java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
-        source = (ROOT / "android/app/src/org/ut3/port/GameControls.java").read_text(encoding="utf-8")
-        def method(signature):
-            begin = source.index(signature)
-            end = source.index("{", begin) + 1
-            depth = 1
-            while depth:
-                depth += (source[end] == "{") - (source[end] == "}")
-                end += 1
-            return source[begin:end]
-        program = r'''
-class Context {
-    static final String INPUT_METHOD_SERVICE="input_method";
-    InputMethodManager manager;
-    Object getSystemService(String name){assert name.equals(INPUT_METHOD_SERVICE);return manager;}
-}
-class InputMethodManager {
-    int restarts,hides;ImeRetireCheck served;
-    void restartInput(ImeRetireCheck view){
-        assert !view.imeRequested&&!view.imeWasVisible&&!view.onCheckIsTextEditor();
-        ++restarts;served=view;view.hideKeyboard(); // Re-entry must be neutral after editor retirement.
-    }
-    void hideSoftInputFromWindow(Object token,int flags){assert restarts==hides+1;++hides;}
-}
-public class ImeRetireCheck {
-    boolean imeRequested,imeWasVisible,authoritative=true;long cursorContext=7,imeSession=10,imeTouchContext;
-    final Runnable imeOpen=()->{};void removeCallbacks(Runnable value){assert value==imeOpen;}
-    final Context context=new Context();Context getContext(){return context;}Object getWindowToken(){return this;}
-''' + method("void hideKeyboard") + method("@Override public boolean onCheckIsTextEditor").replace("@Override ", "") + r'''
-    public static void main(String[] args){
-        ImeRetireCheck view=new ImeRetireCheck();InputMethodManager imm=new InputMethodManager();view.context.manager=imm;
-        view.imeRequested=true;assert view.onCheckIsTextEditor();view.hideKeyboard();
-        assert view.imeSession==11&&imm.restarts==1&&imm.hides==1&&!view.onCheckIsTextEditor();
-        view.hideKeyboard();assert view.imeSession==11&&imm.restarts==1&&imm.hides==1;
-        view.imeWasVisible=true;view.hideKeyboard();assert view.imeSession==12&&imm.restarts==2&&imm.hides==2;
-        view.imeRequested=true;view.context.manager=null;view.hideKeyboard();assert view.imeSession==13&&!view.onCheckIsTextEditor();
-        System.out.println("PASS production hideKeyboard: editor false/session retired before IMM restart then hide; recursive and repeated close neutral; null IMM safe");
-    }
-}
-'''
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "ImeRetireCheck.java"
-            path.write_text(program, encoding="utf-8")
-            subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary, path], check=True)
-            subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "ImeRetireCheck"], check=True)
 
     def test_ui_visibility_and_ime_sessions(self):
         java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
         source = (ROOT / "android/app/src/org/ut3/port/GameControls.java").read_text(encoding="utf-8")
         methods = "\n".join(self._method(source, name) for name in ("private int action", "private boolean visible",
-            "private boolean textUi", "private boolean ready", "@Override public boolean performEditorAction",
+            "private boolean textUi",
             "private void applyPendingSettings"))
         program = r'''
 package org.ut3.port;
@@ -206,9 +160,6 @@ public class ImeGuardCheck extends EditorBase {
         public void reset(){}
     });
     void reloadSettings(){++reloads;settingsPending=false;}
-    final TouchText text=new TouchText(new TouchText.Sink(){
-        public boolean commit(String value){++commits;return true;}public boolean delete(int count){return true;}
-    });
     void hideKeyboard(){++imeHidden;imeRequested=false;++imeSession;}
 ''' + methods + r'''
     boolean only(int... controls){
@@ -254,14 +205,7 @@ public class ImeGuardCheck extends EditorBase {
         assert view.visible(TouchLayout.MODE)&&!view.visible(TouchLayout.SETTINGS)&&view.visible(TouchLayout.FIRE)&&!view.visible(TouchLayout.KEYBOARD);
         view.cursorContext=5;assert view.only();
         view.authoritative=true;view.cursorContext=7;view.playing=false;
-        assert !view.ready()&&view.imeRequested&&view.imeHidden==0;
-        assert !view.performEditorAction(6)&&view.imeRequested&&view.imeHidden==0&&view.commits==0;
-        view.session=2;assert view.ready()&&view.text.compose("A");
-        assert view.performEditorAction(6)&&!view.imeRequested&&view.imeHidden==1&&view.commits==1;
-        view.imeRequested=true;view.imeSession=10;view.session=9;
-        assert !view.performEditorAction(6)&&view.imeRequested&&view.imeHidden==1;
-        view.session=10;GameActivity.current=11;
-        assert !view.ready()&&!view.imeRequested&&view.imeHidden==2;
+        view.imeRequested=false;
         view.settingsPending=true;view.applyPendingSettings();
         assert view.reloads==0&&view.settingsPending;
         view.cursorContext=6;view.menuId=1;view.applyPendingSettings();assert view.reloads==0;
@@ -269,7 +213,7 @@ public class ImeGuardCheck extends EditorBase {
         view.editId=-1;view.input.down(3,0,0,0,TouchInput.LOOK,-1);view.applyPendingSettings();assert view.reloads==0;
         view.input.cancel();view.imeRequested=true;view.applyPendingSettings();assert view.reloads==0;
         view.imeRequested=false;view.applyPendingSettings();assert view.reloads==1&&!view.settingsPending;
-        System.out.println("PASS production visibility: original UI shows the keyboard only, no settings button, loading none, foot/ground/air/board/turret sets, editor on-foot set, legacy PLAY fallback; stale IME session/Done cannot commit or hide a new keyboard; deferred settings reload");
+        System.out.println("PASS production visibility: original UI shows the keyboard only, no settings button, loading none, foot/ground/air/board/turret sets, editor on-foot set, legacy PLAY fallback; deferred settings reload");
     }
 }
 '''
@@ -277,7 +221,6 @@ public class ImeGuardCheck extends EditorBase {
             path = Path(temporary) / "ImeGuardCheck.java"
             path.write_text(program, encoding="utf-8")
             subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary,
-                            ROOT / "android/app/src/org/ut3/port/TouchText.java",
                             ROOT / "android/app/src/org/ut3/port/TouchInput.java",
                             ROOT / "android/app/src/org/ut3/port/TouchLayout.java", path], check=True)
             subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "org.ut3.port.ImeGuardCheck"], check=True)
@@ -294,7 +237,7 @@ public class ImeGuardCheck extends EditorBase {
                 end += 1
             return text[begin:end]
         dispatch = method("android/app/src/org/ut3/port/GameActivity.java", "@Override public boolean dispatchKeyEvent")
-        preime = method("android/app/src/org/ut3/port/GameControls.java", "@Override public boolean onKeyPreIme")
+        preime = ""
         program = r'''
 class KeyEvent {
     static final int ACTION_DOWN=0,ACTION_UP=1,KEYCODE_BACK=4,KEYCODE_ESCAPE=111,KEYCODE_A=29,KEYCODE_Z=54,
@@ -322,7 +265,7 @@ public class ActivityBackCheck extends ActivityBase {
 ''' + dispatch + r'''
     boolean deliver(int action,int key,long time) {
         KeyEvent event=new KeyEvent(action,key,time);
-        return controls.onKeyPreIme(key,event)||dispatchKeyEvent(event);
+        return dispatchKeyEvent(event);
     }
     public static void main(String[] args) {
         ActivityBackCheck view=new ActivityBackCheck();view.controls.overlay=true;
@@ -332,7 +275,7 @@ public class ActivityBackCheck extends ActivityBase {
         assert view.deliver(0,4,200)&&view.deliver(1,4,200);
         assert view.nativeEdges.equals(java.util.Arrays.asList(27,-27));
         view.nativeEdges.clear();view.controls.imeRequested=true;
-        assert view.deliver(0,4,300)&&view.controls.imeRequested;
+        assert view.deliver(0,4,300)&&!view.controls.imeRequested;
         assert view.deliver(1,4,300)&&!view.controls.imeRequested&&view.controls.hidden==1&&view.nativeEdges.isEmpty();
         view.controls.overlay=true;
         assert view.deliver(0,4,400)&&view.deliver(1,4,400)&&view.controls.closes==2&&view.nativeEdges.isEmpty();
@@ -347,7 +290,7 @@ public class ActivityBackCheck extends ActivityBase {
         view.started=false;assert view.dispatchKeyEvent(new KeyEvent(0,4,800))&&view.launcher==0;
         assert view.dispatchKeyEvent(new KeyEvent(1,4,800))&&view.launcher==1&&view.nativeEdges.isEmpty();
         assert !view.dispatchKeyEvent(new KeyEvent(0,96,801))&&view.controls.pads==1;
-        System.out.println("PASS production Activity/View Back routing: overlay DOWN owns repeats/UP, closes once; original Escape pair preserved without overlay; IME pre-IME consumes both edges; orphan UP neutral; arrows/Tab; gamepad to the layer; back before the start opens the launcher");
+        System.out.println("PASS production Activity/View Back routing: overlay DOWN owns repeats/UP, closes once; original Escape pair preserved without overlay; modal keyboard fallback consumes both edges; orphan UP neutral; arrows/Tab; gamepad to the layer; back before the start opens the launcher");
     }
 }
 '''
@@ -357,40 +300,6 @@ public class ActivityBackCheck extends ActivityBase {
             subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary, source], check=True)
             subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "ActivityBackCheck"], check=True)
 
-    def test_keyboard_back_consumes_both_edges(self):
-        java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
-        source = (ROOT / "android/app/src/org/ut3/port/GameControls.java").read_text(encoding="utf-8")
-        begin = source.index("@Override public boolean onKeyPreIme")
-        end = source.index("{", begin) + 1
-        depth = 1
-        while depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        program = r'''
-class KeyEvent {
-    static final int KEYCODE_BACK=4,ACTION_DOWN=0,ACTION_UP=1;
-    final int action;KeyEvent(int action){this.action=action;}int getAction(){return action;}
-}
-class PreImeBase { public boolean onKeyPreIme(int code,KeyEvent event){return false;} }
-public class PreImeCheck extends PreImeBase {
-    boolean imeRequested=true;int hidden;
-    void hideKeyboard(){imeRequested=false;++hidden;}
-''' + source[begin:end] + r'''
-    public static void main(String[] args) {
-        PreImeCheck view=new PreImeCheck();
-        assert view.onKeyPreIme(4,new KeyEvent(0))&&view.imeRequested&&view.hidden==0;
-        assert view.onKeyPreIme(4,new KeyEvent(1))&&!view.imeRequested&&view.hidden==1;
-        assert !view.onKeyPreIme(4,new KeyEvent(0));
-        view.imeRequested=true;assert !view.onKeyPreIme(99,new KeyEvent(0))&&view.imeRequested;
-        System.out.println("PASS production IME Back consumes DOWN/UP, hides once, and cannot fall through to the original game menu");
-    }
-}
-'''
-        with tempfile.TemporaryDirectory() as temporary:
-            source = Path(temporary) / "PreImeCheck.java"
-            source.write_text(program, encoding="utf-8")
-            subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary, source], check=True)
-            subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "PreImeCheck"], check=True)
 
     def test_external_device_detection(self):
         source = (ROOT / 'android/app/src/org/ut3/port/GameControls.java').read_text(encoding='utf-8')
@@ -429,56 +338,6 @@ public class DeviceCheck {
             subprocess.run([java / 'javac.exe', '--release', '8', '-d', temporary, path], check=True)
             subprocess.run([java / 'java.exe', '-ea', '-cp', temporary, 'org.ut3.port.DeviceCheck'], check=True)
 
-    def test_text_composition(self):
-        java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
-        program = r'''
-package org.ut3.port;
-public class TextCheck {
-    static class Sink implements TouchText.Sink {
-        String committed="";int deleted,calls;boolean accept=true;
-        public boolean commit(String text){++calls;if(!accept)return false;committed+=text;return true;}
-        public boolean delete(int count){if(!accept)return false;deleted+=count;return true;}
-    }
-    public static void main(String[] args) {
-        Sink sink=new Sink();TouchText text=new TouchText(sink);
-        assert text.compose("\u0416\uD83D\uDE00")&&sink.calls==0;
-        assert text.backspace()&&text.before(256).toString().equals("\u0416")&&sink.deleted==0;
-        assert text.commit("\u0416")&&sink.calls==1&&text.finish()&&sink.calls==1;
-        assert text.compose("ab")&&text.compose("abc")&&text.finish()&&sink.committed.equals("\u0416abc");
-        assert text.compose("xy")&&text.delete(4,0)&&sink.deleted==4&&text.before(256).toString().equals("xy");
-        assert text.compose("xy");sink.accept=false;assert !text.delete(3,0)&&text.before(256).toString().equals("xy");
-        assert !text.commit("z")&&text.before(256).toString().equals("xy");sink.accept=true;
-        assert text.finish();
-        Sink other=new Sink();TouchText codepoints=new TouchText(other);
-        assert codepoints.deleteCodePoints(1,0)&&other.deleted==1; // New IME session can delete an existing game field.
-        assert !codepoints.deleteCodePoints(2,0)&&other.deleted==1;
-        assert codepoints.commit("A\uD83D\uDE00B")&&!codepoints.deleteCodePoints(2,0)&&other.deleted==1;
-        assert codepoints.deleteCodePoints(1,0)&&other.deleted==2;
-        assert !codepoints.deleteCodePoints(2,0)&&other.deleted==2;
-        assert codepoints.deleteCodePoints(1,0)&&other.deleted==3; // Delegate one original key, never infer surrogate units.
-        assert !codepoints.deleteCodePoints(2,0);
-        assert codepoints.backspace()&&other.deleted==4;
-        assert codepoints.commit("XYZ")&&codepoints.compose("pq")&&codepoints.deleteCodePoints(2,0)&&other.deleted==6;
-        assert codepoints.before(256).toString().equals("pq")&&codepoints.backspace()&&other.deleted==6;
-        assert codepoints.delete(1,0)&&other.deleted==7&&codepoints.before(256).toString().equals("p");
-        assert !codepoints.deleteCodePoints(2,0)&&!codepoints.deleteCodePoints(0,1);
-        assert !text.delete(-1,0)&&!text.delete(257,0)&&!text.delete(1,1);
-        for(int i=0;i<160;i++)if(i<32||i>=127)assert !TouchText.valid(Character.toString((char)i));
-        assert !TouchText.valid("\uD800")&&!TouchText.valid("\uDC00")&&!TouchText.valid("\uD800x");
-        assert !TouchText.valid("\u2028")&&!TouchText.valid("\u2029")&&!TouchText.valid(null);
-        assert TouchText.valid("\u0416\uD83D\uDE00");
-        char[] max=new char[257];java.util.Arrays.fill(max,'x');assert !TouchText.valid(new String(max));
-        assert TouchText.valid(new String(max,0,256));
-        System.out.println("PASS IME local composition/backspace, outside-composition deletion, one original Backspace for a new/unknown session, bounded BMP multi-delete, no surrogate-count guesses, rejected-sink atomicity, UTF16/control/size bounds");
-    }
-}
-'''
-        with tempfile.TemporaryDirectory() as temporary:
-            source = Path(temporary) / "TextCheck.java"
-            source.write_text(program, encoding="utf-8")
-            subprocess.run([java / "javac.exe", "--release", "8", "-d", temporary,
-                            ROOT / "android/app/src/org/ut3/port/TouchText.java", source], check=True)
-            subprocess.run([java / "java.exe", "-ea", "-cp", temporary, "org.ut3.port.TextCheck"], check=True)
 
     def test_layout_geometry_and_sensor_bounds(self):
         java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"

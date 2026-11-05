@@ -15,7 +15,6 @@ import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
-import android.text.InputType;
 import android.view.Display;
 import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
@@ -30,10 +29,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
-import android.view.inputmethod.BaseInputConnection;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputConnection;
-import android.view.inputmethod.InputMethodManager;
+import android.widget.Toast;
 import java.util.ArrayList;
 
 final class GameControls extends View implements SensorEventListener {
@@ -71,7 +67,7 @@ final class GameControls extends View implements SensorEventListener {
     private Runnable settingsAction;
     private float dp,scale=1,layoutScale=1,opacity=.65f,sensitivity=.22f,gyroSensitivity=1,uiScale=1;
     private boolean playing,editing,leftHanded,invertY,pausedByControl,focused,gyroListening,gyroActive,wasd;
-    private boolean touchVisible=true,weaponSwipe=true,weaponTap,staticStick;
+    private boolean touchVisible=true,weaponSwipe=true,weaponButtonSwipe=true,weaponTap,staticStick;
     private float barScale=1;
     /** On-screen W/A/S/D cross: its centre and cell size while shown, the finger driving it and its direction. */
     private float dpadX,dpadY,dpadCell;
@@ -79,7 +75,10 @@ final class GameControls extends View implements SensorEventListener {
     private int dpadId=-1,dpadDirection=-1;
     private int menuId=-1,profile,profileOverride,gyroMode,sensorRotation=-1;
     private boolean authoritative,layoutDirty=true;
-    private boolean imeRequested,imeWasVisible;
+    private boolean imeRequested;
+    private TextInputDialog textDialog;
+    private long imeContext;
+    private int imePolls;
     private long imeSession;
     private int accessibilityFocus=-1,hovered=-1;
     private long sensorTime;
@@ -211,6 +210,7 @@ final class GameControls extends View implements SensorEventListener {
             barScale=clamp(p.getFloat("weaponBarScale",1),.5f,1);
             touchVisible=p.getBoolean("touchVisible",true);
             weaponSwipe=p.getBoolean("touchWeaponSwipe",true);
+            weaponButtonSwipe=p.getBoolean("touchWeaponButtonSwipe",weaponSwipe);
             weaponTap=p.getBoolean("touchWeaponTap",false);
             staticStick=p.getBoolean("touchStaticStick",false);
             leftHanded=p.getBoolean("touchLeftHanded",false);
@@ -278,84 +278,73 @@ final class GameControls extends View implements SensorEventListener {
             if(!textUi(context)){imeTouchContext=0;return;}
             int state=GameActivity.nativeUiControl(context);
             // END is acknowledged after the original UI has consumed the field's click.
-            if(state==-2){imeTouchContext=0;if(!imeRequested)showKeyboard();return;}
+            if(state==-2){
+                imeTouchContext=0;
+                if(!imeRequested)showKeyboard();
+                return;
+            }
             if(state<0){imeTouchContext=0;return;}
             postOnAnimation(this);
         }
     };
-    void hideKeyboard() {
-        imeTouchContext=0;removeCallbacks(imeOpen);
-        if(!imeRequested&&!imeWasVisible)return;
-        ++imeSession;
-        imeRequested=imeWasVisible=false;
-        InputMethodManager manager=(InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        if(manager!=null) {
-            manager.restartInput(this);
-            manager.hideSoftInputFromWindow(getWindowToken(),0);
-        }
-    }
     private boolean textUi(long context) {
         return authoritative&&(context&3)==3&&context==cursorContext&&context==GameActivity.nativeTouchContext();
+    }
+    void windowFocusLost() { releaseInput(); }
+    void hideKeyboard() {
+        imeTouchContext=0;removeCallbacks(imeOpen);removeCallbacks(dialogPoll);
+        if(!imeRequested)return;
+        imeRequested=false;++imeSession;
+        GameActivity.nativeTextDialogRequest(3,null,imeContext,0);
+        TextInputDialog dialog=textDialog;textDialog=null;
+        if(dialog!=null)dialog.dismiss();
     }
     private void showKeyboard() {
         syncContext();if(!textUi(cursorContext))return;
         if(imeRequested){hideKeyboard();return;}
-        releaseInput();++imeSession;imeRequested=true;
-        if(!requestFocus()){imeRequested=false;return;}
-        final long context=cursorContext;
-        final InputMethodManager manager=(InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        if(manager==null){imeRequested=false;return;}
-        manager.restartInput(this);
-        post(new Runnable(){@Override public void run(){if(imeRequested&&textUi(context))manager.showSoftInput(GameControls.this,InputMethodManager.SHOW_IMPLICIT);}});
+        releaseInput();++imeSession;imeRequested=true;imeContext=cursorContext;imePolls=0;
+        if(!GameActivity.nativeTextDialogRequest(1,null,imeContext,0)){imeRequested=false;textNotice();return;}
+        post(dialogPoll);
     }
-    @Override public boolean onCheckIsTextEditor() { return imeRequested&&authoritative&&(cursorContext&3)==3; }
-    @Override public InputConnection onCreateInputConnection(EditorInfo info) {
-        if(!onCheckIsTextEditor())return null;
-        info.inputType=InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
-        info.imeOptions=EditorInfo.IME_ACTION_DONE|EditorInfo.IME_FLAG_NO_EXTRACT_UI|
-            EditorInfo.IME_FLAG_NO_FULLSCREEN|EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
-        info.initialSelStart=info.initialSelEnd=0;
-        final long context=cursorContext;
-        final long session=++imeSession;
-        final TouchText text=new TouchText(new TouchText.Sink(){
-            @Override public boolean commit(String value){return GameActivity.nativeText(value,context);}
-            @Override public boolean delete(int before){return GameActivity.nativeDelete(before,context);}
-        });
-        return new BaseInputConnection(this,false) {
-            private boolean ready(){if(imeRequested&&session==imeSession&&textUi(context))return true;if(session==imeSession)hideKeyboard();return false;}
-            @Override public boolean commitText(CharSequence value,int position){return ready()&&position==1&&text.commit(value);}
-            @Override public boolean setComposingText(CharSequence value,int position){return ready()&&position==1&&text.compose(value);}
-            @Override public boolean finishComposingText(){return ready()&&text.finish();}
-            @Override public boolean deleteSurroundingText(int before,int after){return ready()&&text.delete(before,after);}
-            @Override public boolean deleteSurroundingTextInCodePoints(int before,int after){return ready()&&text.deleteCodePoints(before,after);}
-            @Override public CharSequence getTextBeforeCursor(int length,int flags){return ready()?text.before(length):"";}
-            @Override public CharSequence getTextAfterCursor(int length,int flags){return "";}
-            @Override public CharSequence getSelectedText(int flags){return null;}
-            @Override public int getCursorCapsMode(int modes){return 0;}
-            @Override public boolean performEditorAction(int action) {
-                if(!ready())return false;
-                boolean result=text.finish();hideKeyboard();return result;
-            }
-            @Override public boolean sendKeyEvent(KeyEvent event) {
-                if(!ready())return false;
-                int code=event.getKeyCode();
-                if(code==KeyEvent.KEYCODE_DEL)return event.getAction()!=KeyEvent.ACTION_DOWN||text.backspace();
-                if(code==KeyEvent.KEYCODE_ENTER||code==KeyEvent.KEYCODE_BACK) {
-                    if(event.getAction()==KeyEvent.ACTION_DOWN)return performEditorAction(EditorInfo.IME_ACTION_DONE);
-                    return true;
-                }
-                int unicode=event.getUnicodeChar();
-                return event.getAction()==KeyEvent.ACTION_DOWN&&unicode>0&&text.commit(new String(Character.toChars(unicode)));
-            }
-        };
+    /** The game refused the text request or never answered it: say so instead of closing silently. */
+    private void textNotice() {
+        Toast.makeText(getContext(),text("Text input is not available here.","Ввод текста здесь недоступен."),
+            Toast.LENGTH_SHORT).show();
     }
-    @Override public boolean onKeyPreIme(int code,KeyEvent event) {
-        if(code==KeyEvent.KEYCODE_BACK&&imeRequested) {
-            if(event.getAction()==KeyEvent.ACTION_UP)hideKeyboard();
-            return true;
+    /* Flags (AndroidPortViewportClient.PortTextRequest): 1 password, 2 the text is typed into the
+     * receiver's own InputChar (nativeText), 4 the console's line (committed without a target),
+     * 8 the receiver's text is longer than the dialog shows; bits 8-16 the limit. */
+    private final Runnable dialogPoll=new Runnable() {
+        @Override public void run() {
+            if(!imeRequested||textDialog!=null)return;
+            if(!textUi(imeContext)){hideKeyboard();return;}
+            if(++imePolls>100){hideKeyboard();textNotice();return;}
+            String[] state=GameActivity.nativeTextDialogState(imeContext);
+            if(state==null){postDelayed(this,50);return;}
+            final int flags=state.length==3?Integer.parseInt(state[1]):0,limit=flags>>8;
+            // A value is never shown cut short: a commit would cut the field's text.
+            if(state.length!=3||state[0].length()>limit){hideKeyboard();textNotice();return;}
+            final long session=imeSession,context=imeContext,target=Long.parseLong(state[2]);
+            final boolean append=(flags&2)!=0;
+            final boolean[] submitted={false};
+            textDialog=new TextInputDialog(activity(),state[0],(flags&1)!=0,limit,
+                (flags&1)!=0?text("Password","Пароль"):(flags&4)!=0?text("Console","Консоль"):text("Text","Текст"),
+                (flags&8)!=0?text("This text is too long to show here: what you type is added to it.",
+                    "Этот текст слишком длинный, чтобы показать его здесь: набранное добавится к нему."):null,value->{
+                    if(session!=imeSession||!textUi(context))return false;
+                    if(value.equals(state[0]))return true;
+                    boolean accepted=append?GameActivity.nativeText(value,context):
+                        GameActivity.nativeTextDialogRequest(2,value,context,target);
+                    submitted[0]=accepted&&!append;
+                    return accepted;
+                },()->{
+                    if(session!=imeSession)return;
+                    if(!submitted[0])GameActivity.nativeTextDialogRequest(3,null,context,0);
+                    imeRequested=false;++imeSession;textDialog=null;requestFocus();
+                });
+            textDialog.show();
         }
-        return super.onKeyPreIme(code,event);
-    }
+    };
     private void mode(boolean next) {
         if(authoritative||(cursorContext&3)==1)return;
         release(); playing=next;layoutDirty=true;
@@ -433,9 +422,6 @@ final class GameControls extends View implements SensorEventListener {
         releaseInput();
         android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());
         safe.set(bars.left,bars.top,bars.right,bars.bottom);
-        boolean shown=insets.isVisible(WindowInsets.Type.ime());
-        if(shown)imeWasVisible=true;
-        else if(imeWasVisible)hideKeyboard();
         if(insets.getDisplayCutout()!=null) {
             safe.left=Math.max(safe.left,insets.getDisplayCutout().getSafeInsetLeft());
             safe.top=Math.max(safe.top,insets.getDisplayCutout().getSafeInsetTop());
@@ -449,7 +435,7 @@ final class GameControls extends View implements SensorEventListener {
     }
     @Override public void onWindowFocusChanged(boolean value) {
         super.onWindowFocusChanged(value); focused=value;
-        if(!value) release(); else updateGyro();
+        if(!value) windowFocusLost(); else updateGyro();
     }
     @Override protected void onDetachedFromWindow() {
         removeCallbacks(contextPoll);removeCallbacks(uiPoll);removeCallbacks(hintCheck);
@@ -893,7 +879,6 @@ final class GameControls extends View implements SensorEventListener {
     }
     private void uiDown(int id,float x,float y) {
         if(menuId>=0||uiInput.active())return;
-        hideKeyboard();
         if(authoritative&&(cursorContext&3)==3) {
             if(uiInput.begin(x,y)) {
                 menuId=id;
@@ -950,7 +935,7 @@ final class GameControls extends View implements SensorEventListener {
         if(weaponPicker) { weaponStick(x,y);return; }
         // A sideways slide walks the original weapon bar instead of waiting for the wheel.
         float dx=x-weaponX,dy=y-weaponY;
-        if(weaponSwipe&&Math.abs(dx)>ViewConfiguration.get(getContext()).getScaledTouchSlop()&&Math.abs(dx)>Math.abs(dy)*1.2f&&
+        if(weaponButtonSwipe&&Math.abs(dx)>ViewConfiguration.get(getContext()).getScaledTouchSlop()&&Math.abs(dx)>Math.abs(dy)*1.2f&&
            (weaponSlots&BAR_SHOWN)!=0&&scrubId<0) {
             int id=weaponId;
             removeCallbacks(weaponHold);
@@ -970,7 +955,7 @@ final class GameControls extends View implements SensorEventListener {
         }
         input.up(id,x,y,time);
         float dx=x-weaponX,dy=y-weaponY;
-        if(weaponSwipe&&Math.abs(dx)>=24*dp&&Math.abs(dx)>Math.abs(dy)*1.4f)input.pulse(dx<0?TouchInput.PREVIOUS:TouchInput.NEXT);
+        if(weaponButtonSwipe&&Math.abs(dx)>=24*dp&&Math.abs(dx)>Math.abs(dy)*1.4f)input.pulse(dx<0?TouchInput.PREVIOUS:TouchInput.NEXT);
         else if(Math.hypot(dx,dy)<=ViewConfiguration.get(getContext()).getScaledTouchSlop()*1.5f)input.pulse(TouchInput.NEXT);
     }
     /** Begin a swipe on the original bar at the selected weapon; false when the bar is not shown. */
@@ -988,7 +973,7 @@ final class GameControls extends View implements SensorEventListener {
     }
     private void scrubMove(float x) {
         if(!scrubButton&&Math.abs(x-scrubX)>ViewConfiguration.get(getContext()).getScaledTouchSlop())scrubMoved=true;
-        if(!weaponSwipe)return;
+        if(!(scrubButton?weaponButtonSwipe:weaponSwipe))return;
         int next=TouchLayout.weaponIndex(scrubStart,x-scrubX,scrubStep,scrubSlots.length);
         if(scrubId<0||next==scrubIndex)return;
         scrubIndex=next;

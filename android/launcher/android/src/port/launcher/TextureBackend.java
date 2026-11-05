@@ -11,6 +11,7 @@ public interface TextureBackend {
 
     final class Scan {
         public long textures, bytes;          /* convertible originals and their size */
+        public boolean estimated;             /* original corpus estimate; conversion discovers actual files */
         public int converted;                 /* 0, ETC2 or ASTC: an existing conversion */
         public long convertedTextures, convertedBytes;
         public String failure;                /* why the game's files could not be read; null */

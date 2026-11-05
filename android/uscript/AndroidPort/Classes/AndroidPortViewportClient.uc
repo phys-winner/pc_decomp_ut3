@@ -13,6 +13,10 @@ var transient bool PortPageReady;
 var transient int PortInputMode;
 var transient int PortInputEpoch;
 var transient int PortVehicleProfile;
+// Native text editor mailbox; only the viewport Tick calls the original editbox API.
+var transient int PortTextCommand, PortTextFlags, PortTextEpoch;
+var transient UIEditBox PortTextTarget;
+var transient string PortTextValue, PortTextInput;
 // Host mailbox: 1 opens Android settings, 2 hides controls, 3 shows them.
 // Script acknowledges receipt with zero; no config persistence is involved.
 var transient int PortMenuRequest;
@@ -1595,6 +1599,150 @@ function HidePortCursor()
     PortCursorSkin = UIController.SceneClient.ActiveSkin;
 }
 
+function ClearPortText()
+{
+    PortTextCommand = 0;
+    PortTextValue = "";
+    PortTextTarget = None;
+    PortTextInput = "";
+    PortTextFlags = 0;
+    PortTextEpoch = 0;
+}
+
+/**
+ * PortTextFlags of the native dialog for a receiver holding Length UTF-16 units: bit 0 password,
+ * bit 1 the dialog opens empty and its text is typed into the receiver's original InputChar,
+ * bit 2 the receiver is the console's line, bit 3 the receiver's text is longer than the dialog
+ * can show (with bit 1); bits 8-16 the dialog's limit, 1..256 (one native packet).
+ */
+static function int PortTextRequest(int Length, int MaxCharacters, bool bPassword, bool bConsole)
+{
+    local int Flags, Limit;
+    Limit = 256;
+    if (MaxCharacters > 0)
+        Limit = Min(MaxCharacters, Limit);
+    if (bPassword)
+        Flags = 1;
+    // Never shown cut short (a commit would cut the text): the receiver's own InputChar adds to it.
+    if (Length > Limit)
+        return Flags | 2 | 8 | (256 << 8);
+    if (bConsole)
+        Flags = Flags | 4;
+    return Flags | (Limit << 8);
+}
+
+/** The original console takes text while typing or open; chat types into it too (Talk/TeamTalk: StartTyping). */
+function bool PortConsoleTyping()
+{
+    local name ConsoleState;
+    if (ViewportConsole == None)
+        return false;
+    ConsoleState = ViewportConsole.GetStateName();
+    return ConsoleState == 'Typing' || ConsoleState == 'Open';
+}
+
+/**
+ * SetUserText of a field, which keeps the old text when the new one equals it but for the case of
+ * ASCII letters (the original compares them with _wcsicmp, UT3.exe 0x0108FAE0): such a change goes
+ * through an empty text, so the text the player typed is what the field holds.
+ */
+static function bool PortSetUserText(UIEditBox Edit, string Value)
+{
+    if (Edit.StringRenderComponent.SetUserText(Value))
+        return true;
+    return Edit.GetValue(true) != Value && Edit.StringRenderComponent.SetUserText("")
+        && Edit.StringRenderComponent.SetUserText(Value);
+}
+
+/** A line as the original Console.AppendInputText types it: 0x20-0xFF without ~ and `. */
+static function string PortConsoleText(string Text)
+{
+    local string Result;
+    local int Index, Character;
+    for (Index = 0; Index < Len(Text); ++Index)
+    {
+        Character = Asc(Mid(Text, Index, 1));
+        if (Character >= 0x20 && Character < 0x100 && Character != Asc("~") && Character != Asc("`"))
+            Result $= Chr(Character);
+    }
+    return Result;
+}
+
+function HandlePortText()
+{
+    local UIScene Scene;
+    local UIEditBox Edit;
+    local int Index, Limit;
+    local string Value;
+    if (PortTextCommand == 0)
+        return;
+    if (PortInputMode != 2 || PortTextCommand == 3
+        || (PortTextCommand != 1 && PortTextEpoch != PortInputEpoch))
+    {
+        ClearPortText();
+        return;
+    }
+    if (UIController != None && UIController.SceneClient != None)
+        Scene = UIController.SceneClient.GetActiveScene();
+    if (Scene != None)
+        Edit = UIEditBox(Scene.GetFocusedControl(true));
+    if (PortTextCommand == 1)
+    {
+        ClearPortText();
+        PortTextEpoch = PortInputEpoch;
+        // The console comes before the UI in the viewport's interactions and takes the
+        // characters while it is open, so its line is what the player edits.
+        if (PortConsoleTyping())
+        {
+            PortTextFlags = PortTextRequest(Len(ViewportConsole.TypedStr), 0, false, true);
+            if ((PortTextFlags & 2) == 0)
+                PortTextValue = ViewportConsole.TypedStr;
+        }
+        else if (Edit != None && !Edit.IsReadOnly())
+        {
+            Value = Edit.GetValue();
+            PortTextFlags = PortTextRequest(Len(Value), Edit.MaxCharacters, Edit.bPasswordMode, false);
+            if ((PortTextFlags & 2) == 0)
+            {
+                PortTextTarget = Edit;
+                PortTextValue = Value;
+            }
+        }
+        else
+            PortTextFlags = 2 | (256 << 8); // another original text receiver: typed through InputChar
+        // Allocate the request buffer with the original FString allocator before native writes.
+        for (Index = 0; Index < 256; ++Index)
+            PortTextInput $= " ";
+        PortTextCommand = -1;
+    }
+    else if (PortTextCommand == 2)
+    {
+        Limit = (PortTextFlags >> 8) & 511;
+        if ((PortTextFlags & 2) == 0 && Len(PortTextInput) <= Limit && Len(PortTextInput) <= 256)
+        {
+            if ((PortTextFlags & 4) != 0)
+            {
+                // The whole line, as the original StartTyping sets it.
+                if (PortTextTarget == None && PortConsoleTyping())
+                {
+                    Value = PortConsoleText(PortTextInput);
+                    ViewportConsole.SetInputText(Value);
+                    ViewportConsole.SetCursorPos(Len(Value));
+                }
+            }
+            else if (Edit != None && Edit == PortTextTarget && !Edit.IsReadOnly() && Edit.StringRenderComponent != None)
+            {
+                // As if typed into the field: what its CharacterSet does not take is dropped.
+                // User input stays literal, including strings which look like UI markup.
+                Value = class'AndroidPortCharacterSet'.static.Filter(PortTextInput, Edit.CharacterSet);
+                if (PortSetUserText(Edit, Value))
+                    Edit.NotifyValueChanged(0);
+            }
+        }
+        ClearPortText();
+    }
+}
+
 event Tick(float DeltaTime)
 {
     local int Index;
@@ -1608,6 +1756,7 @@ event Tick(float DeltaTime)
         PortTabsHooked = true;
     }
     UpdatePortInputContext();
+    HandlePortText();
     HidePortCursor();
     HandlePortScrollRequest();
     if (PortScrolledOptions != None)

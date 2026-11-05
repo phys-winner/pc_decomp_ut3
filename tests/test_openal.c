@@ -172,6 +172,16 @@ int main(void)
     assert(get_metrics(&m, sizeof m));
     assert(m.audio_api == 2 && m.stream_state == 4 && m.callbacks > still_paused.callbacks);
     assert(m.frames > 0 && m.nonzero_samples > 0 && !m.nonfinite_samples && m.peak_abs > 0.0001);
+    for(unsigned cycle=0;cycle<3;++cycle) {
+        ut3_openal_pause(1);
+        assert(API(alIsSource,1,source) && API(alIsBuffer,1,MEM32(ids)));
+        ut3_openal_pause(0);ut3_openal_pause(0);
+        API(alSourcePlay,1,source);nap(40);
+        audio_metrics next={0};assert(get_metrics(&next,sizeof next));
+        assert(next.audio_api==2 && next.stream_state==4 && next.callbacks>m.callbacks);
+        assert(API(alcGetCurrentContext,0,0)==ctx && API(alcGetError,1,dev)==ALC_NO_ERROR);
+        m=next;noerror();
+    }
     printf("OPENAL_METRICS_JSON {\"audio_api\":%d,\"stream_state\":%d,\"callbacks\":%llu,\"frames\":%llu,\"nonzero_samples\":%llu,\"nonfinite_samples\":%llu,\"peak_abs\":%.9g}\n",
            m.audio_api, m.stream_state, (unsigned long long)m.callbacks, (unsigned long long)m.frames,
            (unsigned long long)m.nonzero_samples, (unsigned long long)m.nonfinite_samples, m.peak_abs);

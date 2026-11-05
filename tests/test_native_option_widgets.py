@@ -288,16 +288,20 @@ class NativeOptionWidgets(unittest.TestCase):
     def test_original_zero_option_index_preserves_config_order(self):
         self.assertEqual(self.native_order(list(range(1, 15))), [1, 14, 2, 13, 3, 12, 4, 11, 5, 10, 6, 9, 7, 8])
         self.assertEqual(self.native_order([0] * 14), list(range(1, 15)))
-        for language in ("AndroidPortOptions.ini", "AndroidPortOptions-RUS.ini"):
+        # Config order of the options is their order on screen (all OptionIndex=0, see above).
+        values = ["touchSensitivity", "touchAltSensitivity", "touchScale", "uiScale", "touchOpacity",
+                  "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity", "renderScale",
+                  "touchVisible", "touchStaticStick", "touchWeaponSwipe", "touchWeaponButtonSwipe",
+                  "touchWeaponTap", "weaponBarScale", "weaponWheelScale"]
+        port = ["touchVehicleProfile", "touchGyro", "language", "fpsLimit"]
+        languages = sorted(path.name for path in (ROOT / "android/uscript/AndroidPort").glob("AndroidPortOptions*.ini"))
+        self.assertEqual(languages, ["AndroidPortOptions-%s.ini" % code for code in
+                                     ("CZE", "DEU", "ESN", "FRA", "HUN", "ITA", "POL", "RUS")] + ["AndroidPortOptions.ini"])
+        for language in languages:
             text = (ROOT / "android/uscript/AndroidPort" / language).read_text(encoding="utf-8")
-            self.assertEqual(re.findall(r"^OptionIndex=(\d+)$", text, re.M), ["0"] * 20)
-            self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPortValues:(\w+)>", text),
-                ["touchSensitivity", "touchAltSensitivity", "touchScale", "uiScale", "touchOpacity",
-                 "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity", "renderScale",
-                 "touchVisible", "touchStaticStick", "touchWeaponSwipe", "touchWeaponTap",
-                 "weaponBarScale", "weaponWheelScale"])
-            self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPort:(\w+)>", text),
-                ["touchVehicleProfile", "touchGyro", "language", "fpsLimit"])
+            self.assertEqual(re.findall(r"^OptionIndex=(\d+)$", text, re.M), ["0"] * (len(values) + len(port)), language)
+            self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPortValues:(\w+)>", text), values, language)
+            self.assertEqual(re.findall(r"DataStoreMarkup=<AndroidPort:(\w+)>", text), port, language)
             if language == "AndroidPortOptions.ini":
                 labels = next(line for line in text.splitlines() if 'Tag="language",Labels=' in line)
                 self.assertTrue(labels.isascii(), "INT stock fonts require ASCII language labels")

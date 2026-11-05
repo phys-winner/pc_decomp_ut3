@@ -10,6 +10,7 @@
 #include <dlfcn.h>
 #include <jni.h>
 #include <limits.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -375,11 +376,36 @@ JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeStart(JNIEnv *env, j
     (*env)->ReleaseStringUTFChars(env, data, user);
     if (size < 0 || size >= (int)sizeof data_dir) return -1;
     if (setenv("DXVK_LOG_PATH", data_dir, 1) || setenv("DXVK_STATE_CACHE_PATH", data_dir, 1)) return errno;
+    {
+        /* GLES program binaries (d3d9_shader.c): without a cache folder every start compiled and
+         * linked every material's program again, in the frame that first drew it. */
+        char cache[1100];
+        int count = snprintf(cache, sizeof cache, "%s/ShaderCache", data_dir);
+        if (count > 0 && count < (int)sizeof cache && (mkdir(cache, 0775) == 0 || errno == EEXIST))
+            void_files_set_cache(cache);
+    }
+    {
+        /* A player's own DXVK options: userdata/dxvk.conf, in DXVK's dxvk.conf syntax. */
+        char conf[1100];
+        int count = snprintf(conf, sizeof conf, "%s/dxvk.conf", data_dir);
+        if (count > 0 && count < (int)sizeof conf && access(conf, R_OK) == 0) {
+            if (setenv("DXVK_CONFIG_FILE", conf, 1)) return errno;
+        } else unsetenv("DXVK_CONFIG_FILE");
+    }
     if (turnip) {
         char debug_file[1100];
         int count = snprintf(debug_file, sizeof debug_file, "%s/tu-debug.txt", data_dir);
         if (count < 0 || count >= (int)sizeof debug_file) return EOVERFLOW;
         if (setenv("TU_DEBUG_FILE", debug_file, 1)) return errno;
+        /* Some Turnip builds (the port's Mesa 26.0 R8 on Adreno 735) miss a cache flush between
+         * draws: skinned models read stale data, stretch across the screen or vanish. flushall
+         * flushes after every draw; on the measured CPU-bound scenes it cost no frame rate. */
+        if (!strstr(getenv("TU_DEBUG") ? getenv("TU_DEBUG") : "", "flushall")) {
+            char tu_debug[300];
+            const char *base = getenv("TU_DEBUG");
+            snprintf(tu_debug, sizeof tu_debug, "%s%sflushall", base ? base : "", base && *base ? "," : "");
+            if (setenv("TU_DEBUG", tu_debug, 1)) return errno;
+        }
     } else unsetenv("TU_DEBUG_FILE");
     int folder_error = part_folder(game_dir, sizeof game_dir, "PORT_PART_GAME", "/sdcard/UT3/game");
     if (folder_error) return folder_error;

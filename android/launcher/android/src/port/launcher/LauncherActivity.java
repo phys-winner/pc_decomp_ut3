@@ -50,6 +50,8 @@ public final class LauncherActivity extends Activity {
     private Gpu gpu;
     private String busy;
     private boolean checking;
+    private String updateMessage, textureMessage;
+    private boolean updateError, textureError;
     private TextureBackend textures;
     private TextureBackend.Scan textureScan;
     private String textureSource;
@@ -64,7 +66,7 @@ public final class LauncherActivity extends Activity {
     private File pendingFile;
     private List<Install.ArchivePart> pendingPlan;
 
-    private LinearLayout main, side, permissions, distributions, files, renderer, options, texturesBox, space, update, about, work;
+    private LinearLayout main, side, permissions, distributions, files, renderer, options, texturesBox, space, update, about, work, workHome;
     private TextView note, workTitle, workText, workStop;
     private ProgressBar workBar;
 
@@ -177,6 +179,7 @@ public final class LauncherActivity extends Activity {
         super.onResume();
         if (ui == null) return;
         visible = true;
+        textureScan = null;
         refresh();
         if (Work.current != null) { handler.removeCallbacks(watcher); handler.post(watcher); }
     }
@@ -228,7 +231,8 @@ public final class LauncherActivity extends Activity {
         page.addView(columns);
         update = holder(main);
         permissions = holder(main);
-        work = ui.card(main);
+        workHome = holder(main);
+        work = ui.card(workHome);
         workTitle = ui.heading("");
         work.addView(workTitle);
         workBar = ui.progress();
@@ -306,6 +310,23 @@ public final class LauncherActivity extends Activity {
         refreshSpace(idle);
         refreshUpdate();
         refreshAbout();
+        placeWork();
+    }
+
+    private void placeWork() {
+        Work.Job job = Work.current;
+        LinearLayout parent = workHome;
+        if (job != null && job.title.equals(Texts.t(this, Texts.JOB_TEXTURES))) {
+            if (texturesBox.getChildCount() == 0) {
+                LinearLayout card = ui.card(texturesBox);
+                card.addView(ui.heading(Texts.t(this, Texts.TEXTURES)));
+            }
+            parent = (LinearLayout) texturesBox.getChildAt(0);
+        }
+        if (work.getParent() != parent) {
+            ((android.view.ViewGroup) work.getParent()).removeView(work);
+            parent.addView(work);
+        }
     }
 
     private void note(String text, boolean error) {
@@ -881,6 +902,14 @@ public final class LauncherActivity extends Activity {
 
     private void finished(Work.Job job) {
         Work.current = null;
+        if (job.title.equals(Texts.t(this, Texts.JOB_TEXTURES))) {
+            textureError = job.failure != null && job.failure.code != Failure.CANCELLED;
+            textureMessage = job.failure == null ? Texts.t(this, Texts.DONE)
+                : Texts.failure(this, job.failure);
+            textureScan = null;
+            refresh();
+            return;
+        }
         String from = State.get(this, State.CHOICES, "importingFrom", ""), fromFile = State.get(this, State.CHOICES, "importingFile", "");
         State.update(this, State.CHOICES, values -> {
             values.remove("importing");
@@ -1096,6 +1125,7 @@ public final class LauncherActivity extends Activity {
         if (!source.equals(textureSource)) {
             textureSource = source;
             textureScan = null;
+            textureMessage = null;
         }
         if (textures == null) {
             try {
@@ -1108,10 +1138,9 @@ public final class LauncherActivity extends Activity {
         if (textureScan == null) {
             if (!textureScanning && idle) {
                 File root = textureRoot();
-                Spec.Distribution distribution = selected;
                 TextureBackend backend = textures;
                 textureScanning = true;
-                background(() -> withTextureArchive(distribution, (index, fd) -> backend.scan(root, index, fd)),
+                background(() -> backend.scan(root),
                     scan -> textureScanFinished(source, scan), failure -> {
                         TextureBackend.Scan scan = new TextureBackend.Scan();
                         scan.failure = failure.getMessage() != null ? failure.getMessage() : failure.toString();
@@ -1130,6 +1159,7 @@ public final class LauncherActivity extends Activity {
         if (s.failure == null && s.textures == 0 && !converted) return;
         LinearLayout card = ui.card(texturesBox);
         card.addView(ui.heading(Texts.t(this, Texts.TEXTURES)));
+        if (textureMessage != null) card.addView(ui.label(textureMessage, 13, textureError ? ui.error : ui.good));
         if (s.failure != null) {
             card.addView(ui.label(s.failure, 13, ui.error));
             TextView retry = ui.button(Texts.t(this, Texts.TEX_RESCAN), Ui.SECONDARY,
@@ -1154,7 +1184,8 @@ public final class LauncherActivity extends Activity {
             return;
         }
         card.addView(ui.label(Texts.t(this, Texts.TEX_WHY), 13, ui.muted));
-        card.addView(ui.label(Texts.fmt(this, Texts.TEX_FOUND, s.textures, Texts.size(this, s.bytes)), 14, ui.text));
+        card.addView(ui.label(Texts.fmt(this, s.estimated ? Texts.TEX_ESTIMATE : Texts.TEX_FOUND,
+            s.textures, Texts.size(this, s.bytes)), 14, ui.text));
         List<TextView> buttons = new ArrayList<>();
         if (gpu.astc) buttons.add(ui.button(Texts.fmt(this, Texts.TEX_CONVERT, "ASTC"), Ui.SECONDARY, () -> startTextures(TextureBackend.ASTC)));
         buttons.add(ui.button(Texts.fmt(this, Texts.TEX_CONVERT, "ETC2"), Ui.SECONDARY, () -> startTextures(TextureBackend.ETC2)));
@@ -1164,6 +1195,7 @@ public final class LauncherActivity extends Activity {
 
     /** format 0 removes the conversion, TEX_REMOVE_ORIGINALS the originals it replaced. */
     private void startTextures(int format) {
+        textureMessage = null;
         File root = textureRoot();
         Spec.Distribution distribution = selected;
         TextureBackend backend = textures;
@@ -1262,14 +1294,17 @@ public final class LauncherActivity extends Activity {
     private void checkUpdates(boolean manual) {
         if (checking || !spec.updates) return;
         checking = true;
+        updateMessage = null;
         refreshAbout();
         background(() -> Updates.check(this), info -> {
             checking = false;
-            if (manual) note(Updates.available(this) == null ? Texts.t(this, Texts.UP_TO_DATE) : null, false);
+            updateError = false;
+            if (manual) updateMessage = Updates.available(this) == null ? Texts.t(this, Texts.UP_TO_DATE) : null;
             refresh();
         }, e -> {
             checking = false;
-            if (manual) note(Texts.fmt(this, Texts.UPDATE_FAILED, e.getMessage()), true);
+            updateError = true;
+            if (manual) updateMessage = Texts.fmt(this, Texts.UPDATE_FAILED, e.getMessage());
             refresh();
         });
     }
@@ -1327,6 +1362,7 @@ public final class LauncherActivity extends Activity {
             card.addView(ui.buttons(buttons.toArray(new TextView[0])));
         }
         if (spec.updates) {
+            if (updateMessage != null) card.addView(ui.label(updateMessage, 13, updateError ? ui.error : ui.good));
             TextView check = ui.button(Texts.t(this, checking ? Texts.CHECKING : Texts.CHECK_UPDATES), Ui.SECONDARY, () -> checkUpdates(true));
             Ui.enable(check, !checking);
             card.addView(ui.buttons(check));

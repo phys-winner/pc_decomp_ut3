@@ -1,4 +1,4 @@
-"""Sample an existing UT3 PID with system Simpleperf; never start or restart the app."""
+"""Sample an existing UT3 PID with the matching NDK Simpleperf; never restart the app."""
 import argparse
 import datetime
 import hashlib
@@ -35,14 +35,16 @@ def main():
     parser.add_argument("--pid", type=int, required=True, help="Already running UT3 PID supplied by the caller")
     parser.add_argument("--serial", required=True, help="Explicit ADB device serial")
     parser.add_argument("--duration", type=float, default=15)
+    parser.add_argument("--event", default="cpu-cycles:u", help="Simpleperf event; cpu-cycles also samples kernel time")
     parser.add_argument("--receipt", type=Path, default=ROOT / "build/apk/ut3.json", help="Exact installed APK receipt, including archived comparison builds")
     args = parser.parse_args()
     if args.pid <= 0 or not 1 <= args.duration <= 60:
         parser.error("Use a positive existing PID and a duration between 1 and 60 seconds")
     adb_path = shutil.which("adb") or str(SDK / "platform-tools/adb.exe")
     host_perf = NDK / "simpleperf/bin/windows/x86_64/simpleperf.exe"
+    device_perf = NDK / "simpleperf/bin/android/arm64/simpleperf"
     cache_builder = NDK / "simpleperf/binary_cache_builder.py"
-    for path in (Path(adb_path), host_perf, cache_builder):
+    for path in (Path(adb_path), host_perf, device_perf, cache_builder):
         if not path.is_file():
             parser.error(f"Required profiling input is missing: {path}")
     adb = [adb_path, "-s", args.serial]
@@ -70,15 +72,24 @@ def main():
     out = ROOT / "build/cpu-profile" / f"{args.pid}-{stamp}"
     out.mkdir(parents=True, exist_ok=False)
     remote = f"cache/cpu-{args.pid}-{stamp}.data"
-    record = adb + ["shell", "run-as", PACKAGE, "/system/bin/simpleperf", "record",
-                    "-p", str(args.pid), "-e", "cpu-cycles:u", "-f", "1000",
+    recorder_hash = digest(device_perf)
+    recorder = "cache/simpleperf-" + recorder_hash[:16]
+    staging = "/data/local/tmp/ut3-simpleperf-" + recorder_hash[:16]
+    subprocess.run(adb + ["push", str(device_perf), staging], check=True, capture_output=True)
+    device("run-as", PACKAGE, "cp", staging, recorder)
+    device("run-as", PACKAGE, "chmod", "700", recorder)
+    if device("run-as", PACKAGE, "sha256sum", recorder).split()[0] != recorder_hash:
+        raise RuntimeError("Staged NDK Simpleperf differs from the local recorder")
+    record = adb + ["shell", "run-as", PACKAGE, recorder, "record", "--in-app",
+                    "-p", str(args.pid), "-e", args.event, "-f", "1000",
                     "--call-graph", "fp", "--duration", str(args.duration), "-o", remote]
     metadata = {"status": "RECORDING", "pid": args.pid, "uid": uid, "serial": args.serial,
-                "event": "cpu-cycles:u", "frequency": 1000, "callgraph": "fp",
+                "event": args.event, "frequency": 1000, "callgraph": "fp",
                 "duration_seconds": args.duration, "record_command": record,
                 "installed_apk_sha256": installed_sha,
                 "local_library_sha256": receipt["library_sha256"], "remote_data": remote,
-                "scope": "Existing PID only; no app launch/stop, install, clear, adb root, setprop or performance policy changes."}
+                "recorder_sha256": recorder_hash, "remote_recorder": recorder, "recorder_staging": staging,
+                "scope": "Existing PID only; stages verified NDK recorder in app cache. No app launch/stop, install, clear, adb root, setprop or performance policy changes."}
     meta_path = out / "profile.json"
     try:
         # Isolate installed libraries before recording: compiler temp files in live
@@ -126,7 +137,7 @@ def main():
                 raise RuntimeError(f"NDK report failed; inspect {out / name}")
         report = (out / "report-self.txt").read_text(encoding="utf-8")
         counts = re.findall(r"Samples:\s*(\d+)", report)
-        if "cpu-cycles" not in report or not counts or sum(map(int, counts)) == 0:
+        if args.event.split(":")[0] not in report or not counts or sum(map(int, counts)) == 0:
             raise RuntimeError("No CPU-cycle samples were reported; raw perf.data was retained")
         metadata["samples"] = sum(map(int, counts))
         metadata["status"] = "CAPTURED_AND_REPORTED"

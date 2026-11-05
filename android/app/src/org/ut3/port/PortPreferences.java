@@ -38,6 +38,10 @@ final class PortPreferences {
                 save();
             }
         }
+        if (values.containsKey("touchweaponswipe") && !values.containsKey("touchweaponbuttonswipe")) {
+            put("touchWeaponButtonSwipe", getBoolean("touchWeaponSwipe", true));
+            save();
+        }
     }
 
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }

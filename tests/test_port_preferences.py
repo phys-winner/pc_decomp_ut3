@@ -57,6 +57,11 @@ public class PreferencesCheck {
         assert withLayout.getFloat("touchX0",0)==.5f;
         withLayout.put("fpsLimit",60);withLayout.save();
         assert GameSettings.read(ini).contains("Preserve=1");
+        GameSettings.write(ini,"[AndroidPort.AndroidPortSettings]\ntouchWeaponSwipe=False\n");
+        PortPreferences migrated=new PortPreferences(root);
+        assert !migrated.getBoolean("touchWeaponSwipe",true)&&!migrated.getBoolean("touchWeaponButtonSwipe",true);
+        migrated.put("touchWeaponSwipe",true);migrated.save();
+        assert !new PortPreferences(root).getBoolean("touchWeaponButtonSwipe",true):"An existing button choice stays independent";
         try {new PortPreferences(null);throw new AssertionError();}catch(IOException expected){}
         System.out.println("PASS: settings defaults, malformed/nonfinite values, save verification, atomic replacement and restart");
     }

@@ -30,6 +30,7 @@ event GetSupportedScriptFields(out array<UIDataProviderField> out_Fields)
     AddScriptField(out_Fields, 'touchWasd', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchVisible', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchWeaponSwipe', DATATYPE_Property);
+    AddScriptField(out_Fields, 'touchWeaponButtonSwipe', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchWeaponTap', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchStaticStick', DATATYPE_Property);
     AddScriptField(out_Fields, 'weaponBarScale', DATATYPE_RangeProperty);
@@ -97,6 +98,7 @@ event bool GetFieldValue(string FieldName, out UIProviderScriptFieldValue FieldV
     case 'touchWasd': FieldValue.StringValue = Settings.touchWasd ? "1" : "0"; return true;
     case 'touchVisible': FieldValue.StringValue = Settings.touchVisible ? "1" : "0"; return true;
     case 'touchWeaponSwipe': FieldValue.StringValue = Settings.touchWeaponSwipe ? "1" : "0"; return true;
+    case 'touchWeaponButtonSwipe': FieldValue.StringValue = Settings.touchWeaponButtonSwipe ? "1" : "0"; return true;
     case 'touchWeaponTap': FieldValue.StringValue = Settings.touchWeaponTap ? "1" : "0"; return true;
     case 'touchStaticStick': FieldValue.StringValue = Settings.touchStaticStick ? "1" : "0"; return true;
     }
@@ -140,6 +142,7 @@ event bool SetFieldValue(string FieldName, const out UIProviderScriptFieldValue 
         case 'touchWasd': Settings.touchWasd = Enabled; break;
         case 'touchVisible': Settings.touchVisible = Enabled; break;
         case 'touchWeaponSwipe': Settings.touchWeaponSwipe = Enabled; break;
+        case 'touchWeaponButtonSwipe': Settings.touchWeaponButtonSwipe = Enabled; break;
         case 'touchWeaponTap': Settings.touchWeaponTap = Enabled; break;
         case 'touchStaticStick': Settings.touchStaticStick = Enabled; break;
         default: return false;

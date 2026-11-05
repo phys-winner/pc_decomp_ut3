@@ -145,6 +145,7 @@ extern uint64_t void_audio_pause_state(void) __attribute__((weak));
 extern void void_native_worker_affinity_begin(void);
 extern void void_native_worker_affinity_end(void);
 static void (*native_pause)(ALCdevice *), (*native_resume)(ALCdevice *);
+static ALCboolean (*native_reopen)(ALCdevice *,const ALCchar *,const ALCint *);
 static void (*native_probe_enable)(int);
 static int (*native_get_metrics)(FrostpunkAudioMetrics *,uint32_t);
 static void load_native(void)
@@ -157,9 +158,10 @@ static void load_native(void)
 #undef LOAD
     native_pause=(__typeof__(native_pause))dlsym(native_library,"alcDevicePauseSOFT");
     native_resume=(__typeof__(native_resume))dlsym(native_library,"alcDeviceResumeSOFT");
+    native_reopen=N.alcGetProcAddress ? (__typeof__(native_reopen))N.alcGetProcAddress(NULL,"alcReopenDeviceSOFT") : NULL;
     native_probe_enable=(__typeof__(native_probe_enable))dlsym(native_library,"FrostpunkAudio_ProbeEnable");
     native_get_metrics=(__typeof__(native_get_metrics))dlsym(native_library,"FrostpunkAudio_GetMetrics");
-    if (!native_pause || !native_resume) ++missing;
+    if (!native_pause || !native_resume || !native_reopen) ++missing;
     native_ok=!missing;
     if(native_ok && native_probe_enable)native_probe_enable(1);
     void_log("[openal] pinned native library %s (85 core + 33 EFX, real Oboe/AAudio)",native_ok?"loaded":"incomplete");
@@ -305,8 +307,20 @@ static uint32_t guest_proc(const char *name);
 /* Private Android lifecycle hooks: no guest calls or context ownership switch. */
 void ut3_openal_pause(int paused)
 {
-    pthread_mutex_lock(&bridge_lock);audio_paused=paused!=0;
-    if(native_ok) for(audio_device *d=devices;d;d=d->next) if(!d->capture) {if(audio_paused)native_pause(d->native);else native_resume(d->native);}
+    pthread_mutex_lock(&bridge_lock);
+    int resume=audio_paused&&!paused;
+    audio_paused=paused!=0;
+    if(native_ok) for(audio_device *d=devices;d;d=d->next) if(!d->capture) {
+        ALCenum prior=N.alcGetError(d->native);if(!d->error)d->error=prior;
+        if(audio_paused)native_pause(d->native);
+        else if(resume) {
+            /* A background AAudio stream may disconnect; reopen the output while retaining contexts, buffers and sources. */
+            if(!native_reopen(d->native,NULL,NULL))void_log("[openal] cannot reopen playback on resume");
+            native_resume(d->native);
+        }
+        ALCenum error=N.alcGetError(d->native);
+        if(error)void_log("[openal] lifecycle %s error %#x",audio_paused?"pause":"resume",error);
+    }
     pthread_mutex_unlock(&bridge_lock);
 }
 void ut3_openal_log_stats(void)

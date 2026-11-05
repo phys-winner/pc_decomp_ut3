@@ -440,6 +440,71 @@ static int touch_viewport(uint32_t *viewport)
         touch_member(*viewport,CLASS_OFFSET,&cls) && cls==touch_metadata.viewport_class;
 }
 
+/* Our typed mailbox is read/written only while the guest machine is owned. */
+static int touch_text_members(uint32_t *viewport,uint32_t offsets[5])
+{
+    static const char *names[]={"PortTextCommand","PortTextTarget","PortTextValue","PortTextFlags","PortTextInput"};
+    static const char *types[]={"IntProperty","ObjectProperty","StrProperty","IntProperty","StrProperty"};
+    static const uint32_t sizes[]={4,4,12,4,12};
+    if(!touch_viewport(viewport))return 0;
+    for(unsigned i=0;i<5;++i) {
+        offsets[i]=touch_property(touch_metadata.viewport_class,names[i],types[i]);
+        if(!offsets[i] || offsets[i]>65536-sizes[i] || *viewport>UINT32_MAX-offsets[i]-sizes[i] ||
+           !void_vm_writable(*viewport+offsets[i],sizes[i]))return 0;
+        for(unsigned j=0;j<i;++j)
+            if(offsets[i]<offsets[j]+sizes[j] && offsets[j]<offsets[i]+sizes[i])return 0;
+    }
+    return 1;
+}
+
+/* PortTextFlags (AndroidPortViewportClient.PortTextRequest): 1 password, 2 typed into the
+ * receiver's InputChar (empty value, no target), 4 the console's line (no target), 8 the
+ * receiver's text is longer than the dialog shows (with 2); bits 8-16 the limit, 1..256. */
+static int touch_text_flags_valid(uint32_t flags,uint32_t target)
+{
+    uint32_t mode=flags&0xFFu;
+    if((flags&~0x1FF0Fu) || !(flags>>8) || (flags>>8)>256)return 0;
+    if(mode&4)return mode==4 && !target;
+    if((mode&8) && !(mode&2))return 0;
+    return !(mode&2) || !target;
+}
+
+int void_touch_text_snapshot(uint16_t text[257],uint32_t *target,uint32_t *flags)
+{
+    uint32_t viewport,o[5],command,data,count,capacity;
+    if(!touch_text_members(&viewport,o) || !touch_member(viewport,o[0],&command) || command!=UINT32_MAX ||
+       !touch_member(viewport,o[1],target) || !touch_member(viewport,o[3],flags) ||
+       !touch_text_flags_valid(*flags,*target) ||
+       !touch_member(viewport,o[2],&data) || !touch_member(viewport,o[2]+4,&count) ||
+       !touch_member(viewport,o[2]+8,&capacity) || count>257 || capacity<count || capacity>65536 ||
+       ((*flags&2) && count>1))return 0;
+    if(!count){text[0]=0;return 1;}
+    if(!data || (data&1) || data>UINT32_MAX-count*2 || !void_vm_readable(data,count*2))return 0;
+    memcpy(text,GPTR(data),count*2);
+    return text[count-1]==0;
+}
+
+int void_touch_text_request(int command,const uint16_t *text,int length,uint32_t target)
+{
+    uint32_t viewport,o[5],current,object,flags,data,count,capacity;
+    if(command<1 || command>3 || length<0 || length>256 || (length&&!text) || !touch_text_members(&viewport,o))return 0;
+    if(command==2) {
+        /* A commit replaces the field it was opened for, or the console's line (no target). */
+        if(!touch_member(viewport,o[0],&current) || current!=UINT32_MAX ||
+           !touch_member(viewport,o[1],&object) || object!=target ||
+           !touch_member(viewport,o[3],&flags) || !touch_text_flags_valid(flags,object) || (flags&2) ||
+           (!target && !(flags&4)) || (uint32_t)length>(flags>>8) ||
+           !touch_member(viewport,o[4],&data) || !touch_member(viewport,o[4]+4,&count) ||
+           !touch_member(viewport,o[4]+8,&capacity) || count!=257 || capacity<count || capacity>65536 ||
+           !data || (data&1) || data>UINT32_MAX-514 || !void_vm_writable(data,514))return 0;
+        uint16_t chars[257]={0};if(length)memcpy(chars,text,(size_t)length*2);
+        memcpy(GPTR(data),chars,sizeof chars);
+        uint32_t n=(uint32_t)length+1;memcpy(GPTR(viewport+o[4]+4),&n,4);
+    }
+    uint32_t value=(uint32_t)command;memcpy(GPTR(viewport+o[0]),&value,4);
+    return 1;
+}
+
 /* Weapon bar slots and vehicle flags, which change without a new input
  * context. 1 read, 0 unavailable (older package or no publisher). */
 int void_touch_game_details(uint32_t out[2])
