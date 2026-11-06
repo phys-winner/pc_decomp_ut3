@@ -1,4 +1,5 @@
-class AndroidPortChecks extends Commandlet;
+class AndroidPortChecks extends Commandlet
+    dependson(UTUIFrontEnd_SettingsVideoAdvanced);
 
 function bool Check(bool Condition, string Label)
 {
@@ -53,10 +54,62 @@ event int Main(string Params)
     local AndroidPortCommandFixture CommandPanel;
     local string LongText, FieldText;
     local int TextIndex;
+    local UTUIFrontEnd_SettingsVideoAdvanced AdvancedVideo;
     Store = new(None) class'AndroidPortDataStore';
     if (!Check(Len(Store.LayoutCaption) == 19 && Asc(Left(Store.LayoutCaption, 1)) == 1056
         && Asc(Right(Store.LayoutCaption, 1)) == 1071, "localized layout caption preserves Unicode")) return 1;
     Store.EnsureSettings();
+    TestEngine = new(None) class'GameEngine';
+    Viewport = new(TestEngine) class'AndroidPortViewportClient';
+    Viewport.PortStore = Store;
+    AdvancedVideo = new(None) class'UTUIFrontEnd_SettingsVideoAdvanced';
+    AdvancedVideo.OptionsPage = new(AdvancedVideo) class'UTUITabPage_Options';
+    AdvancedVideo.OptionsPage.OptionList = new(AdvancedVideo.OptionsPage) class'UTUIOptionList';
+    Viewport.PortAdvancedScene = AdvancedVideo;
+    AdvancedVideo.SetVideoSettingValue(PVS_TextureDetail, 1);
+    AdvancedVideo.SetVideoSettingValue(PVS_StaticDecals, 0);
+    AdvancedVideo.SetVideoSettingValue(PVS_CompositeDynamicLights, 0);
+    AdvancedVideo.SetVideoSettingValue(PVS_DropParticleDistortion, 0);
+    AdvancedVideo.SetVideoSettingValue(PVS_SkeletalMeshLODBias, -2);
+    AdvancedVideo.SetVideoSettingValue(PVS_ParticleLODBias, -2);
+    AdvancedVideo.SetVideoSettingValue(PVS_ShadowFilterQualityBias, -1);
+    if (!Check(Viewport.OnPortMaximumGraphics(None, 0), "maximum graphics action")) return 1;
+    LogInternal("ANDROID_PORT_MAX_VALUES " $ AdvancedVideo.GetVideoSettingValue(PVS_TextureDetail)
+        $ " " $ AdvancedVideo.GetVideoSettingValue(PVS_ScreenPercentage)
+        $ " " $ AdvancedVideo.GetVideoSettingValue(PVS_EnableMotionBlur)
+        $ " " $ AdvancedVideo.GetVideoSettingValue(PVS_DepthOfField)
+        $ " " $ AdvancedVideo.GetVideoSettingValue(PVS_Bloom)
+        $ " " $ AdvancedVideo.GetVideoSettingValue(PVS_QualityBloom));
+    if (!Check(AdvancedVideo.GetVideoSettingValue(PVS_TextureDetail) == 5
+        && AdvancedVideo.GetVideoSettingValue(PVS_ScreenPercentage) == 100
+        && AdvancedVideo.GetVideoSettingValue(PVS_EnableMotionBlur) == 0
+        && AdvancedVideo.GetVideoSettingValue(PVS_DepthOfField) == 0
+        && AdvancedVideo.GetVideoSettingValue(PVS_Bloom) == 0
+        && AdvancedVideo.GetVideoSettingValue(PVS_QualityBloom) == 0,
+        "original engine applies maximum graphics without blur/bloom")) return 1;
+    // These checkboxes disable quality-reducing approximations; their checked value is correct.
+    if (!Check(AdvancedVideo.GetVideoSettingValue(PVS_CompositeDynamicLights) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_DropParticleDistortion) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_OneFrameThreadLag) == 1,
+        "maximum disables light compositing and particle distortion dropping")) return 1;
+    if (!Check(AdvancedVideo.GetVideoSettingValue(PVS_StaticDecals) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_DynamicDecals) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_DynamicLights) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_DynamicShadows) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_LightEnvironmentShadows) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_DirectionalLightmaps) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_Distortion) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_SpeedTreeLeaves) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_SpeedTreeFronds) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_LensFlares) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_FogVolumes) == 1
+        && AdvancedVideo.GetVideoSettingValue(PVS_HighPolyChars) == 1,
+        "maximum enables lighting, shadows, geometry and visual effects")) return 1;
+    if (!Check(AdvancedVideo.GetVideoSettingValue(PVS_DetailMode) == 2
+        && AdvancedVideo.GetVideoSettingValue(PVS_SkeletalMeshLODBias) == 0
+        && AdvancedVideo.GetVideoSettingValue(PVS_ParticleLODBias) == 0
+        && AdvancedVideo.GetVideoSettingValue(PVS_ShadowFilterQualityBias) == 1,
+        "maximum restores highest original detail and LOD values")) return 1;
     ValueStore = new(None) class'AndroidPortValueStore';
     ValueStore.Settings = Store.Settings;
     if (!Check(ValueStore.Settings == Store.Settings, "scalar and collection stores share settings")) return 1;
@@ -154,13 +207,12 @@ event int Main(string Params)
     Value.StringValue = "0";
     if (!Check(ValueStore.SetFieldValue("touchWeaponButtonSwipe", Value) && Store.Settings.touchWeaponSwipe
         && !Store.Settings.touchWeaponButtonSwipe, "button swipe does not disable bar swipe")) return 1;
-    if (!Check(ValueStore.GetFieldValue("renderScale", Value) && Value.PropertyType == DATATYPE_RangeProperty
-        && Value.RangeValue.CurrentValue == 100 && Value.RangeValue.MinValue == 25
-        && Value.RangeValue.MaxValue == 100 && Value.RangeValue.NudgeValue == 5, "render scale percent range")) return 1;
-    Value.RangeValue.CurrentValue = 70;
-    if (!Check(ValueStore.SetFieldValue("renderScale", Value) && Store.Settings.renderScale == 70, "render scale choice")) return 1;
-    Value.RangeValue.CurrentValue = 5;
-    if (!Check(ValueStore.SetFieldValue("renderScale", Value) && Store.Settings.renderScale == 25, "render scale lower clamp")) return 1;
+    if (!Check(!ValueStore.GetFieldValue("renderScale", Value), "duplicate render scale removed")) return 1;
+    Value.StringValue = "1";
+    if (!Check(ValueStore.SetFieldValue("fsr1", Value) && ValueStore.SetFieldValue("antialias", Value)
+        && Store.Settings.fsr1 && Store.Settings.antialias, "post-process options reach canonical settings")) return 1;
+    if (!Check(ValueStore.SetFieldValue("frameGeneration", Value) && Store.Settings.frameGeneration,
+        "frame generation reaches canonical settings")) return 1;
     Store.Settings.touchGyroMode = -1;
     Store.Settings.touchGyro = 2;
     if (!Check(Store.Settings.GyroMode() == 3, "an older build's always-on gyroscope stays always on")) return 1;
@@ -171,11 +223,14 @@ event int Main(string Params)
     Store.SetCurrentValueIndex('touchGyro', 2);
     Store.CommitCollection('touchGyro');
     if (!Check(Store.Settings.touchGyroMode == 2 && Store.Settings.GyroMode() == 2, "gyroscope while firing")) return 1;
+    Store.SetCurrentValueIndex('touchGyro', 4);
+    Store.CommitCollection('touchGyro');
+    if (!Check(Store.Settings.touchGyroMode == 4 && Store.Settings.GyroMode() == 4, "gyroscope firing or aiming without a held activation key")) return 1;
     Store.SetCurrentValueIndex('touchVehicleProfile', 4);
     Store.CommitCollection('touchVehicleProfile');
     if (!Check(Store.Settings.touchVehicleProfile == 4, "turret profile")) return 1;
     ValueStore.GetSupportedScriptFields(Fields);
-    if (!Check(Fields.Length == 17, "scalar fields discoverable")) return 1;
+    if (!Check(Fields.Length == 19, "scalar fields discoverable")) return 1;
     if (!Check(ValueStore.GetFieldValue("uiScale", Value)
         && Value.RangeValue.CurrentValue == 100 && Value.RangeValue.MinValue == 100
         && Value.RangeValue.MaxValue == 150 && Value.RangeValue.NudgeValue == 5,

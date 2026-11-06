@@ -7,17 +7,17 @@ var config bool touchVisible, touchWeaponSwipe, touchWeaponButtonSwipe, touchWea
 var config bool touchLeftHanded, touchInvertY, touchWasd;
 var config int touchGyro, touchVehicleProfile;
 // Gyroscope aim: 0 off, 1 sniper mode (scope zoom, a steered Redeemer), 2 while firing,
-// 3 always; -1 until chosen, when an older build's touchGyro (1 secondary fire, 2 always) counts.
+// 3 always, 4 firing or aiming; -1 until chosen, when an older build's touchGyro counts.
 var config int touchGyroMode;
 var config float touchGyroSensitivity;
 var config string renderer, language;
-// Render scale: the 3D scene's ScreenPercentage, 25-100; the interface keeps the display's resolution.
-var config int fpsLimit, renderScale;
+var config int fpsLimit;
+var config bool fsr1, antialias, frameGeneration;
 
 function int GyroMode()
 {
     if (touchGyroMode >= 0)
-        return Clamp(touchGyroMode, 0, 3);
+        return Clamp(touchGyroMode, 0, 4);
     return touchGyro == 2 ? 3 : Clamp(touchGyro, 0, 1);
 }
 
@@ -38,5 +38,4 @@ defaultproperties
     renderer="gles"
     language="INT"
     fpsLimit=60
-    renderScale=100
 }

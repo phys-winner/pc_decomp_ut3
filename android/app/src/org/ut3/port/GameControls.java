@@ -44,8 +44,9 @@ final class GameControls extends View implements SensorEventListener {
      *  16|32 without look steering is the gyroscope's sniper mode (scope zoom, a steered Redeemer). */
     private static final int VEHICLE_DEPLOY=1, VEHICLE_DEPLOYED=2, VEHICLE_SEAT_JUMP=4, VEHICLE_LOOK_STEER=8, VEHICLE_SCOPED=48;
     private static final int VEHICLE_SEATS=128, VEHICLE_SEAT_MASK=31<<8;
+    private static final int WEAPON_FIRING=1<<14;
     /** Gyroscope aim modes of the ANDROID settings. */
-    static final int GYRO_OFF=0, GYRO_SNIPER=1, GYRO_FIRING=2, GYRO_ALWAYS=3;
+    static final int GYRO_OFF=0, GYRO_SNIPER=1, GYRO_FIRING=2, GYRO_ALWAYS=3, GYRO_FIRING_OR_AIMING=4;
     /** Script weapon bar word: slot bits 0-9, the selected slot in 10-13, shown in 14, HUD minimap in 15. */
     private static final int BAR_SHOWN=1<<14,HUD_MAP=1<<15;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -251,7 +252,7 @@ final class GameControls extends View implements SensorEventListener {
      *  (1 secondary fire, mostly the sniper rifle's zoom; 2 always) counts. */
     static int gyroMode(PortPreferences p) {
         int mode=p.getInt("touchGyroMode",-1);
-        if(mode>=0)return Math.min(GYRO_ALWAYS,mode);
+        if(mode>=0)return Math.min(GYRO_FIRING_OR_AIMING,mode);
         int legacy=p.getInt("touchGyro",0);
         return legacy==2?GYRO_ALWAYS:legacy==1?GYRO_SNIPER:GYRO_OFF;
     }
@@ -1260,7 +1261,9 @@ final class GameControls extends View implements SensorEventListener {
     private void updateGyro() {
         if(input==null)return;
         boolean active=focused&&isShown()&&playing&&!editing&&!pieOpen&&(gyroMode==GYRO_ALWAYS||
-            (gyroMode==GYRO_FIRING&&(input.held()&(TouchInput.FIRE|TouchInput.ALT))!=0)||(gyroMode==GYRO_SNIPER&&scoped()));
+            (gyroMode==GYRO_FIRING&&(input.held()&(TouchInput.FIRE|TouchInput.ALT))!=0)||(gyroMode==GYRO_SNIPER&&scoped())||
+            (gyroMode==GYRO_FIRING_OR_AIMING&&((vehicleFlags&WEAPON_FIRING)!=0||scoped()||
+                (input.held()&(TouchInput.FIRE|TouchInput.ALT))!=0)));
         if(active!=gyroActive) { sensorTime=0;gyroActive=active; }
         if(active&&gyro!=null&&!gyroListening)gyroListening=sensors.registerListener(this,gyro,SensorManager.SENSOR_DELAY_GAME);
         else if(!active)stopGyro();

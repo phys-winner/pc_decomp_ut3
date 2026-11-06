@@ -18,7 +18,7 @@ NDK = Path(os.environ.get("ANDROID_NDK_HOME", SDK / "ndk/27.2.12479018"))
 
 
 # The link of libut3.so (tools/build_android.py) wraps these lifted functions.
-WRAPS = ["sub_00F75DB0", "sub_00486270", "sub_00C85710", "sub_00C12290"]
+WRAPS = ["sub_00F75DB0", "sub_00486270", "sub_00C85710", "sub_00C12290", "sub_00B6AF10", "sub_010FC820"]
 
 
 def main():

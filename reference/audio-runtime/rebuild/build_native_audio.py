@@ -128,14 +128,17 @@ target_include_directories(native_audio_probe PRIVATE "{audio.as_posix()}" "{(al
 target_link_libraries(native_audio_probe PRIVATE OpenAL log)
 target_link_options(native_audio_probe PRIVATE "-Wl,-z,max-page-size=16384")
 ''';(project/"CMakeLists.txt").write_text(project_text)
-    options={"ALSOFT_UTILS":"OFF","ALSOFT_EXAMPLES":"OFF","ALSOFT_INSTALL":"OFF","ALSOFT_INSTALL_CONFIG":"OFF","ALSOFT_INSTALL_HRTF_DATA":"OFF","ALSOFT_INSTALL_AMBDEC_PRESETS":"OFF","ALSOFT_INSTALL_EXAMPLES":"OFF","ALSOFT_INSTALL_UTILS":"OFF","ALSOFT_EAX":"OFF","ALSOFT_CPUEXT_NEON":"ON","ALSOFT_REQUIRE_NEON":"ON","ALSOFT_BACKEND_OBOE":"ON","ALSOFT_REQUIRE_OBOE":"ON","ALSOFT_EMBED_HRTF_DATA":"ON","ALSOFT_UPDATE_BUILD_VERSION":"OFF"}
+    options={"ALSOFT_UTILS":"OFF","ALSOFT_EXAMPLES":"OFF","ALSOFT_INSTALL":"OFF","ALSOFT_INSTALL_CONFIG":"OFF","ALSOFT_INSTALL_HRTF_DATA":"OFF","ALSOFT_INSTALL_AMBDEC_PRESETS":"OFF","ALSOFT_INSTALL_EXAMPLES":"OFF","ALSOFT_INSTALL_UTILS":"OFF","ALSOFT_EAX":"ON","ALSOFT_CPUEXT_NEON":"ON","ALSOFT_REQUIRE_NEON":"ON","ALSOFT_BACKEND_OBOE":"ON","ALSOFT_REQUIRE_OBOE":"ON","ALSOFT_EMBED_HRTF_DATA":"ON","ALSOFT_UPDATE_BUILD_VERSION":"OFF"}
     for name in ["PIPEWIRE","PULSEAUDIO","ALSA","OSS","SOLARIS","SNDIO","WASAPI","DSOUND","WINMM","JACK","COREAUDIO","OPENSL","PORTAUDIO","SDL3","SDL2","WAVE"]:options["ALSOFT_BACKEND_"+name]="OFF"
     build=OUT/"cmake";command=[cmake,"-S",project,"-B",build,"-G","Ninja","-DCMAKE_MAKE_PROGRAM="+str(ninja),"-DCMAKE_TOOLCHAIN_FILE="+str(ndk/"build/cmake/android.toolchain.cmake"),"-DANDROID_ABI=arm64-v8a","-DANDROID_PLATFORM=android-30","-DANDROID_STL=c++_shared","-DCMAKE_BUILD_TYPE=Release",*[f"-D{k}={v}"for k,v in options.items()]]
     own_sources=[Path(__file__),audio/"metrics.h",audio/"metrics.cpp",audio/"native_probe.cpp",openal/"provenance.json",oboe/"provenance.json"]
     own_pins={str(p.relative_to(ROOT)):sha(p)for p in own_sources}
     overlay_pins={str(p.relative_to(OUT)):sha(p)for directory in [alsource,osource]for p in directory.rglob('*')if p.is_file()}
+    # Stripping preserves a linker ID derived from debug paths; identify the pinned inputs instead.
+    build_id=hashlib.sha1(json.dumps(dict(sources=own_pins,overlays=overlay_pins,compiler=sha(compiler)),sort_keys=True).encode()).hexdigest()
+    (project/"CMakeLists.txt").write_text(project_text+f'target_link_options(OpenAL PRIVATE "-Wl,--build-id=0x{build_id}")\n')
     configure=checked(command);(OUT/"configure.log").write_text(configure);print("Native audio configure PASS; building OpenAL+Oboe AAudio/NEON",flush=True)
-    build_stdout=checked([cmake,"--build",build,"--target","OpenAL","native_audio_probe","--parallel","8"]);(OUT/"build.log").write_text(build_stdout)
+    build_stdout=checked([cmake,"--build",build,"--target","OpenAL","native_audio_probe","--parallel","2"]);(OUT/"build.log").write_text(build_stdout)
     library=build/"openal/libopenal.so";probe=build/"native_audio_probe"
     if not library.exists()or not probe.exists():raise RuntimeError("Native audio build outputs missing")
     config=(build/"openal/config_simd.h").read_text()+(build/"openal/config_backends.h").read_text()
@@ -152,7 +155,7 @@ target_link_options(native_audio_probe PRIVATE "-Wl,-z,max-page-size=16384")
     (licenses/"SOURCE-PROVENANCE.txt").write_text("OpenAL Soft1.25.2 "+REVISION+"\nhttps://github.com/kcat/openal-soft/releases/tag/1.25.2\nOboe1.11.0 "+OBOE_REVISION+"\nhttps://github.com/google/oboe/releases/tag/1.11.0\nOriginal source archives, private overlay changes, and exact build recipe are retained in this project's reference/openal-soft, reference/oboe, and tools/build_native_audio.py.\n")
     upstream("openal-soft",REVISION);upstream("oboe",OBOE_REVISION)
     if any(sha(ROOT/name)!=digest for name,digest in own_pins.items())or any(sha(OUT/name)!=digest for name,digest in overlay_pins.items()):raise RuntimeError("Native audio source/overlay changed during build")
-    report=dict(timestamp_utc=datetime.now(timezone.utc).isoformat(),source_sha256=own_pins,overlay_source_sha256=overlay_pins,OpenAL=ai,Oboe=oi,overlay_changes=patches,cmake_options=options,compiler_sha256=sha(compiler),configure_command=[str(x)for x in command],build_command=[str(x)for x in [cmake,"--build",build,"--target","OpenAL","native_audio_probe","--parallel","8"]],strip_command=[str(strip),"--strip-unneeded",str(runtime/"libopenal.so")],library_sha256=sha(runtime/"libopenal.so"),library_bytes=(runtime/"libopenal.so").stat().st_size,unstripped_library_bytes=library.stat().st_size,fixture_sha256=sha(probe),runtime_files={p.name:sha(p)for p in runtime.iterdir()if p.is_file()},licenses={p.name:sha(p)for p in licenses.iterdir()if p.is_file()},AArch64=True,NEON=True,AAudio_only=True,capture_exposed=False,null_wave_OpenSL_available=False,native_Win64_redirect_implemented=False,game_boot_proven=False)
+    report=dict(timestamp_utc=datetime.now(timezone.utc).isoformat(),source_sha256=own_pins,overlay_source_sha256=overlay_pins,OpenAL=ai,Oboe=oi,overlay_changes=patches,cmake_options=options,compiler_sha256=sha(compiler),build_id=build_id,configure_command=[str(x)for x in command],build_command=[str(x)for x in [cmake,"--build",build,"--target","OpenAL","native_audio_probe","--parallel","2"]],strip_command=[str(strip),"--strip-unneeded",str(runtime/"libopenal.so")],library_sha256=sha(runtime/"libopenal.so"),library_bytes=(runtime/"libopenal.so").stat().st_size,unstripped_library_bytes=library.stat().st_size,fixture_sha256=sha(probe),runtime_files={p.name:sha(p)for p in runtime.iterdir()if p.is_file()},licenses={p.name:sha(p)for p in licenses.iterdir()if p.is_file()},AArch64=True,NEON=True,AAudio_only=True,capture_exposed=False,null_wave_OpenSL_available=False,native_Win64_redirect_implemented=False,game_boot_proven=False)
     if args.run:
         adb=[sdk/"platform-tools/adb.exe","-s",cfg["device"]];remote="/data/local/tmp/frostpunk/native-audio";checked([*adb,"shell","mkdir","-p",remote])
         for p in [probe,*runtime.iterdir()]:checked([*adb,"push",p,remote+"/"+p.name])
@@ -163,7 +166,7 @@ target_link_options(native_audio_probe PRIVATE "-Wl,-z,max-page-size=16384")
         if result.returncode==0:
             actual=json.loads(result.stdout);report.update(android_hardware_pass=actual["success"],android_fixture=actual)
         else:report["android_hardware_pass"]=False
-    receipt=OUT/"build-receipt.json";receipt.write_text(json.dumps(report,indent=2)+'\n');(ROOT/("research/native-audio.json"if args.run else "research/native-audio-build.json")).write_text(json.dumps(report,indent=2)+'\n')
+    receipt=OUT/"build-receipt.json";receipt.write_text(json.dumps(report,indent=2)+'\n',newline='\n');(ROOT/("research/native-audio.json"if args.run else "research/native-audio-build.json")).write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(receipt=str(receipt),library_bytes=report["library_bytes"],AAudio_only=True,NEON=True,hardware_pass=report.get("android_hardware_pass"),returncode=report.get("android_returncode"))))
     if args.run and not report["android_hardware_pass"]:raise SystemExit(1)
 

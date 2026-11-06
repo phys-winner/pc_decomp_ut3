@@ -86,14 +86,28 @@ def main():
         print("\n".join(line for line in text.splitlines() if any(token in line for token in
             ("ANDROID_PORT", "Error,", "Warning,", "Critical", "ScriptWarning")))[-6000:])
         raise SystemExit("Native settings commandlet failed: " + str(log))
+    engine_bytes = engine.read_bytes()
+    engine_text = engine_bytes.decode("utf-16" if engine_bytes.startswith(b"\xff\xfe") else "utf-8-sig")
+    system = re.search(r"(?ims)^\[SystemSettings\]\s*(.*?)(?=^\[|\Z)", engine_text)
+    assert system, "Missing saved native video settings"
+    flags = dict((key.lower(), value.strip().lower()) for key, value in re.findall(r"(?m)^(\w+)=(.*)$", system[1]))
+    expected_graphics = {name: "true" for name in ("StaticDecals", "DynamicDecals", "DynamicLights", "DynamicShadows",
+        "LightEnvironmentShadows", "DirectionalLightmaps", "Distortion", "SpeedTreeLeaves", "SpeedTreeFronds",
+        "LensFlares", "FogVolumes", "FloatingPointRenderTargets", "EnableHighPolyChars")}
+    expected_graphics.update({name: "false" for name in ("CompositeDynamicLights", "DropParticleDistortion",
+        "OneFrameThreadLag", "MotionBlur", "DepthOfField", "Bloom", "QualityBloom")})
+    expected_graphics.update({"DetailMode": "2", "SkeletalMeshLODBias": "0", "ParticleLODBias": "0",
+                              "ShadowFilterQualityBias": "1"})
+    for name, expected in expected_graphics.items():
+        assert flags.get(name.lower()) == expected, (name, expected, flags.get(name.lower()))
     assert build_uscript.sha(module) == before, "Production module changed during the isolated test"
     saved = work / "UTGame/Config/UTAndroidPort.ini"
     if not saved.is_file():
         raise AssertionError("SaveConfig did not create UTAndroidPort.ini in the private checkout")
     settings = saved.read_text(encoding="utf-16" if saved.read_bytes().startswith(b"\xff\xfe") else "utf-8-sig")
     assert "[AndroidPortChecks.AndroidPortSettings]" in settings
-    for expected in ("renderer=dxvk-turnip", "language=RUS", "fpsLimit=90", "renderScale=25", "touchGyroMode=2",
-                     "touchWasd=True", "uiScale=1.250000"):
+    for expected in ("renderer=dxvk-turnip", "language=RUS", "fpsLimit=90", "touchGyroMode=4",
+                     "touchWasd=True", "uiScale=1.250000", "fsr1=True", "antialias=True", "frameGeneration=True"):
         assert expected.lower() in settings.lower(), expected
     evidence = ROOT / "research/native-settings-selfcheck"
     evidence.mkdir(exist_ok=True)

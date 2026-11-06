@@ -32,9 +32,11 @@ import java.util.concurrent.Executors;
 import org.ut3.port.launcher.Launch;
 
 public final class GameActivity extends Activity implements SurfaceHolder.Callback {
-    static { System.loadLibrary("ut3"); }
+    private boolean nativeLoaded;
+    private static boolean crashHandlerInstalled;
     static native void nativeSurface(Surface surface);
     static native int nativeStart(String userdata, String renderer, boolean fixedSeed, int renderWidth, int renderHeight);
+    static native int nativePostfx(boolean fsr1, boolean antialias, boolean frameGeneration);
     static native int nativeStatus();
     static native void nativePause(boolean paused);
     static native void nativeKey(int vk, boolean down);
@@ -69,6 +71,11 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     static native String[] nativeTextDialogState(long context);
     static native boolean nativeText(String text, long context);
     static native int nativeConfigure(int fps, int queryWaitUs, int precacheWaitUs, boolean benchmark);
+    /** The newest intervals between presented frames in microseconds, oldest first; returns how many
+     *  intervals were recorded so far (frames presented minus one). */
+    static native long nativeFrameTimes(int[] intervalsUs);
+    /** "GL_RENDERER\nGL_VERSION" of the OpenGL ES renderer once its context exists, else "\n". */
+    static native String nativeGpuStrings();
 
     private final Handler handler = new Handler();
     private TextView status;
@@ -84,6 +91,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
        APK carries no launcher. */
     private Launch launch;
     private FrameLayout root;
+    private FpsOverlay fpsOverlay;
     private TouchLayoutEditor layoutEditor;
     private boolean inputPrompted;
 
@@ -250,20 +258,6 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         }
     }
 
-    /** The render scale (ScreenPercentage, 25-100). A render height chosen in an older build becomes
-     *  the matching scale once. */
-    private int renderScale(int displayHeight) throws IOException {
-        if (portPreferences.getString("renderScale", null) == null) {
-            int height = portPreferences.getInt("renderHeight", 0);
-            if (height == 480 || height == 720 || height == 1080) {
-                int scale = Math.max(GameSettings.MIN_SCALE, Math.min(100, Math.round(100f * height / displayHeight)));
-                portPreferences.put("renderScale", scale);
-                portPreferences.save();
-            }
-        }
-        return Math.max(GameSettings.MIN_SCALE, Math.min(100, portPreferences.getInt("renderScale", 100)));
-    }
-
     private int fpsLimit() {
         return GameSettings.nearestRate(portPreferences.getInt("fpsLimit", 60), displayRates());
     }
@@ -290,6 +284,12 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 if (launch != null) launch.firstFrame(root);
                 if((nativeTouchContext()&3)==3)offerTouchVisibility();
             } else if (result != Integer.MIN_VALUE) {
+                if (result != 0) {
+                    setResult(RESULT_FIRST_USER, new Intent().putExtra("crash.exitCode", result));
+                    finish();
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                    return;
+                }
                 /* A clean exit returns to the launcher; another code stays on screen. */
                 if (launch != null) launch.exited(result);
                 status.setText(String.format(java.util.Locale.ROOT, say("The game stopped: code %d. Log: userdata/ut3.log",
@@ -338,6 +338,29 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (!getIntent().getBooleanExtra("crash.watched", false)) {
+            Intent watch = new Intent(this, GameWatchActivity.class);
+            if (getIntent().getExtras() != null) watch.putExtras(getIntent().getExtras());
+            startActivity(watch);
+            finish();
+            return;
+        }
+        setResult(RESULT_OK);
+        if (!crashHandlerInstalled) {
+            Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+            Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+                try {
+                    java.io.StringWriter text = new java.io.StringWriter();
+                    error.printStackTrace(new java.io.PrintWriter(text));
+                    CrashReport.write(new File(getExternalFilesDir(null), "userdata/ut3-crash.txt"),
+                        "Java crash on " + thread.getName() + ":\n" + text);
+                } catch (Throwable storageError) { android.util.Log.e("UT3", "Java crash journal", storageError); }
+                if (previous != null) previous.uncaughtException(thread, error);
+            });
+            crashHandlerInstalled = true;
+        }
+        System.loadLibrary("ut3");
+        nativeLoaded = true;
         try {
             launch = Launch.attach(this);
         } catch (RuntimeException noLauncher) {
@@ -457,17 +480,19 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             renderWidth = GameSettings.renderWidth(displayWidth, displayHeight, renderHeight);
             File engine = new File(userdata, "Documents/My Games/Unreal Tournament 3/UTGame/Config/UTEngine.ini");
             GameSettings.prepare(engine, game, renderWidth, renderHeight, fpsLimit(), portPreferences.getString("language", "INT"),
-                renderer, renderScale(displayHeight));
+                renderer);
             String language = portPreferences.getString("language", "INT");
             String options = "INT".equals(language) ? "AndroidPortOptions.ini" : "AndroidPortOptions-" + language + ".ini";
             GameSettings.prepareNativeUi(engine, game, userdata,
-                asset("AndroidPort.u"), GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()));
+                asset("AndroidPort.u"), GameSettings.rendererOptions(GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()),renderer,android.os.Build.VERSION.SDK_INT));
         } catch (IOException | IllegalArgumentException error) {
             refuse(say("Could not prepare the game's settings: ", "Не удалось подготовить настройки игры: ",
                 "Die Spieleinstellungen konnten nicht vorbereitet werden: ", "Nie udało się przygotować ustawień gry: ") + error.getMessage());
             return;
         }
-        int error = nativeConfigure(fpsLimit(), getIntent().getIntExtra("queryWaitUs", 0),
+        int error = nativePostfx(portPreferences.getBoolean("fsr1",false),portPreferences.getBoolean("antialias",false),
+            !"gles".equals(renderer)&&android.os.Build.VERSION.SDK_INT>=31&&portPreferences.getBoolean("frameGeneration",false));
+        if (error == 0) error = nativeConfigure(fpsLimit(), getIntent().getIntExtra("queryWaitUs", 0),
             getIntent().getIntExtra("precacheWaitUs", 50), getIntent().getBooleanExtra("benchmark", false));
         if (error == 0) error = nativeStart(userdata.getAbsolutePath(), renderer, getIntent().getBooleanExtra("fixedSeed", false), renderWidth, renderHeight);
         if (error != 0) {
@@ -476,6 +501,17 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             return;
         }
         started = true;
+        /* The launcher's FPS counter (1: DXVK's fps and frametimes items, 2: with the system lines), the
+           same overlay with every renderer. DXVK's own HUD stays available through userdata/dxvk.conf. */
+        String counter = android.system.Os.getenv("PORT_OPTION_FPS_COUNTER");
+        if ("1".equals(counter) || "2".equals(counter)) {
+            SystemInfo system = "2".equals(counter) ? new SystemInfo(this, renderer, displayWidth, displayHeight, fpsLimit(),
+                getDisplay() != null ? getDisplay().getRefreshRate() : 0) : null;
+            fpsOverlay = new FpsOverlay(this, FpsCounter.hudScale(getResources().getDisplayMetrics().density),
+                GameActivity::nativeFrameTimes, system);
+            root.addView(fpsOverlay, 1, new FrameLayout.LayoutParams(-1, -1));
+            fpsOverlay.start();
+        }
         if (launch != null) launch.starting();
         status.setClickable(false);
         status.setText(say("Loading Unreal Tournament 3 — ", "Загрузка Unreal Tournament 3 — ", "Unreal Tournament 3 wird geladen — ",
@@ -507,15 +543,23 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             if (lanLock != null && !lanLock.isHeld()) lanLock.acquire();
             updatePowerSnapshot(); nativePause(false); startIfReady();
         }
+        if (fpsOverlay != null) fpsOverlay.start();
     }
     @Override protected void onPause() {
         if (portPreferences != null)
             ((android.hardware.input.InputManager) getSystemService(INPUT_SERVICE)).unregisterInputDeviceListener(gamepads);
         if (lanLock != null && lanLock.isHeld()) lanLock.release();
         if (controls != null) { controls.release(); controls.releaseGamepad(true); }
-        nativePause(true); super.onPause();
+        if (fpsOverlay != null) fpsOverlay.stop();
+        if (nativeLoaded) nativePause(true);
+        super.onPause();
     }
-    @Override protected void onDestroy() { handler.removeCallbacks(progress); settingsIO.shutdown(); super.onDestroy(); }
+    @Override protected void onDestroy() {
+        handler.removeCallbacks(progress);
+        if (fpsOverlay != null) fpsOverlay.stop();
+        settingsIO.shutdown();
+        super.onDestroy();
+    }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request == 1 && results.length > 0 && results[0] == 0) startIfReady();

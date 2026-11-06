@@ -70,7 +70,7 @@ int main(void)
     for (unsigned i = 0; i < sizeof openal_api_names / sizeof *openal_api_names; ++i)
         assert(procedure(openal_api_names[i]));
     assert(sizeof openal_api_names / sizeof *openal_api_names == 118);
-    assert(!procedure("EAXGet") && !procedure("EAXSet"));
+    assert(procedure("EAXGet") && procedure("EAXSet"));
     assert(!procedure("EAXGetBufferMode") && !procedure("EAXSetBufferMode"));
     uint32_t default_name = API(alcGetString, 2, 0, ALC_DEFAULT_DEVICE_SPECIFIER);
     assert(default_name && void_vm_readable(default_name, 1) && native_library && native_ok);
@@ -78,7 +78,7 @@ int main(void)
     int (*get_metrics)(audio_metrics *, uint32_t) = dlsym(native_library, "FrostpunkAudio_GetMetrics");
     assert(enable_metrics && get_metrics);
     enable_metrics(1);
-    uint32_t configured = void_gstrdup("Generic Software");
+    uint32_t configured = void_gstrdup("Android OpenAL (AAudio)");
     uint32_t dev = API(alcOpenDevice, 1, configured);
     void_gfree(configured);
     assert(dev && device(dev) && device(dev)->native);
@@ -111,6 +111,16 @@ int main(void)
 
     uint32_t scratch = void_galloc(96);
     memset(GPTR(scratch), 0xA5, 96);
+    name=void_gstrdup("EAX4.0");
+    assert(API(alIsExtensionPresent,1,name));void_gfree(name);
+    /* Actual EAX listener property round trip, including 32-bit guest ABI. */
+    const uint8_t listener_guid[16]={0xa8,0xa6,0x06,0x03,0x24,0xb2,0xd2,0x11,0x99,0xe5,0,0,0xe8,0xd8,0xc7,0x22};
+    memcpy(GPTR(scratch+16),listener_guid,16);MEM32(scratch+36)=3;
+    assert(API(EAXSet,5,scratch+16,11,0,scratch+36,4)==AL_NO_ERROR);
+    assert(API(EAXGet,5,scratch+16,11,0,scratch+44,4)==AL_NO_ERROR);
+    assert(MEM32(scratch+44)==3&&MEM32(scratch+40)==0xa5a5a5a5&&MEM32(scratch+48)==0xa5a5a5a5);
+    assert(API(EAXGet,5,scratch+16,11,0,0xfffffffdu,4)==AL_INVALID_VALUE);
+    assert(API(alGetError,0,0)==AL_INVALID_VALUE);noerror();
     API(alcGetIntegerv, 4, dev, ALC_MAX_AUXILIARY_SENDS, 1, scratch + 4);
     int sends = (int32_t)MEM32(scratch + 4); assert(sends == 5);
     API(alDopplerFactor, 1, f32(0.75f));
@@ -153,8 +163,11 @@ int main(void)
     for (unsigned i = 0; i < 4; ++i) API(alBufferData, 5, MEM32(ids + 4 * i), AL_FORMAT_MONO16, pcm, FRAMES * 2, RATE);
     API(alSourceQueueBuffers, 3, source, 4, ids);
     API(alSourcePlay, 1, source);
-    noerror(); nap(170);
-    int processed = source_integer(source, AL_BUFFERS_PROCESSED, scratch + 4);
+    noerror();
+    int processed=0;
+    for(unsigned wait=0;wait<80&&!processed;++wait){
+        nap(25);processed=source_integer(source,AL_BUFFERS_PROCESSED,scratch+4);
+    }
     int playing = source_integer(source, AL_SOURCE_STATE, scratch + 4);
     assert(playing == AL_PLAYING && processed > 0 && processed < 4);
     API(alSourceUnqueueBuffers, 3, source, processed, scratch + 16);
@@ -228,6 +241,16 @@ int main(void)
     assert(API(alcCloseDevice, 1, dev));
     assert(!API(alcCloseDevice, 1, dev));
     assert(API(alcGetError, 1, 0) == ALC_INVALID_DEVICE);
+    name=void_gstrdup("Generic Software");
+    uint32_t basic=API(alcOpenDevice,1,name);void_gfree(name);assert(basic);
+    uint32_t basic_context=API(alcCreateContext,2,basic,0);assert(basic_context);
+    assert(API(alcMakeContextCurrent,1,basic_context));
+    name=void_gstrdup("EAX4.0");assert(!API(alIsExtensionPresent,1,name));void_gfree(name);
+    name=void_gstrdup("ALC_EXT_EFX");assert(!API(alcIsExtensionPresent,2,basic,name));void_gfree(name);
+    assert(API(EAXGet,5,scratch+16,11,0,scratch+44,4)==AL_INVALID_OPERATION);
+    noerror();
+    assert(API(alcMakeContextCurrent,1,0));API(alcDestroyContext,1,basic_context);
+    assert(API(alcCloseDevice,1,basic));
     enable_metrics(0);
     printf("OPENAL_TEST_JSON {\"success\":true,\"lookup_core\":85,\"lookup_efx\":33,\"guest_calls\":%u,\"renderer\":\"%s\",\"version\":\"%s\",\"device\":\"%s\",\"aux_sends\":%d,\"processed\":%d,\"capture_error\":%u,\"audio_api\":%d,\"stream_state\":%d,\"callbacks\":%llu,\"frames\":%llu,\"nonzero_samples\":%llu,\"nonfinite_samples\":%llu,\"peak_abs\":%.9g,\"pause_callback_delta\":%llu}\n",
            calls, (char *)GPTR(renderer), (char *)GPTR(version), (char *)GPTR(endpoint), sends, processed, capture_error,

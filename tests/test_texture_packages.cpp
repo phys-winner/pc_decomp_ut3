@@ -1,6 +1,38 @@
 /* Android self-check of production package parsing, codecs and cache writing. */
 #include "../android/texconv/ut3tex.cpp"
 #include <cassert>
+#include <signal.h>
+#include <sys/wait.h>
+
+static void check_locks(const std::string &directory)
+{
+    fs::create_directories(directory);auto path=(fs::path(directory)/"lock-test.part").string();
+    require(!fs::exists(path),"lock test file already exists");
+    {
+        Output active(path);active.write("keep",4,0);
+        bool refused=false;
+        try{Output other(path);}catch(const std::exception &e){refused=std::string(e.what()).find("cannot lock")!=std::string::npos;}
+        assert(refused && Package::read(path)==Bytes({'k','e','e','p'}));
+        pid_t child=fork();assert(child>=0);
+        if(!child) {
+            close(active.fd);bool busy=false;
+            try{Output other(path);}catch(const std::exception &){busy=true;}
+            _exit(busy?0:1);
+        }
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+        assert(Package::read(path)==Bytes({'k','e','e','p'}));
+    }
+    int ready[2];assert(!pipe(ready));pid_t child=fork();assert(child>=0);
+    if(!child) {
+        close(ready[0]);Output active(path);active.write("stale",5,0);
+        assert(write(ready[1],"x",1)==1);for(;;)pause();
+    }
+    close(ready[1]);char value;assert(read(ready[0],&value,1)==1);close(ready[0]);
+    assert(!kill(child,SIGKILL));int status;assert(waitpid(child,&status,0)==child && WIFSIGNALED(status));
+    { Output recovered(path);assert(fs::file_size(path)==0); }
+    assert(!unlink(path.c_str()));
+    puts("PASS OFD cache lock: same-process and cross-process exclusion preserve active bytes, killed writer releases lock and stale partial recovers");
+}
 
 int main(int argc,char **argv)
 {
@@ -27,7 +59,8 @@ int main(int argc,char **argv)
                 require(convert(argv[2],atoi(argv[3]),2)==0,"conversion failed");
                 auto after=scan(argv[2]);assert(after[2]==atoi(argv[3])&&after[3]>0);
                 printf("converted: %lld unique mips, %lld cache bytes\n",(long long)after[3],(long long)after[4]);
-            } else { auto v=scan(argv[2]);printf("scan: %lld mips, %lld DXT bytes\n",(long long)v[0],(long long)v[1]); }
+            } else if(std::string(argv[1])=="--lock") { check_locks(argv[2]); }
+            else { auto v=scan(argv[2]);printf("scan: %lld mips, %lld DXT bytes\n",(long long)v[0],(long long)v[1]); }
         } catch(const std::exception &e) { fprintf(stderr,"FAIL: %s (%s)\n",e.what(),message.c_str());return 1; }
     }
     return 0;

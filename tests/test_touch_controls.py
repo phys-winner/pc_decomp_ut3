@@ -339,6 +339,48 @@ public class DeviceCheck {
             subprocess.run([java / 'java.exe', '-ea', '-cp', temporary, 'org.ut3.port.DeviceCheck'], check=True)
 
 
+    def test_gyro_firing_or_aiming_without_held_key(self):
+        java = Path(os.environ.get('JAVA_HOME', 'C:/Portable/jdk-24.0.1')) / 'bin'
+        source = (ROOT / 'android/app/src/org/ut3/port/GameControls.java').read_text(encoding='utf-8')
+        methods = '\n'.join(self._method(source, name) for name in (
+            'private void updateGyro(', 'private void stopGyro(', 'private boolean scoped('))
+        program = r'''
+public class GyroCheck {
+    static final int GYRO_SNIPER=1,GYRO_FIRING=2,GYRO_ALWAYS=3,GYRO_FIRING_OR_AIMING=4;
+    static final int VEHICLE_LOOK_STEER=16,VEHICLE_SCOPED=32,WEAPON_FIRING=1<<14;
+    static class TouchInput { static final int FIRE=1,ALT=2;int keys;int held(){return keys;} }
+    static class SensorManager { static final int SENSOR_DELAY_GAME=1;int registrations,removals;
+        boolean registerListener(Object a,Object b,int rate){registrations++;return true;}
+        void unregisterListener(Object a){removals++;} }
+    final SensorManager sensors=new SensorManager();Object gyro=new Object();TouchInput input=new TouchInput();
+    boolean focused=true,shown=true,playing=true,editing,pieOpen,gyroActive,gyroListening;
+    boolean isShown(){return shown;}int gyroMode=4,vehicleFlags;long sensorTime;
+''' + methods + r'''
+    void check(boolean expected){updateGyro();assert gyroActive==expected&&gyroListening==expected;}
+    public static void main(String[] ignored){
+        GyroCheck g=new GyroCheck();g.check(false);
+        g.vehicleFlags=WEAPON_FIRING;g.check(true);assert g.input.held()==0;
+        g.sensorTime=123;g.check(true);assert g.sensorTime==123&&g.sensors.registrations==1;
+        g.vehicleFlags=0;g.check(false);assert g.sensorTime==0;
+        g.vehicleFlags=VEHICLE_SCOPED;g.check(true);
+        g.vehicleFlags=VEHICLE_SCOPED|VEHICLE_LOOK_STEER;g.check(false);
+        g.input.keys=TouchInput.FIRE;g.check(true);g.input.keys=TouchInput.ALT;g.check(true);
+        g.input.keys=0;g.vehicleFlags=WEAPON_FIRING;
+        g.focused=false;g.check(false);g.focused=true;g.shown=false;g.check(false);g.shown=true;
+        g.playing=false;g.check(false);g.playing=true;g.editing=true;g.check(false);g.editing=false;
+        g.pieOpen=true;g.check(false);g.pieOpen=false;g.check(true);
+        g.gyroMode=GYRO_FIRING;g.check(false);g.gyroMode=GYRO_SNIPER;g.check(false);
+        g.gyroMode=0;g.check(false);g.gyroMode=GYRO_ALWAYS;g.check(true);
+        System.out.println("PASS gyro: firing/scope state without held key; original modes and focus/menu gates");
+    }
+}
+'''
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'GyroCheck.java'
+            path.write_text(program,encoding='utf-8')
+            subprocess.run([java/'javac.exe','--release','8','-d',temporary,path],check=True)
+            subprocess.run([java/'java.exe','-ea','-cp',temporary,'GyroCheck'],check=True)
+
     def test_layout_geometry_and_sensor_bounds(self):
         java = Path(os.environ.get("JAVA_HOME", "C:/Portable/jdk-24.0.1")) / "bin"
         source = (ROOT / "android/app/src/org/ut3/port/GameControls.java").read_text(encoding="utf-8")

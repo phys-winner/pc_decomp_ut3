@@ -290,9 +290,9 @@ class NativeOptionWidgets(unittest.TestCase):
         self.assertEqual(self.native_order([0] * 14), list(range(1, 15)))
         # Config order of the options is their order on screen (all OptionIndex=0, see above).
         values = ["touchSensitivity", "touchAltSensitivity", "touchScale", "uiScale", "touchOpacity",
-                  "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity", "renderScale",
+                  "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity",
                   "touchVisible", "touchStaticStick", "touchWeaponSwipe", "touchWeaponButtonSwipe",
-                  "touchWeaponTap", "weaponBarScale", "weaponWheelScale"]
+                  "touchWeaponTap", "weaponBarScale", "weaponWheelScale", "fsr1", "antialias", "frameGeneration"]
         port = ["touchVehicleProfile", "touchGyro", "language", "fpsLimit"]
         languages = sorted(path.name for path in (ROOT / "android/uscript/AndroidPort").glob("AndroidPortOptions*.ini"))
         self.assertEqual(languages, ["AndroidPortOptions-%s.ini" % code for code in

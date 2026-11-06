@@ -14,6 +14,7 @@
 !/dependencies-host.json
 !/dependencies-turnip.json
 !/dependencies-textures.json
+!/dependencies-fsr.json
 
 !/android/
 /android/**
@@ -30,6 +31,7 @@
 !/android/**/*.py
 !/android/**/*.md
 !/android/**/*.yml
+!/android/**/*.comp
 !/android/launcher/.gitignore
 
 !/config/
@@ -47,6 +49,7 @@
 !/tests/*.h
 !/tests/*.cpp
 !/tests/*.inc
+!/tests/*.hlsl
 !/tests/*.py
 !/tests/uscript/
 !/tests/uscript/AndroidPortChecks/
@@ -109,3 +112,17 @@ AGENTS.md
 !/reference/audio-runtime/arm64-v8a/*.so
 !/reference/dxvk-runtime/*.so
 !/reference/turnip-android/*.so
+
+!/reference/fsr1/
+!/reference/fsr1/ffx_fsr1.h
+!/reference/fsr1/FSR1-MIT.txt
+!/reference/fsr3-runtime/
+/reference/fsr3-runtime/**
+!/reference/fsr3-runtime/include/
+!/reference/fsr3-runtime/include/**/
+!/reference/fsr3-runtime/include/**/*.h
+!/reference/fsr3-runtime/lib/
+!/reference/fsr3-runtime/lib/libffx_backend_vk_android_arm64.a
+!/reference/fsr3-runtime/lib/libffx_frameinterpolation_android_arm64.a
+!/reference/fsr3-runtime/lib/libffx_opticalflow_android_arm64.a
+!/reference/fsr3-runtime/FSR3-Android-MIT.txt

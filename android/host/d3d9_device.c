@@ -443,6 +443,8 @@ COM_METHOD(dev, GetNumberOfSwapChains, 1) { return 1; }
 COM_METHOD(dev, Reset, 2)
 {
     d3d_device *d = DEV;
+    extern void void_postfx_reset(uint32_t);
+    void_postfx_reset(THIS_);
     uint32_t pp = ARG(1);
     for (int i = 0; i < 14; ++i) d->pp[i] = MEM32(pp + 4u * (uint32_t)i);
     if (!d->pp[2]) d->pp[2] = 22;
@@ -460,6 +462,8 @@ COM_METHOD(dev, Reset, 2)
 COM_METHOD(dev, Present, 5)
 {
     d3d_device *d = DEV;
+    extern void void_postfx_present(uint32_t);
+    void_postfx_present(THIS_);
     { extern void ut3_adpf_work_end(void); ut3_adpf_work_end(); }
     d3d_gl_present(d);
     ++d->frame;
@@ -1021,7 +1025,10 @@ COM_METHOD(dev, DrawPrimitiveUP, 5)
     d3d_device *d = DEV;
     uint32_t primitive = ARG(1), count = ARG(2), data = ARG(3), stride = ARG(4);
     if (!count) return D3D_OK;
-    d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 0, 0, 0, 0, GPTR(data), stride, NULL, 0);
+    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
+    uint32_t filtered,args[]={primitive,count,data,stride};
+    if(!void_postfx_draw(THIS_,83,args,&filtered))
+        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 0, 0, 0, 0, GPTR(data), stride, NULL, 0);
     /* D3D unbinds stream 0 and the index buffer after a UP draw. */
     bind_ref(&d->st.streams[0], NULL);
     d->st.stream_offset[0] = d->st.stream_stride[0] = 0;
@@ -1036,8 +1043,11 @@ COM_METHOD(dev, DrawIndexedPrimitiveUP, 9)
     uint32_t index_format = ARG(6), data = ARG(7), stride = ARG(8);
     if (!count) return D3D_OK;
     (void)vertices;
-    d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 1, 0, 0, min_index, GPTR(data), stride,
-        GPTR(indices), index_format == 102);
+    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
+    uint32_t filtered,args[]={primitive,min_index,vertices,count,indices,index_format,data,stride};
+    if(!void_postfx_draw(THIS_,84,args,&filtered))
+        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 1, 0, 0, min_index, GPTR(data), stride,
+            GPTR(indices), index_format == 102);
     bind_ref(&d->st.streams[0], NULL);
     bind_ref(&d->st.indices, NULL);
     d->st.stream_offset[0] = d->st.stream_stride[0] = 0;
@@ -1322,6 +1332,8 @@ uint32_t d3d_swapchain_create(d3d_device *dev);
 
 static void device_destroy(void_com_object *o)
 {
+    extern void void_postfx_reset(uint32_t);
+    void_postfx_reset(o->guest);
     /* shortcut: external resources must be released first, add child-to-device lifetime references when needed. */
     d3d_device *d = (d3d_device *)o;
     d3d_gl_device_destroy();

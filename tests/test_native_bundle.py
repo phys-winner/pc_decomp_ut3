@@ -76,6 +76,15 @@ class NativeBundleTest(unittest.TestCase):
                         "tool_sha256": self.digest("tools/build_texconv.py"),
                         "sha256": self.digest("build/texconv/libtexconv.so"),
                         "sources": {"android/texconv/ut3tex.cpp": self.digest("android/texconv/ut3tex.cpp")}}
+        for name in ("fsr3.inc", "vulkan_interop.inc"):
+            self.write("android/dxvk/" + name, b"FSR3 bridge")
+        self.write("build/fsr/libut3_fsr3.so", self.elf)
+        self.write("reference/fsr3-runtime/FSR3-Android-MIT.txt", b"FSR3 license")
+        self.write("build/fsr/receipt.json", json.dumps({
+            "inputs": {}, "path": "build/fsr/libut3_fsr3.so",
+            "sha256": self.digest("build/fsr/libut3_fsr3.so"),
+            "licenses": ["reference/fsr3-runtime/FSR3-Android-MIT.txt"]
+        }).encode())
         self.receipts()
 
     def write(self, name, data):
@@ -93,9 +102,9 @@ class NativeBundleTest(unittest.TestCase):
 
     def test_complete_bundle_deduplicates_identical_cpp_runtime(self):
         runtime, pins, licenses = build_android.native_dependencies()
-        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so", "libtexconv.so"})
+        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so", "libtexconv.so", "libut3_fsr3.so"})
         self.assertIn(self.root / "build/dxvk/libut3_dxvk.a", pins)
-        self.assertEqual(len(licenses), 8)
+        self.assertEqual(len(licenses), 9)
 
     def test_modified_converter_is_rejected(self):
         self.write("build/texconv/libtexconv.so", self.elf + b"changed")

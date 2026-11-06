@@ -84,6 +84,7 @@ void void_regs_load(const void_regs *r)
 /* --------------------------------------------------------------- logging */
 static pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
 static FILE *log_file;
+#include "crash.inc"
 
 void void_log_open(const char *path)
 {
@@ -92,6 +93,7 @@ void void_log_open(const char *path)
     log_file = path ? fopen(path, "w") : NULL;
     if (log_file) setvbuf(log_file, NULL, _IOLBF, 0);
     pthread_mutex_unlock(&log_lock);
+    if (path) void_crash_open(path);
 }
 
 static void log_va(const char *fmt, va_list ap)
@@ -419,6 +421,7 @@ _Noreturn void void_fatal(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(message, sizeof message, fmt, ap);
     va_end(ap);
+    void_crash_record(message);
     void_log("[void] FATAL: %s", message);
     if (!atomic_exchange(&dumping, 1)) {
         log_caller_backtrace();
@@ -501,18 +504,21 @@ static void log_host_backtrace(const void *context)
 #endif
 }
 
+static struct sigaction fault_previous[NSIG];
 static void on_signal(int signo, siginfo_t *info, void *context)
 {
-    uintptr_t fault = (uintptr_t)info->si_addr;
-    char where[96] = "";
-    if (fault >= VOID_GUEST_BASE && fault < VOID_GUEST_BASE + VOID_GUEST_SPAN)
-        snprintf(where, sizeof where, " (guest VA %08X)", (uint32_t)(fault - VOID_GUEST_BASE));
-    void_log("[void] host signal %d code %d at %p%s", signo, info->si_code, info->si_addr, where);
-    if (!atomic_exchange(&dumping, 1)) {
-        log_host_backtrace(context);
-        void_dump_state("host signal");
+    uintptr_t pc = 0, lr = 0;
+#if defined(__aarch64__)
+    const ucontext_t *uc = context;
+    if (uc) { pc = uc->uc_mcontext.pc; lr = uc->uc_mcontext.regs[30]; }
+#endif
+    void_crash_signal(signo, info->si_code, info->si_code > 0 ? (uintptr_t)info->si_addr : 0, pc, lr, g_cur_func, g_esp);
+    /* Android's debuggerd receives the original fault context and writes its tombstone. */
+    struct sigaction *previous = &fault_previous[signo];
+    if (previous->sa_handler != SIG_DFL && previous->sa_handler != SIG_IGN) {
+        if (previous->sa_flags & SA_SIGINFO) previous->sa_sigaction(signo, info, context);
+        else previous->sa_handler(signo);
     }
-    void_log_flush();
     signal(signo, SIG_DFL);
     raise(signo);
 }
@@ -528,7 +534,8 @@ void void_install_fault_handlers(void)
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     int signals[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
-    for (size_t i = 0; i < sizeof signals / sizeof signals[0]; ++i) sigaction(signals[i], &sa, NULL);
+    for (size_t i = 0; i < sizeof signals / sizeof signals[0]; ++i)
+        sigaction(signals[i], &sa, &fault_previous[signals[i]]);
 }
 
 /* ---------------------------------------------------------------- CPUID */

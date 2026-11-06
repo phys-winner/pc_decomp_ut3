@@ -119,6 +119,7 @@ static void gpu_profile_end(uint32_t frame)
 /* The Android activity provides the window; the shell build has none. */
 __attribute__((weak)) void *void_android_window(void) { return NULL; }
 __attribute__((weak)) void void_android_frame_presented(void) {}
+__attribute__((weak)) void void_android_gpu_strings(const char *renderer, const char *version) { (void)renderer; (void)version; }
 __attribute__((weak)) void *void_android_window_current(uint32_t *serial, int wait) { (void)wait; *serial = 0; return NULL; }
 __attribute__((weak)) void void_android_window_ack(uint32_t serial) { (void)serial; }
 
@@ -202,6 +203,7 @@ static int gl_init(void)
     atomic_store(&surface_live, window_mode);
     void_log("[gl] %s / %s / %s (%s)", glGetString(GL_VENDOR), glGetString(GL_RENDERER), glGetString(GL_VERSION),
         window_mode ? "window" : "pbuffer");
+    void_android_gpu_strings((const char *)glGetString(GL_RENDERER), (const char *)glGetString(GL_VERSION));
     GLint value = 0;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &value); d3d_gl_limits.max_texture = (uint32_t)value;
     glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &value); d3d_gl_limits.max_3d_texture = (uint32_t)value;
@@ -2148,6 +2150,7 @@ void d3d_gl_frame_pace(void)
 
 /* What the game's thread did meanwhile, as of its present (frame statistics). */
 static uint64_t present_game_cpu_ns;
+static uint64_t present_query_sleep_ns;
 static d3d_rt_stats_t present_game_stats;
 
 static void gl_present(d3d_device *dev)
@@ -2264,16 +2267,36 @@ static void gl_present(d3d_device *dev)
     dev->fbo_dirty = 1;
     raster_state_valid = 0;
     void_android_frame_presented();
+    if (gpu_begin_query) {
+        static uint64_t last_wall, last_cpu, last_game, last_query, last_swap, last_draws;
+        static d3d_rt_stats_t last_stats;
+        struct timespec cpu;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu);
+        uint64_t cpu_ns = (uint64_t)cpu.tv_sec * 1000000000ull + (uint64_t)cpu.tv_nsec;
+        uint64_t wall = void_perf_now_ns();
+        if (last_wall)
+            void_log("[frame] %u: wall %.2f game_cpu %.2f render_cpu %.2f query_wait %.2f swap %.2f draws %llu frame_wait %.2f sync %.2f ring %.2f",
+                dev->frame, (double)(wall - last_wall) / 1e6, (double)(present_game_cpu_ns - last_game) / 1e6,
+                (double)(cpu_ns - last_cpu) / 1e6, (double)(present_query_sleep_ns - last_query) / 1e6,
+                (double)(swap_ns - last_swap) / 1e6, (unsigned long long)(draw_calls - last_draws),
+                (double)(present_game_stats.frame_wait_ns - last_stats.frame_wait_ns) / 1e6,
+                (double)(present_game_stats.sync_ns - last_stats.sync_ns) / 1e6,
+                (double)(present_game_stats.ring_wait_ns - last_stats.ring_wait_ns) / 1e6);
+        last_wall = wall; last_cpu = cpu_ns; last_game = present_game_cpu_ns;
+        last_query = present_query_sleep_ns; last_swap = swap_ns; last_draws = draw_calls;
+        last_stats = present_game_stats;
+    }
     void_perf_frame_end(dev->frame);
 }
 
-typedef struct { uint32_t frame; uint64_t game_cpu_ns; d3d_rt_stats_t stats; } present_args;
+typedef struct { uint32_t frame; uint64_t game_cpu_ns, query_sleep_ns; d3d_rt_stats_t stats; } present_args;
 
 static void run_present(void *args)
 {
     const present_args *a = (const present_args *)args;
     d3d_rt_mirror_frame(a->frame);
     present_game_cpu_ns = a->game_cpu_ns;
+    present_query_sleep_ns = a->query_sleep_ns;
     present_game_stats = a->stats;
     gl_present(RDEV);
     d3d_rt_mirror_frame(a->frame + 1);    /* the game counts on to the next frame */
@@ -2283,13 +2306,14 @@ static void run_present(void *args)
 /* The game's thread: the frame goes to the render thread, which starts on it
  * at once; the game records the next while that one is drawn, never more. */
 void d3d_query_log(uint32_t frames);
+uint64_t d3d_query_sleep_ns(void);
 void d3d_gl_present(d3d_device *dev)
 {
     static uint32_t logged_frame;
     if (dev->frame - logged_frame >= 300) { d3d_query_log(dev->frame - logged_frame); logged_frame = dev->frame; }
     struct timespec cpu;
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu);
-    present_args a = { dev->frame, (uint64_t)cpu.tv_sec * 1000000000ull + (uint64_t)cpu.tv_nsec, { 0 } };
+    present_args a = { dev->frame, (uint64_t)cpu.tv_sec * 1000000000ull + (uint64_t)cpu.tv_nsec, d3d_query_sleep_ns(), { 0 } };
     d3d_rt_stats(&a.stats);
     d3d_rt_sync_state(dev);
     d3d_rt_frame_queued();

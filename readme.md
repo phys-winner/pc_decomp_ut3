@@ -14,7 +14,7 @@ Unreal Tournament 3. Unreal Tournament 3 and its content belong to their respect
 
 ## Status and features
 
-Current version: **0.3-dev** (versionCode 6). The versionCode also counts internal test builds.
+Current version: **0.4-dev** (versionCode 7). The versionCode also counts internal test builds.
 
 - The original game code runs as statically recompiled native code; the PE images it was recompiled from are
   made at start from the game's own `Binaries` (relocated to the port's bases, size and CRC-32 checked). The
@@ -26,7 +26,14 @@ Current version: **0.3-dev** (versionCode 6). The versionCode also counts intern
 - GLES rendering runs on a dedicated thread by default, with CPU core selection, asynchronous GPU query
   polling, streaming uploads and shader program prelinking. Program binaries are cached with driver-change
   invalidation; DXVK pipeline caches distinguish drivers and retain the current and newest other cache for
-  each driver. DXVK also supports scaled vertex formats through a shader fallback when needed.
+  each driver. DXVK also supports scaled vertex formats through a shader fallback when needed, and hands out
+  occlusion queries from one query pool at a time: PowerVR's Vulkan driver splits a render (storing and reloading
+  the whole frame) whenever consecutive queries use different pools.
+- An optional FPS counter (launcher → Options), drawn the same way with every renderer: the frame rate and a
+  frame-time graph in the style of DXVK's HUD, optionally with the system: SoC and its cluster clocks, the game's
+  CPU load and busiest threads, GPU and driver, memory, Android's thermal status and headroom, battery and
+  screen. Android gives apps no CPU or GPU temperature, so heat shows as the thermal status and the battery's
+  temperature.
 - Launcher: game files from a folder or a ZIP archive (a ZIP stored without compression plays in place), languages
   (English, Russian, German, Polish), update checks through GitHub releases, cleanup of unused files.
 - Touch controls with an analog stick, swipe look, weapon bar selection, vehicle profiles, an editable layout and
@@ -59,6 +66,23 @@ Current version: **0.3-dev** (versionCode 6). The versionCode also counts intern
 - Profile writes before sign-in are rejected, so startup defaults cannot overwrite saved settings or campaign
   progress. ZIP installations create physical save directories beneath virtual archive parents as needed.
 - Bink movies with sound (intro, loading, campaign), skippable by tap or gamepad.
+- The original PC hardware appraisal is disabled on Android. The advanced-video **MAX GRAPHICS** button
+  applies the original highest quality presets, then disables motion blur, depth of field and both bloom
+  options. The original **Screen Percentage** is the only 3D resolution control and survives restarts.
+- **PhysX effects (CPU)** enables the original hardware-effect path with the game's PhysX 2.7.3 CPU solver:
+  hardware scene, cloth and fluid descriptors are translated at the SDK boundary. No AGEIA PPU or CUDA GPU is
+  emulated. **OpenAL (AAudio / EAX)** selects native OpenAL Soft with EAX 1–5 and EFX effects; **Generic Software**
+  is the basic mode. Android processes the physics and audio effects on the CPU.
+- Android settings include **FSR1 EASU/RCAS**, **FXAA**, and **FSR3.1 frame generation**. Spatial filtering runs on
+  the 3D scene before the HUD, using the original Screen Percentage. Frame generation requires DXVK and
+  Android 12 or newer; it uses optical flow, real scene depth and the camera, submits on DXVK's queue, and
+  presents an intermediate frame followed by the restored real frame. Moving HUD elements can have artifacts,
+  and interpolation has a GPU/memory cost; it is off by default. FSR1 and FXAA also work with GLES.
+- Gyroscope mode **Firing or aiming** follows weapon firing, sniper zoom and guided Redeemer control without
+  holding a separate activation key. Existing gyroscope modes retain their saved indices.
+- Native crashes and uncaught Java exceptions produce persistent reports in `userdata/crashes`. A separate
+  Android process shows the cause and report path, with **Copy to clipboard** and **Exit** buttons. Reports
+  include the native journal, game-log tails and Android's available exit trace/tombstone.
 
 Known limitations: a stable 60 FPS at the display's native resolution is not reached on the tested phones;
 the port needs Android 11 or newer on 64-bit ARM. OpenSpy endpoint initialization, protocol boundaries and an
@@ -110,6 +134,25 @@ bundled Turnip driver (`reference/adrenotools`, `reference/turnip-android`). Eve
 SHA-256 in the `dependencies-*.json` files; `tools/build_dxvk.py --rebuild` and `tools/build_native_audio.py
 --rebuild` rebuild DXVK and OpenAL from upstream sources at the pinned revisions.
 
+The optional API-31 FSR3 plugin is built by `tools/build_fsr.py` from the pinned ARM64 SDK libraries and
+headers in `reference/fsr3-runtime`; `dependencies-fsr.json` records the upstream commits, release archive
+digest and retained file hashes. `tools/build_postfx_shaders.py` regenerates the checked-in Shader Model 3
+FSR1/FXAA kernels using Windows' D3DCompiler. To change `android/postfx/motion.comp`, regenerate its SPIR-V with
+`tools/build_fsr.py --shader-compiler <path-to-glslangValidator.exe>`.
+
+To prepare the PhysX Mod Pack without running its MSI installer:
+
+```powershell
+python tools/extract_physx_mod.py mods/UT3_PhysXModPack.msi mods/UT3_PhysXModPack
+```
+
+Copy the extracted `game` directory's contents into the game root. The tool verifies all 73 MSI files and
+writes a SHA-256 manifest and installation notes; original documents and licences are retained separately.
+On the tested Android device, HeatRay's hardware-requested fluids and Tornado's hardware-requested cloth
+create successfully with the CPU solver. Some Mod Pack materials request HLSL permutations absent from the
+port's offline shader cache and currently use fallback materials. This does not prevent installing the pack,
+but the Mod Pack's rendering is not yet complete.
+
 The optional converter, `libtexconv.so`, is built with `tools/build_texconv.py` from the upstream ASTC/ETC2
 submodules in `reference/astcenc` and `reference/etcpak`. Their revisions are pinned by Git; source hashes in
 `dependencies-textures.json` use LF line endings so validation also accepts Windows CRLF checkouts.
@@ -139,6 +182,12 @@ It is used by the GLES renderer. DXVK uses the device's native BC texture suppor
 data is always accepted through the ordinary loader, including partial texture updates made by mods.
 The cache stores original mip data so such updates also retain previously uploaded levels and cube faces.
 
+Android allows unused texture mip levels to stream out even at maximum quality (`OnlyStreamInTextures=False`
+in the active settings and all five presets). GLES expands unsupported DXT blocks to RGBA8 without this
+optional cache, so retaining every visited mip can exhaust shared RAM. The ordinary DXT upload path uses
+packed RGBA rows to reduce conversion stalls; the requested texture quality and screen percentage remain
+the game's settings.
+
 In the game's **ANDROID** settings, **Control layout** opens the editor: drag a control, pinch or use the
 size slider, select hidden controls from the list, and choose **Save** or **Cancel**. The tools panel can be
 dragged by its heading. Weapon-bar swiping starts enabled; icon taps start disabled. Bar size is 50–100%,
@@ -155,9 +204,13 @@ python -m unittest tests.test_pe_images        # PE images made from the Steam f
 python tests/test_game_settings.py
 python tests/test_touch_controls.py
 python tests/test_native_settings.py          # original UE3 VM and SaveConfig
+python -m unittest tests.test_crash_report
+python tools/test_openal.py --run --serial DEVICE_SERIAL  # actual EAX and AAudio output
+python tools/test_fsr.py --serial DEVICE_SERIAL           # actual FSR3 images on Turnip/DXVK
 python -m unittest tests.test_openspy tests.test_native_bundle tests.test_ui_hud tests.test_ui_list_scale
 python -m unittest tests.test_render_thread_cores tests.test_dxvk_scaled_spirv tests.test_dxvk_pipeline_cache_prune
 python -m unittest tests.test_text_dialog tests.test_weapon_gestures tests.test_localized_options tests.test_fsincos
+python -m unittest tests.test_dxvk_query_pools tests.test_fps_counter
 python tools/check_texture_cache.py --device DEVICE_SERIAL --game /sdcard/UT3/texture-qa
 python android/launcher/tests/run_tests.py     # the launcher base
 ```

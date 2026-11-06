@@ -146,6 +146,8 @@ extern void void_native_worker_affinity_begin(void);
 extern void void_native_worker_affinity_end(void);
 static void (*native_pause)(ALCdevice *), (*native_resume)(ALCdevice *);
 static ALCboolean (*native_reopen)(ALCdevice *,const ALCchar *,const ALCint *);
+static ALenum (*native_eax_set)(const void *,ALuint,ALuint,void *,ALuint);
+static ALenum (*native_eax_get)(const void *,ALuint,ALuint,void *,ALuint);
 static void (*native_probe_enable)(int);
 static int (*native_get_metrics)(FrostpunkAudioMetrics *,uint32_t);
 static void load_native(void)
@@ -159,17 +161,20 @@ static void load_native(void)
     native_pause=(__typeof__(native_pause))dlsym(native_library,"alcDevicePauseSOFT");
     native_resume=(__typeof__(native_resume))dlsym(native_library,"alcDeviceResumeSOFT");
     native_reopen=N.alcGetProcAddress ? (__typeof__(native_reopen))N.alcGetProcAddress(NULL,"alcReopenDeviceSOFT") : NULL;
+    native_eax_set=(__typeof__(native_eax_set))N.alGetProcAddress("EAXSet");
+    native_eax_get=(__typeof__(native_eax_get))N.alGetProcAddress("EAXGet");
     native_probe_enable=(__typeof__(native_probe_enable))dlsym(native_library,"FrostpunkAudio_ProbeEnable");
     native_get_metrics=(__typeof__(native_get_metrics))dlsym(native_library,"FrostpunkAudio_GetMetrics");
-    if (!native_pause || !native_resume || !native_reopen) ++missing;
+    if (!native_pause || !native_resume || !native_reopen || !native_eax_set || !native_eax_get) ++missing;
     native_ok=!missing;
     if(native_ok && native_probe_enable)native_probe_enable(1);
-    void_log("[openal] pinned native library %s (85 core + 33 EFX, real Oboe/AAudio)",native_ok?"loaded":"incomplete");
+    void_log("[openal] pinned native library %s (85 core + 33 EFX + EAX 1-5, real Oboe/AAudio)",native_ok?"loaded":"incomplete");
 }
 
 typedef struct audio_device {
     uint32_t token; ALCdevice *native; int capture, frame_bytes; ALCenum error;
     struct audio_device *next;
+    int effects;
 } audio_device;
 typedef struct audio_context {
     uint32_t token; ALCcontext *native; audio_device *device; ALenum error;
@@ -216,7 +221,7 @@ static uint32_t wrap_device(ALCdevice *native,int capture,int frame_bytes)
     if(!native) return 0;
     audio_device *d=calloc(1,sizeof *d);uint32_t id=token();
     if(!d || !id) { free(d); if(capture) N.alcCaptureCloseDevice(native);else N.alcCloseDevice(native);alc_error(NULL,ALC_OUT_OF_MEMORY);return 0; }
-    *d=(audio_device){id,native,capture,frame_bytes,0,devices};devices=d;
+    *d=(audio_device){id,native,capture,frame_bytes,0,devices,0};devices=d;
     if(!capture && (audio_paused || (void_audio_pause_state && (void_audio_pause_state() & 1u)))) native_pause(native);
     ++device_opens;void_log("[openal] real %s device %08X: %s",capture?"capture":"playback",id,N.alcGetString(native,ALC_DEVICE_SPECIFIER));return id;
 }
@@ -291,13 +296,18 @@ static int supported_extension(const char *name,int alc)
 {
     if(!name) return 0;
     if(alc) return !strcmp(name,"ALC_ENUMERATION_EXT") || !strcmp(name,"ALC_ENUMERATE_ALL_EXT") || !strcmp(name,"ALC_EXT_EFX");
+    audio_context *c=current_context();
+    if(c && c->device->effects && (!strcmp(name,"EAX") || !strcmp(name,"EAX2.0") || !strcmp(name,"EAX3.0") ||
+        !strcmp(name,"EAX4.0") || !strcmp(name,"EAX5.0")))return 1;
     return !strcmp(name,"AL_EXT_FLOAT32") || !strcmp(name,"AL_EXT_MCFORMATS");
 }
 static uint32_t extension_string(const char *native,int alc)
 {
     if(!native)return 0;
-    const char *names=alc?"ALC_ENUMERATION_EXT ALC_ENUMERATE_ALL_EXT ALC_EXT_EFX":"AL_EXT_FLOAT32 AL_EXT_MCFORMATS";
-    char result[128]={0},word[64];
+    audio_context *c=current_context();
+    const char *names=alc?"ALC_ENUMERATION_EXT ALC_ENUMERATE_ALL_EXT ALC_EXT_EFX":
+        c && c->device->effects?"AL_EXT_FLOAT32 AL_EXT_MCFORMATS EAX EAX2.0 EAX3.0 EAX4.0 EAX5.0":"AL_EXT_FLOAT32 AL_EXT_MCFORMATS";
+    char result[256]={0},word[64];
     for(const char *p=names;*p;) {const char *e=strchr(p,' ');if(!e)e=p+strlen(p);size_t n=e-p;memcpy(word,p,n);word[n]=0;
         if(word_present(native,word)){if(*result)strcat(result," ");strcat(result,word);}p=*e?e+1:e;}
     return intern(result,0);
@@ -730,8 +740,21 @@ AUDIO_EXPORT(alDistanceModel,0,0)
 AUDIO_EXPORT(alcCreateContext,0,0)
 {
     audio_device *d=device(ARG(0));if(!d){if(!ARG(0))alc_error(NULL,ALC_INVALID_DEVICE);return 0;}
-    const ALCint *attrs=NULL;if(ARG(1)){uint32_t count=0;for(;;){if(count>=512){alc_error(d,ALC_INVALID_VALUE);return 0;}if(!checked(ARG(1),(uint64_t)(count+1)*4,0,1,d))return 0;
+    uint32_t count=0;
+    const ALCint *attrs=NULL;if(ARG(1)){for(;;){if(count>=512){alc_error(d,ALC_INVALID_VALUE);return 0;}if(!checked(ARG(1),(uint64_t)(count+1)*4,0,1,d))return 0;
         if(!MEM32(ARG(1)+count*4)){attrs=GPTR(ARG(1));break;}count+=2;}}
+    ALCint enhanced[515];
+    if(d->effects) {
+        if(count)memcpy(enhanced,attrs,count*sizeof *attrs);
+        uint32_t sends=0;
+        for(uint32_t i=0;i<count;i+=2)if(enhanced[i]==ALC_MAX_AUXILIARY_SENDS){
+            if(enhanced[i+1]<4)enhanced[i+1]=4;
+            sends=1;
+        }
+        if(!sends){enhanced[count++]=ALC_MAX_AUXILIARY_SENDS;enhanced[count++]=4;}
+        enhanced[count]=0;
+        attrs=enhanced; /* EAX 4 uses four effect slots. */
+    }
     void_native_worker_affinity_begin();
     ALCcontext *native=N.alcCreateContext(d->native,attrs);
     void_native_worker_affinity_end();if(!native)return 0;
@@ -773,11 +796,17 @@ AUDIO_EXPORT(alcGetContextsDevice,0,0)
 AUDIO_EXPORT(alcOpenDevice,0,0)
 {
     const char *name=text(ARG(0),1,NULL);if(ARG(0)&&!name)return 0;
-    if(name && !strcasecmp(name,"Generic Software")){void_log("[openal] Generic Software maps explicitly to native default Oboe output");name=NULL;}
+    int effects=!name || strcasecmp(name,"Generic Software");
+    if(name && (!strcasecmp(name,"Generic Software") || !strcmp(name,"Android OpenAL (AAudio)")))name=NULL;
     void_native_worker_affinity_begin();
     ALCdevice *native=N.alcOpenDevice(name);
     void_native_worker_affinity_end();
-    return wrap_device(native,0,0);
+    uint32_t token=wrap_device(native,0,0);
+    if(token) {
+        device(token)->effects=effects;
+        void_log("[openal] Android output: %s, EAX/EFX %s (CPU effects over AAudio)", effects?"OpenAL":"Generic Software",effects?"on":"off");
+    }
+    return token;
 }
 
 AUDIO_EXPORT(alcCloseDevice,0,0)
@@ -797,6 +826,7 @@ AUDIO_EXPORT(alcGetError,0,1)
 AUDIO_EXPORT(alcIsExtensionPresent,0,0)
 {
     audio_device *d=device(ARG(0));if(ARG(0)&&!d)return 0;const char *name=text(ARG(1),1,d);
+    if(d && !d->effects && name && !strcmp(name,"ALC_EXT_EFX"))return 0;
     if(!name){if(!ARG(1))alc_error(d,ALC_INVALID_VALUE);return 0;}return supported_extension(name,1)?(uint8_t)N.alcIsExtensionPresent(d?d->native:NULL,name):0;
 }
 
@@ -815,6 +845,10 @@ AUDIO_EXPORT(alcGetEnumValue,0,0)
 AUDIO_EXPORT(alcGetString,0,0)
 {
     audio_device *d=device(ARG(0));if(ARG(0)&&!d)return 0;ALCenum param=ARG(1);const char *value=N.alcGetString(d?d->native:NULL,param);
+    if(!d && (param==ALC_DEVICE_SPECIFIER || param==0x1013))return intern("Generic Software\0Android OpenAL (AAudio)\0",1);
+    if(!d && (param==ALC_DEFAULT_DEVICE_SPECIFIER || param==0x1012))return intern("Android OpenAL (AAudio)",0);
+    if(d && !d->capture && param==ALC_DEVICE_SPECIFIER)return intern(d->effects?"Android OpenAL (AAudio)":"Generic Software",0);
+    if(d && !d->effects && param==ALC_EXTENSIONS)return intern("ALC_ENUMERATION_EXT ALC_ENUMERATE_ALL_EXT",0);
     if(param==ALC_EXTENSIONS)return extension_string(value,1);
     int list=!d&&(param==ALC_DEVICE_SPECIFIER || param==ALC_CAPTURE_DEVICE_SPECIFIER || param==0x1013);return intern(value,list);
 }
@@ -1046,10 +1080,34 @@ AUDIO_EXPORT(alGetAuxiliaryEffectSlotiv,0,0)
     N.alGetAuxiliaryEffectSlotiv((ALuint)ARG(0),(ALenum)ARG(1),p2);return 0;
 }
 
+AUDIO_EXPORT(EAXSet,0,0)
+{
+    audio_context *c=current_context();if(!c || !c->device->effects)return AL_INVALID_OPERATION;
+    /* OpenAL Soft fixes legacy EAX long/unsigned long to 32 bits on LP64, matching the guest ABI. */
+    const void *guid=checked(ARG(0),16,0,0,NULL);
+    void *value=checked(ARG(3),ARG(4),0,0,NULL);
+    if(!guid || (ARG(4)&&!value))return AL_INVALID_VALUE;
+    ALenum result=native_eax_set(guid,ARG(1),ARG(2),value,ARG(4));
+    static unsigned reports;
+    if(reports++<4)void_log("[openal] native EAXSet property=%u bytes=%u result=%d",ARG(1),ARG(4),result);
+    return result;
+}
+
+AUDIO_EXPORT(EAXGet,0,0)
+{
+    audio_context *c=current_context();if(!c || !c->device->effects)return AL_INVALID_OPERATION;
+    const void *guid=checked(ARG(0),16,0,0,NULL);
+    void *value=checked(ARG(3),ARG(4),1,0,NULL);
+    if(!guid || (ARG(4)&&!value))return AL_INVALID_VALUE;
+    return native_eax_get(guid,ARG(1),ARG(2),value,ARG(4));
+}
+
 typedef struct {const char *name;void_fn function;uint32_t guest;} audio_route;
 static audio_route routes[]={
 #define ROUTE(name) {#name,name##_entry,0},
     OPENAL_ROUTES(ROUTE)
+    ROUTE(EAXSet)
+    ROUTE(EAXGet)
 #undef ROUTE
 };
 static uint32_t guest_proc(const char *name)

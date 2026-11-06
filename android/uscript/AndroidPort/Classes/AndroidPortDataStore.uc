@@ -13,6 +13,8 @@ struct PortChoices
 var config array<PortChoices> Choices;
 var config array<int> DisplayFps;
 var config string LayoutCaption;
+var config string MaximumGraphicsCaption;
+var config string PhysXCaption, PhysXDescription, OpenALCaption, OpenALDescription;
 
 function EnsureSettings()
 {
@@ -97,7 +99,7 @@ function CommitCollection(name Field)
     case 'fpsLimit':
         if (Index >= DisplayFps.Length) return;
         Settings.fpsLimit = DisplayFps[Index]; break;
-    case 'touchGyro': Settings.touchGyroMode = Clamp(Index, 0, 3); break;
+    case 'touchGyro': Settings.touchGyroMode = Clamp(Index, 0, 4); break;
     case 'touchVehicleProfile': Settings.touchVehicleProfile = Clamp(Index, 0, 4); break;
     default: return;
     }
@@ -107,6 +109,7 @@ function CommitCollection(name Field)
 defaultproperties
 {
     LayoutCaption="CONTROL LAYOUT"
+    MaximumGraphicsCaption="MAX GRAPHICS"
     Tag=AndroidPort
     WriteAccessType=ACCESS_WriteAll
     LanguageCodes(0)="INT"
@@ -120,6 +123,6 @@ defaultproperties
     LanguageCodes(8)="POL"
     StringData(0)=(Tag="language",Strings=("English","Russian","German","French","Italian","Spanish","Czech","Hungarian","Polish"),DefaultValueIndex=0)
     StringData(1)=(Tag="fpsLimit",Strings=("60"),DefaultValueIndex=0)
-    StringData(2)=(Tag="touchGyro",Strings=("Off","Sniper mode","While firing","Always"),DefaultValueIndex=0)
+    StringData(2)=(Tag="touchGyro",Strings=("Off","Sniper mode","While firing","Always","Firing or aiming"),DefaultValueIndex=0)
     StringData(3)=(Tag="touchVehicleProfile",Strings=("On foot","Ground vehicle / walker","Aircraft","Hoverboard","Turret"),DefaultValueIndex=0)
 }

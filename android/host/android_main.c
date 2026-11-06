@@ -167,15 +167,70 @@ static int crypto_set_adapter_identity(JNIEnv *env)
 }
 
 uint64_t void_audio_pause_state(void) { return __atomic_load_n(&pause_state, __ATOMIC_ACQUIRE); }
+
+/* Intervals between presented frames for the launcher's FPS counter on OpenGL ES (GameActivity's
+ * FpsOverlay; the DXVK modes show DXVK's HUD): the newest FRAME_TIMES of them in microseconds. One
+ * presenting thread writes (GLES render thread or DXVK's presenter); the UI thread copies them. */
+#define FRAME_TIMES 304u
+static uint32_t frame_times_us[FRAME_TIMES];
+static uint64_t frame_intervals;
+
 void void_android_frame_presented(void)
 {
     __atomic_store_n(&frame_ready, 1, __ATOMIC_RELEASE);
-    static uint64_t last_audio_stats;
+    static uint64_t last_audio_stats, last_present;
     uint64_t now = void_monotonic_ns();
+    if (last_present) {
+        uint64_t us = (now - last_present) / 1000u, n = __atomic_load_n(&frame_intervals, __ATOMIC_RELAXED);
+        __atomic_store_n(&frame_times_us[n % FRAME_TIMES], us > UINT32_MAX ? UINT32_MAX : (uint32_t)us, __ATOMIC_RELAXED);
+        __atomic_store_n(&frame_intervals, n + 1, __ATOMIC_RELEASE);
+    }
+    last_present = now;
     if (ut3_openal_log_stats && now - last_audio_stats >= UINT64_C(5000000000)) {
         last_audio_stats = now;
         ut3_openal_log_stats();
     }
+}
+
+/* GL_RENDERER and GL_VERSION of the OpenGL ES renderer's context (d3d9_gl.c), for the FPS counter. */
+static char gpu_renderer[128], gpu_version[160];
+static pthread_mutex_t gpu_strings_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void void_android_gpu_strings(const char *renderer, const char *version)
+{
+    pthread_mutex_lock(&gpu_strings_lock);
+    snprintf(gpu_renderer, sizeof gpu_renderer, "%s", renderer ? renderer : "");
+    snprintf(gpu_version, sizeof gpu_version, "%s", version ? version : "");
+    pthread_mutex_unlock(&gpu_strings_lock);
+}
+
+JNIEXPORT jstring JNICALL Java_org_ut3_port_GameActivity_nativeGpuStrings(JNIEnv *env, jclass type)
+{
+    (void)type;
+    char text[sizeof gpu_renderer + sizeof gpu_version + 2];
+    pthread_mutex_lock(&gpu_strings_lock);
+    snprintf(text, sizeof text, "%s\n%s", gpu_renderer, gpu_version);
+    pthread_mutex_unlock(&gpu_strings_lock);
+    /* GL strings are ASCII; anything else would not be modified UTF-8 for NewStringUTF. */
+    for (char *c = text; *c; ++c) if ((unsigned char)*c >= 0x80) *c = '?';
+    return (*env)->NewStringUTF(env, text);
+}
+
+JNIEXPORT jlong JNICALL Java_org_ut3_port_GameActivity_nativeFrameTimes(JNIEnv *env, jclass type, jintArray out)
+{
+    (void)type;
+    uint64_t n = __atomic_load_n(&frame_intervals, __ATOMIC_ACQUIRE);
+    jsize length = out ? (*env)->GetArrayLength(env, out) : 0;
+    if (length > (jsize)FRAME_TIMES) length = (jsize)FRAME_TIMES;
+    jint values[FRAME_TIMES];
+    for (jsize i = 0; i < length; ++i) {
+        /* Oldest first; the slots before the first frames stay 0, as DXVK's graph starts. */
+        uint64_t back = (uint64_t)(length - i);
+        uint32_t us = back <= n ? __atomic_load_n(&frame_times_us[(n - back) % FRAME_TIMES], __ATOMIC_RELAXED) : 0;
+        values[i] = us > INT32_MAX ? INT32_MAX : (jint)us;
+    }
+    if (length) (*env)->SetIntArrayRegion(env, out, 0, length, values);
+    return (jlong)n;
 }
 void void_android_load_ready(void) {}
 

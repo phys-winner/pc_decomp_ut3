@@ -24,7 +24,6 @@ event GetSupportedScriptFields(out array<UIDataProviderField> out_Fields)
     AddScriptField(out_Fields, 'touchOpacity', DATATYPE_RangeProperty);
     AddScriptField(out_Fields, 'touchGyroSensitivity', DATATYPE_RangeProperty);
     AddScriptField(out_Fields, 'uiScale', DATATYPE_RangeProperty);
-    AddScriptField(out_Fields, 'renderScale', DATATYPE_RangeProperty);
     AddScriptField(out_Fields, 'touchLeftHanded', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchInvertY', DATATYPE_Property);
     AddScriptField(out_Fields, 'touchWasd', DATATYPE_Property);
@@ -35,6 +34,9 @@ event GetSupportedScriptFields(out array<UIDataProviderField> out_Fields)
     AddScriptField(out_Fields, 'touchStaticStick', DATATYPE_Property);
     AddScriptField(out_Fields, 'weaponBarScale', DATATYPE_RangeProperty);
     AddScriptField(out_Fields, 'weaponWheelScale', DATATYPE_RangeProperty);
+    AddScriptField(out_Fields, 'fsr1', DATATYPE_Property);
+    AddScriptField(out_Fields, 'antialias', DATATYPE_Property);
+    AddScriptField(out_Fields, 'frameGeneration', DATATYPE_Property);
 }
 
 function bool ReadRange(name Field, out UIRangeData Range)
@@ -60,9 +62,6 @@ function bool ReadRange(name Field, out UIRangeData Range)
     case 'uiScale':
         Range.MinValue = 1.0; Range.MaxValue = 1.5; Range.NudgeValue = 0.05;
         Range.CurrentValue = Settings.uiScale; break;
-    case 'renderScale':
-        Range.MinValue = 0.25; Range.MaxValue = 1.0; Range.NudgeValue = 0.05;
-        Range.CurrentValue = Settings.renderScale / 100.0; break;
     case 'weaponBarScale':
         Range.MinValue = 0.5; Range.MaxValue = 1.0; Range.NudgeValue = 0.05;
         Range.CurrentValue = Settings.weaponBarScale; break;
@@ -101,6 +100,9 @@ event bool GetFieldValue(string FieldName, out UIProviderScriptFieldValue FieldV
     case 'touchWeaponButtonSwipe': FieldValue.StringValue = Settings.touchWeaponButtonSwipe ? "1" : "0"; return true;
     case 'touchWeaponTap': FieldValue.StringValue = Settings.touchWeaponTap ? "1" : "0"; return true;
     case 'touchStaticStick': FieldValue.StringValue = Settings.touchStaticStick ? "1" : "0"; return true;
+    case 'fsr1': FieldValue.StringValue = Settings.fsr1 ? "1" : "0"; return true;
+    case 'antialias': FieldValue.StringValue = Settings.antialias ? "1" : "0"; return true;
+    case 'frameGeneration': FieldValue.StringValue = Settings.frameGeneration ? "1" : "0"; return true;
     }
     return false;
 }
@@ -127,7 +129,6 @@ event bool SetFieldValue(string FieldName, const out UIProviderScriptFieldValue 
         case 'touchOpacity': Settings.touchOpacity = Value; break;
         case 'touchGyroSensitivity': Settings.touchGyroSensitivity = Value; break;
         case 'uiScale': Settings.uiScale = Value; break;
-        case 'renderScale': Settings.renderScale = Clamp(Round(Value * 100.0), 25, 100); break;
         case 'weaponBarScale': Settings.weaponBarScale = Value; break;
         case 'weaponWheelScale': Settings.weaponWheelScale = Value; break;
         }
@@ -145,6 +146,9 @@ event bool SetFieldValue(string FieldName, const out UIProviderScriptFieldValue 
         case 'touchWeaponButtonSwipe': Settings.touchWeaponButtonSwipe = Enabled; break;
         case 'touchWeaponTap': Settings.touchWeaponTap = Enabled; break;
         case 'touchStaticStick': Settings.touchStaticStick = Enabled; break;
+        case 'fsr1': Settings.fsr1 = Enabled; break;
+        case 'antialias': Settings.antialias = Enabled; break;
+        case 'frameGeneration': Settings.frameGeneration = Enabled; break;
         default: return false;
         }
     }

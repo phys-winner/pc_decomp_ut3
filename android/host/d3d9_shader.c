@@ -696,6 +696,27 @@ static void build_map(const MOJOSHADER_parseData *pd, umap_t *map, int *map_coun
     }
 }
 
+/* MojoShader emits literal arrays as separate GLSL uniforms; API constant uploads must not replace them. */
+static void upload_constant_arrays(GLuint program, const MOJOSHADER_parseData *pd)
+{
+    for (int i = 0; pd && i < pd->uniform_count; ++i) {
+        const MOJOSHADER_uniform *u = &pd->uniforms[i];
+        if (!u->constant) continue;
+        if (u->type != MOJOSHADER_UNIFORM_FLOAT || u->array_count < 1 || u->array_count > 256 ||
+            u->index < 0 || u->index > 256 - u->array_count || !u->name)
+            void_fatal("invalid literal shader constant array");
+        float values[256][4] = {{0}};
+        for (int c = 0; c < pd->constant_count; ++c) {
+            const MOJOSHADER_constant *value = &pd->constants[c];
+            int at = value->index - u->index;
+            if (value->type == MOJOSHADER_UNIFORM_FLOAT && at >= 0 && at < u->array_count)
+                memcpy(values[at], value->value.f, sizeof values[at]);
+        }
+        GLint location = glGetUniformLocation(program, u->name);
+        if (location >= 0) glUniform4fv(location, u->array_count, &values[0][0]);
+    }
+}
+
 /* The vertex shader variant whose D3DCOLOR inputs are swizzled to RGBA. */
 /* Patched GLSL of the vertex shader variant for a BGRA-input mask. */
 static char *vertex_source(d3d_shader *vs, uint32_t mask)
@@ -1062,6 +1083,8 @@ static program_t *link_program(d3d_shader *vs, d3d_shader *ps, uint32_t bgra_mas
         if (binary_state > 0 && (key[0] | key[1])) binary_store(p->gl, key);
     }
     glUseProgram(p->gl);
+    upload_constant_arrays(p->gl, vs ? vs->parse : NULL);
+    upload_constant_arrays(p->gl, ps ? ps->parse : NULL);
     p->loc_vs_f = glGetUniformLocation(p->gl, "vs_uniforms_vec4");
     p->loc_vs_i = glGetUniformLocation(p->gl, "vs_uniforms_ivec4");
     p->loc_vs_b = glGetUniformLocation(p->gl, "vs_uniforms_bool");
@@ -1074,6 +1097,9 @@ static program_t *link_program(d3d_shader *vs, d3d_shader *ps, uint32_t bgra_mas
     p->loc_alpha_ref = glGetUniformLocation(p->gl, "vpAlphaRef");
     p->loc_srgb = glGetUniformLocation(p->gl, "vpSrgb");
     if (p->loc_flip >= 0) glUniform1f(p->loc_flip, -1.0f);
+    /* Render targets already store D3D's top-down rows; VPOS needs no second flip. */
+    GLint vpos = glGetUniformLocation(p->gl, "vposFlip");
+    if (vpos >= 0) glUniform2f(vpos, 1.0f, 0.0f);
     p->last_alpha_func = -1;
     if (vs) build_map(vs->parse, p->vs_map, &p->vs_map_count, &p->vs_f_count, &p->vs_i_count, &p->vs_b_count);
     if (ps) build_map(ps->parse, p->ps_map, &p->ps_map_count, &p->ps_f_count, &p->ps_i_count, &p->ps_b_count);

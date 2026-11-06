@@ -58,6 +58,7 @@ def main():
     sources = sorted((args.source.resolve() / "Classes").glob("*.uc"))
     if not sources:
         parser.error("Source must contain Classes/*.uc")
+    source_pins = {str(path.relative_to(ROOT)): sha(path) for path in sources}
     manifest = json.loads((ROOT / "config/inputs.json").read_text())
     original = Path(manifest["source_root"])
     expected = next(row["sha256"] for row in manifest["modules"] if row["path"] == "Binaries/UT3.exe")
@@ -87,7 +88,7 @@ def main():
     startup.wShowWindow = 0
     begin = time.monotonic()
     result = subprocess.run(command, cwd=work / "Binaries", stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, startupinfo=startup,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180, startupinfo=startup,
         creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
     text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     success = re.search(r"Success - 0 error\(s\), 0 warning\(s\)", text)
@@ -96,6 +97,7 @@ def main():
             ("Error,", "Warning,", "Error:", "Failed", "Success -")))[-12000:])
         raise SystemExit(f"UT3 make failed (exit={result.returncode}); see {log}")
     data = bytearray(output.read_bytes())
+    assert source_pins == {str(path.relative_to(ROOT)): sha(path) for path in sources}, "Script sources changed during compilation"
     if len(data) < 69 or struct.unpack_from("<II", data) != (0x9E2A83C1, 512):
         raise ValueError("Compiler did not produce the expected version-512 UE3 package")
     # The port's classes are local UI only. A listen server sends every loaded package
@@ -113,7 +115,7 @@ def main():
         "size": len(data), "compiler_sha256": expected, "command": command,
         "exit_code": result.returncode, "seconds": time.monotonic() - begin,
         "log": str(log), "log_sha256": sha(log), "tool_sha256": sha(Path(__file__)),
-        "sources": {str(path.relative_to(ROOT)): sha(path) for path in sources},
+        "sources": source_pins,
         "original_inputs": {str(path.relative_to(original)): sha(path) for path in
             sorted((original / "UTGame/CookedPC").glob("*.u"))},
         "runtime": "NOT YET VERIFIED"}

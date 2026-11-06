@@ -196,6 +196,12 @@ static void decode_blocks(int conv, const uint8_t *src, uint32_t width, uint32_t
             for (uint32_t y = 0; y < 4; ++y) {
                 uint32_t py = by * 4 + y;
                 if (py >= height) break;
+                if (channels == 4) {
+                    uint32_t count = width - bx * 4;
+                    if (count > 4) count = 4;
+                    memcpy(dst + ((size_t)py * width + bx * 4) * 4, texels[y * 4], count * 4);
+                    continue;
+                }
                 for (uint32_t x = 0; x < 4; ++x) {
                     uint32_t px = bx * 4 + x;
                     if (px >= width) break;

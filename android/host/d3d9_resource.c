@@ -1252,12 +1252,19 @@ static void_com_class query_class;
  * (DXT-48-1536, build 26.1) answers ANY_SAMPLES_PASSED with false zeros once more than 1024 query
  * objects take turns (device probe: 1536 objects in random order, ~5% of the results; 1024 objects,
  * random or LIFO, none), and UE3 keeps a D3D9 query per tested primitive, so meshes blinked on WAR-Torlan. */
-#define QUERY_POOL 1024
+#define QUERY_POOL 4096
 enum { QUERY_NONE, QUERY_PENDING, QUERY_HIDDEN, QUERY_VISIBLE };
 static GLuint query_names[QUERY_POOL];
 static d3d_query *query_owners[QUERY_POOL];
 static uint16_t query_free[QUERY_POOL];
 static uint32_t query_free_count, query_count, query_live, query_unbacked, query_collected_frame = ~0u;
+static uint32_t query_limit;
+
+static uint32_t query_pool_size(const char *renderer)
+{
+    /* Keep the measured PowerVR workaround; Adreno can retain the Deck query set. */
+    return renderer && strstr(renderer, "Adreno") ? QUERY_POOL : 1024;
+}
 
 static void query_release(d3d_query *q)
 {
@@ -1289,10 +1296,11 @@ static int query_collect(d3d_query *q)
 
 static uint32_t query_take(d3d_query *q)
 {
-    if (!query_free_count && query_count < QUERY_POOL) {
+    if (!query_limit) query_limit = query_pool_size((const char *)glGetString(GL_RENDERER));
+    if (!query_free_count && query_count < query_limit) {
         glGenQueries(1, &query_names[query_count]);
         query_free[query_free_count++] = (uint16_t)query_count++;
-        if (query_count == 256 || query_count == 512 || query_count == QUERY_POOL)
+        if (query_count == 256 || query_count == 512 || query_count == query_limit)
             void_log("[gl] occlusion query pool %u (%u D3D9 queries)", query_count, query_live);
     }
     /* Pool used up: once a frame, collect the finished results nobody read (UE3 pools queries it
@@ -1326,6 +1334,7 @@ static int watch_flushed = 1;                           /* GL work flushed since
 
 static void watch_push(d3d_query *q)
 {
+    watch_flushed = 0;
     if (!d3d_rt_threaded()) return;                    /* inline, every poll of the game's looks */
     if (watch_count == watch_cap) {
         uint32_t cap = watch_cap ? watch_cap * 2 : 1024;
@@ -1336,7 +1345,6 @@ static void watch_push(d3d_query *q)
         watch = grown; watch_cap = cap; watch_head = 0;
     }
     watch[(watch_head + watch_count++) % watch_cap] = (watched){ q, QRY_RT(q)->rt_serial };
-    watch_flushed = 0;
 }
 
 static void watch_remove(d3d_query *q)
@@ -1392,7 +1400,8 @@ static void run_query_poll(void *args)
 {
     const poll_args *a = (const poll_args *)args;
     d3d_query *q = a->q;
-    if (a->flush) { glFlush(); watch_flushed = 1; }
+    /* A pending result needs its end submitted once, not a tile flush on every probe. */
+    if (a->flush && !watch_flushed) { glFlush(); watch_flushed = 1; }
     if (!answered(q)) query_answer(q);
     atomic_store_explicit(&QRY_RT(q)->polling, 0, memory_order_release);
 }
@@ -1453,6 +1462,7 @@ static _Thread_local unsigned query_pending_spins;
 /* The game's polls, for the frame statistics: GetData calls of occlusion and
  * event queries, those still pending (with FLUSH), polls handed over, sleeps. */
 static uint64_t poll_calls[2], poll_pending[2], poll_pending_flush[2], poll_recorded, poll_sleep_ns;
+uint64_t d3d_query_sleep_ns(void) { return poll_sleep_ns; }
 static uint32_t query_pending_result(uint32_t flags)
 {
     if (!(flags & 1u)) { query_pending_spins = 0; return S_FALSE_D3D; }

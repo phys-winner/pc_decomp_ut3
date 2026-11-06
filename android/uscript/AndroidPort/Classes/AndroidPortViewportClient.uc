@@ -1,4 +1,5 @@
-class AndroidPortViewportClient extends UTGameViewportClient;
+class AndroidPortViewportClient extends UTGameViewportClient
+    dependson(UTUIFrontEnd_SettingsVideoAdvanced);
 
 var transient UTUIFrontEnd_SettingsPanels PortPanels;
 var transient UTUITabPage_Options PortPage;
@@ -7,12 +8,15 @@ var transient AndroidPortValueStore PortValueStore;
 var transient AndroidPortMenuScale PortMenuScale;
 var transient float NextPanelCheck;
 var transient bool PortPageReady;
+var transient UTUIFrontEnd_SettingsVideoAdvanced PortAdvancedScene;
 
 // Read by the host through reflected IntProperty metadata on this viewport.
 // Mode: 0 no controller/loading, 1 gameplay (including respawn), 2 capturing UI.
 var transient int PortInputMode;
 var transient int PortInputEpoch;
 var transient int PortVehicleProfile;
+var transient float PortFov;
+var transient vector PortViewLocation, PortViewForward, PortViewRight, PortViewUp;
 // Native text editor mailbox; only the viewport Tick calls the original editbox API.
 var transient int PortTextCommand, PortTextFlags, PortTextEpoch;
 var transient UIEditBox PortTextTarget;
@@ -44,6 +48,7 @@ var transient Weapon PortWeaponPreview;
 // stick deflection throttle, 32 moving backwards, 64 board/translocator,
 // 128 multiple seats, bits 8-12 seats this player can switch to.
 // 8192 Scorpion driver: axial steering dead zone prevents slight stick drift locking its wheels.
+// 16384 the original weapon is in its firing state, including after a fire button was released.
 var transient int PortVehicleFlags;
 // Console look steering (UTVehicle.SetInputs for UTVC_Simple): the steering
 // toward the view and the vehicle's own reverse threshold and stick scale.
@@ -176,6 +181,7 @@ function UpdatePortInputContext()
     local bool bCapturingUI;
     local name ConsoleState;
     local int PreviousEpoch;
+    local rotator ViewRotation;
     PreviousEpoch = PortInputEpoch;
     CurrentWorld = GetCurrentWorldInfo();
     if (GamePlayers.Length > 0 && GamePlayers[0] != None)
@@ -200,6 +206,13 @@ function UpdatePortInputContext()
             bCapturingUI = true;
     }
     PublishPortInputContext(CurrentWorld, CurrentController, CurrentPawn, CurrentScene, bCapturingUI);
+    PortFov = 0;
+    if (CurrentController != None && PortInputMode == 1)
+    {
+        PortFov = CurrentController.GetFOVAngle();
+        CurrentController.GetPlayerViewPoint(PortViewLocation, ViewRotation);
+        GetAxes(ViewRotation, PortViewForward, PortViewRight, PortViewUp);
+    }
     if (PreviousEpoch != PortInputEpoch)
     {
         PortScrollSteps = 0;
@@ -451,6 +464,9 @@ function UpdatePortVehicle(Pawn CurrentPawn)
     // with look steering (8), so older layers ignore the combination.
     if ((Flags & 8) == 0 && PortInputMode == 1 && PortScoped(CurrentPawn))
         Flags = Flags | 48;
+    if (PortInputMode == 1 && CurrentPawn != None && CurrentPawn.Health > 0
+        && CurrentPawn.Weapon != None && CurrentPawn.Weapon.IsFiring())
+        Flags = Flags | 16384;
     PortVehicleFlags = Flags;
 }
 
@@ -1465,6 +1481,7 @@ event GameSessionEnded()
         PortMenuScale.Reset();
     PortPanels = None;
     PortPage = None;
+    PortAdvancedScene = None;
     PortPageReady = false;
     PortMenuPending = false;
     PortMenuRequest = 0;
@@ -1551,6 +1568,11 @@ function PreparePortWidgets()
     local array<UIObject> Children;
     local UTUIOptionList Options;
     local UIComboBox Combo;
+    local UTUIDataProvider_MenuOption Provider;
+    local UILabel Label;
+    local UTUITabPage_Options Page;
+    local UIObject Parent;
+    local string FeatureDescription;
     local int SceneIndex, WidgetIndex, Index;
     local string Value;
     for (SceneIndex = 0; SceneIndex < UIController.SceneClient.ActiveScenes.Length; ++SceneIndex)
@@ -1561,8 +1583,38 @@ function PreparePortWidgets()
             Options = UTUIOptionList(Children[WidgetIndex]);
             if (Options != None)
                 for (Index = 0; Index < Options.GeneratedObjects.Length; ++Index)
+                {
                     if (Options.GeneratedObjects[Index].OptionObj != None)
                         Options.GeneratedObjects[Index].OptionObj.NotifyActiveStateChanged = PortOptionState;
+                    Provider = UTUIDataProvider_MenuOption(Options.GeneratedObjects[Index].OptionProvider);
+                    if (Provider == None)
+                        continue;
+                    // Localized engine strings load after config, so replace the live provider and label.
+                    if (Options.GeneratedObjects[Index].OptionProviderName == 'EnableHardwarePhysics')
+                    {
+                        Provider.CustomFriendlyName = PortStore.PhysXCaption;
+                        FeatureDescription = PortStore.PhysXDescription;
+                    }
+                    else if (Options.GeneratedObjects[Index].OptionProviderName == 'HardwareOpenAL')
+                    {
+                        Provider.CustomFriendlyName = PortStore.OpenALCaption;
+                        FeatureDescription = PortStore.OpenALDescription;
+                    }
+                    else
+                        continue;
+                    Label = UILabel(Options.GeneratedObjects[Index].LabelObj);
+                    if (Label != None && Label.GetDataStoreBinding() != Provider.CustomFriendlyName)
+                        Label.SetDataStoreBinding(Provider.CustomFriendlyName);
+                    if (Options.CurrentIndex == Index)
+                    {
+                        Parent = Options.GetOwner();
+                        while (Parent != None && UTUITabPage_Options(Parent) == None)
+                            Parent = Parent.GetOwner();
+                        Page = UTUITabPage_Options(Parent);
+                        if (Page != None && Page.DescriptionLabel != None)
+                            Page.DescriptionLabel.SetDataStoreBinding(FeatureDescription);
+                    }
+                }
             Combo = UIComboBox(Children[WidgetIndex]);
             if (Combo == None || Combo.ComboEditbox == None || !Combo.IsVisible()
                 || Combo.GetBounds(UIORIENT_Horizontal, EVALPOS_PixelViewport) < 1)
@@ -1743,6 +1795,63 @@ function HandlePortText()
     }
 }
 
+function PreparePortVideo()
+{
+    local int Index;
+    local UTUIFrontEnd_SettingsVideoAdvanced Advanced;
+    for (Index = UIController.SceneClient.ActiveScenes.Length - 1; Index >= 0; --Index)
+    {
+        Advanced = UTUIFrontEnd_SettingsVideoAdvanced(UIController.SceneClient.ActiveScenes[Index]);
+        if (Advanced != None)
+            break;
+    }
+    if (Advanced != PortAdvancedScene)
+    {
+        PortAdvancedScene = Advanced;
+        if (Advanced != None && Advanced.ButtonBar != None)
+            Advanced.ButtonBar.AppendButton(PortStore.MaximumGraphicsCaption, OnPortMaximumGraphics);
+    }
+}
+
+function bool OnPortMaximumGraphics(UIScreenObject Sender, int PlayerIndex)
+{
+    local array<EPossibleVideoSettings> Settings;
+    local array<int> Values;
+    local int Index, Widget;
+    if (PortAdvancedScene == None || PortAdvancedScene.OptionsPage == None)
+        return false;
+    // Apply the original highest quality buckets, then exclude all blur and bloom.
+    Settings.AddItem(PVS_WorldDetail); Values.AddItem(5);
+    Settings.AddItem(PVS_TextureDetail); Values.AddItem(5);
+    Settings.AddItem(PVS_ScreenPercentage); Values.AddItem(100);
+    Settings.AddItem(PVS_EnableMotionBlur); Values.AddItem(0);
+    Settings.AddItem(PVS_DepthOfField); Values.AddItem(0);
+    Settings.AddItem(PVS_Bloom); Values.AddItem(0);
+    Settings.AddItem(PVS_QualityBloom); Values.AddItem(0);
+    PortAdvancedScene.SetVideoSettingValueArray(Settings, Values);
+    // Direct flags survive ApplyNewSettings only after the preset is marked Custom (0).
+    Settings.Length = 0; Values.Length = 0;
+    Settings.AddItem(PVS_WorldDetail); Values.AddItem(0);
+    Settings.AddItem(PVS_EnableMotionBlur); Values.AddItem(0);
+    Settings.AddItem(PVS_DepthOfField); Values.AddItem(0);
+    Settings.AddItem(PVS_Bloom); Values.AddItem(0);
+    Settings.AddItem(PVS_QualityBloom); Values.AddItem(0);
+    PortAdvancedScene.SetVideoSettingValueArray(Settings, Values);
+    for (Index = 0; Index < PortAdvancedScene.SettingWidgetMapping.Length; ++Index)
+    {
+        PortAdvancedScene.SetDataStoreStringValue("<Registry:" $ PortAdvancedScene.SettingWidgetMapping[Index] $ ">",
+            string(PortAdvancedScene.GetVideoSettingValue(EPossibleVideoSettings(Index))));
+        Widget = PortAdvancedScene.OptionsPage.OptionList.GetObjectInfoIndexFromName(PortAdvancedScene.SettingWidgetMapping[Index]);
+        if (Widget != INDEX_NONE)
+            UIDataStoreSubscriber(PortAdvancedScene.OptionsPage.OptionList.GeneratedObjects[Widget].OptionObj).RefreshSubscriberValue();
+    }
+    PortAdvancedScene.bCustomizedSettings = true;
+    PortAdvancedScene.bRequireRestartWarning = true;
+    PortAdvancedScene.UpdateSpecialCaptions();
+    LogInternal("AndroidPort maximum graphics applied: original buckets 5, screen 100, motion blur/DOF/bloom disabled");
+    return true;
+}
+
 event Tick(float DeltaTime)
 {
     local int Index;
@@ -1776,6 +1885,7 @@ event Tick(float DeltaTime)
     NextPanelCheck = 0.25;
     if (!PreparePortStores())
         return;
+    PreparePortVideo();
     PreparePortWidgets();
     for (Index = UIController.SceneClient.ActiveScenes.Length - 1; Index >= 0; --Index)
         if (AcceptStartupCDKey(UTUIFrontEnd_CDKey(UIController.SceneClient.ActiveScenes[Index])))

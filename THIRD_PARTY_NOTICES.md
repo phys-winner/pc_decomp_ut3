@@ -129,3 +129,8 @@ changes identified in the user's `mods/fix_mp/dinput8.dll` (the UT3 OpenSpy prox
 The implementation is `android/host/openspy.c`; no code from the DLL is loaded or
 distributed. The original game files remain unchanged. Upstream project:
 <https://github.com/openspy/ut3-proxy>.
+# AMD FidelityFX
+
+FSR1 EASU/RCAS use AMD's scalar kernels, adapted to Shader Model 3 with individual texture samples and float constants. Source: https://github.com/GPUOpen-Effects/FidelityFX-FSR at a21ffb8f6c13233ba336352bdff293894c706575, MIT licence in reference/fsr1/FSR1-MIT.txt.
+
+The optional Vulkan frame-generation plugin uses FidelityFX SDK 1.1.4 / FSR3.1.4 from https://github.com/Snowapril/fsr3-android, pinned ARM64 release v0.1.0. AMD and Android-port MIT notices are retained in reference/fsr3-runtime/FSR3-Android-MIT.txt and the SDK headers. Library and header hashes are in dependencies-fsr.json. These licences are included in the APK's third-party components page.

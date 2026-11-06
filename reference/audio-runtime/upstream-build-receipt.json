@@ -1,7 +1,7 @@
 {
-  "timestamp_utc": "2026-10-15T17:39:58.770053+00:00",
+  "timestamp_utc": "2026-11-06T03:33:47.796073+00:00",
   "source_sha256": {
-    "tools\\build_native_audio.py": "0361185c6a532d7b63de865439230bc81a27f95782beca8fde4c1ae9ce7fde89",
+    "tools\\build_native_audio.py": "f2edf5e1a6bc941555cea462d0465ef4311e22f6d58d2b79d3a6cb859800aec7",
     "android\\audio\\metrics.h": "391c8c70e3f0762b0a61ee7a83360d0a42a304d5f24cf16582b18906874d4d55",
     "android\\audio\\metrics.cpp": "cc1dceba75c1633a512292a04e617a9274efa97d9b0946d7e05b268b515890f2",
     "android\\audio\\native_probe.cpp": "ed878e964ad31b7bcf6b6b7553413adc1402ef6816a7adb4fa4688979a981d0c",
@@ -3625,7 +3625,7 @@
     "ALSOFT_INSTALL_AMBDEC_PRESETS": "OFF",
     "ALSOFT_INSTALL_EXAMPLES": "OFF",
     "ALSOFT_INSTALL_UTILS": "OFF",
-    "ALSOFT_EAX": "OFF",
+    "ALSOFT_EAX": "ON",
     "ALSOFT_CPUEXT_NEON": "ON",
     "ALSOFT_REQUIRE_NEON": "ON",
     "ALSOFT_BACKEND_OBOE": "ON",
@@ -3650,16 +3650,17 @@
     "ALSOFT_BACKEND_WAVE": "OFF"
   },
   "compiler_sha256": "39187ddc9bc25d52e1ae3bff3561d1459e66856ce7c75f391f9f980c1258bdef",
+  "build_id": "98cdf414b1c2c7a6c3e11ee71b1ca4a6be531c88",
   "configure_command": [
-    "<ANDROID_SDK>\\cmake\\3.22.1\\bin\\cmake.exe",
+    "C:\\Users\\Xilonen\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\cmake.exe",
     "-S",
-    "<FROSTPUNK>\\build\\native-audio\\project",
+    "E:\\static_recompilation\\ut3\\build\\native-audio\\rebuild\\build\\native-audio\\project",
     "-B",
-    "<FROSTPUNK>\\build\\native-audio\\cmake",
+    "E:\\static_recompilation\\ut3\\build\\native-audio\\rebuild\\build\\native-audio\\cmake",
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=<ANDROID_SDK>\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_TOOLCHAIN_FILE=<ANDROID_SDK>\\ndk\\27.2.12479018\\build\\cmake\\android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=C:\\Users\\Xilonen\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-DCMAKE_TOOLCHAIN_FILE=C:\\Users\\Xilonen\\AppData\\Local\\Android\\Sdk\\ndk\\27.2.12479018\\build\\cmake\\android.toolchain.cmake",
     "-DANDROID_ABI=arm64-v8a",
     "-DANDROID_PLATFORM=android-30",
     "-DANDROID_STL=c++_shared",
@@ -3672,7 +3673,7 @@
     "-DALSOFT_INSTALL_AMBDEC_PRESETS=OFF",
     "-DALSOFT_INSTALL_EXAMPLES=OFF",
     "-DALSOFT_INSTALL_UTILS=OFF",
-    "-DALSOFT_EAX=OFF",
+    "-DALSOFT_EAX=ON",
     "-DALSOFT_CPUEXT_NEON=ON",
     "-DALSOFT_REQUIRE_NEON=ON",
     "-DALSOFT_BACKEND_OBOE=ON",
@@ -3697,27 +3698,27 @@
     "-DALSOFT_BACKEND_WAVE=OFF"
   ],
   "build_command": [
-    "<ANDROID_SDK>\\cmake\\3.22.1\\bin\\cmake.exe",
+    "C:\\Users\\Xilonen\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\cmake.exe",
     "--build",
-    "<FROSTPUNK>\\build\\native-audio\\cmake",
+    "E:\\static_recompilation\\ut3\\build\\native-audio\\rebuild\\build\\native-audio\\cmake",
     "--target",
     "OpenAL",
     "native_audio_probe",
     "--parallel",
-    "8"
+    "2"
   ],
   "strip_command": [
-    "<ANDROID_SDK>\\ndk\\27.2.12479018\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-strip.exe",
+    "C:\\Users\\Xilonen\\AppData\\Local\\Android\\Sdk\\ndk\\27.2.12479018\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-strip.exe",
     "--strip-unneeded",
-    "<FROSTPUNK>\\build\\native-audio\\runtime\\libopenal.so"
+    "E:\\static_recompilation\\ut3\\build\\native-audio\\rebuild\\build\\native-audio\\runtime\\libopenal.so"
   ],
-  "library_sha256": "e754134ce0541420f44bf83c3ab3ce63041a0a8bb4d4f2f88a23a8a6e4a5a179",
-  "library_bytes": 1645560,
-  "unstripped_library_bytes": 38889360,
-  "fixture_sha256": "07e510d8461a6d4b9e06d05ce27dff5be9706a856cef27faaa4342bf2864339c",
+  "library_sha256": "0c628d5326314a471c0f230a64f64cba8729369aa433d2f3e193852ee2ee2af7",
+  "library_bytes": 1785336,
+  "unstripped_library_bytes": 45348568,
+  "fixture_sha256": "42f9416741af48a8102433205382538283e6e4edab0a66bf5832fd12bb2524af",
   "runtime_files": {
     "libc++_shared.so": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
-    "libopenal.so": "e754134ce0541420f44bf83c3ab3ce63041a0a8bb4d4f2f88a23a8a6e4a5a179"
+    "libopenal.so": "0c628d5326314a471c0f230a64f64cba8729369aa433d2f3e193852ee2ee2af7"
   },
   "licenses": {
     "fmt-LICENSE.txt": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
@@ -3733,51 +3734,5 @@
   "capture_exposed": false,
   "null_wave_OpenSL_available": false,
   "native_Win64_redirect_implemented": false,
-  "game_boot_proven": false,
-  "hardware_timestamp_utc": "2026-10-15T17:40:48.918530+00:00",
-  "serial": "SERIAL",
-  "remote_verified_sha256": {
-    "native_audio_probe": "07e510d8461a6d4b9e06d05ce27dff5be9706a856cef27faaa4342bf2864339c",
-    "libc++_shared.so": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
-    "libopenal.so": "e754134ce0541420f44bf83c3ab3ce63041a0a8bb4d4f2f88a23a8a6e4a5a179"
-  },
-  "android_command": [
-    "<ANDROID_SDK>\\platform-tools\\adb.exe",
-    "-s",
-    "SERIAL",
-    "shell",
-    "cd /data/local/tmp/frostpunk/native-audio && LD_LIBRARY_PATH=/data/local/tmp/frostpunk/native-audio ALSOFT_LOGLEVEL=3 ALSOFT_DRIVERS=oboe ./native_audio_probe"
-  ],
-  "android_returncode": 0,
-  "android_stdout": "{\"success\":true,\"renderer\":\"OpenAL Soft\",\"version\":\"1.1 ALSOFT 1.25.2\",\"device\":\"OpenAL Soft\",\"audio_api\":2,\"stream_state\":4,\"callbacks\":107,\"frames\":19392,\"nonzero_samples\":35652,\"nonfinite_samples\":0,\"sample_rate\":48000,\"channels\":2,\"format\":2,\"frames_per_burst\":192,\"performance_mode\":12,\"sharing_mode\":1,\"device_id\":3,\"xruns\":0,\"frames_written\":19200,\"frames_read\":17856,\"peak_abs\":0.0170898438,\"render_cpu_ns\":11791826,\"render_wall_ns\":12218021,\"render_cpu_percent_audio_time\":2.918769,\"original_x64_executed\":false,\"game_boot_proven\":false}\n",
-  "android_stderr": "[ALSOFT] (II) Initializing library v1.25.2-unknown unknown\n[ALSOFT] (II) Supported backends: oboe\n[ALSOFT] (II) Loading config /etc/openal/alsoft.conf...\n[ALSOFT] (II) Loading config /etc/xdg/alsoft.conf...\n[ALSOFT] (II) Loading config /.alsoftrc...\n[ALSOFT] (II) Loading config /.config/alsoft.conf...\n[ALSOFT] (II) Got binary: \"/data/local/tmp/frostpunk/native-audio\", \"native_audio_probe\"\n[ALSOFT] (II) Loading config /data/local/tmp/frostpunk/native-audio/alsoft.conf...\n[ALSOFT] (II) Extensions: +NEON\n[ALSOFT] (II) Initialized backend \"oboe\"\n[ALSOFT] (II) Added \"oboe\" for playback\n[ALSOFT] (WW) No capture backend available!\n[ALSOFT] (II) Opening default playback device\n[ALSOFT] (II) Created device 0xb400007335b1fa00, \"Oboe Default\"\n[ALSOFT] (II) ALC_SYNC = 1\n[ALSOFT] (II) Pre-reset: Stereo, Float32, 48000hz, 512 / 1536 buffer\n[ALSOFT] (II) Got stream with properties:\nStreamID: 0xb4000071d3020b70\nDeviceId: 3\nDirection: Output\nAPI type: AAudio\nBufferCapacity: 1536\nBufferSize: 1536\nFramesPerBurst: 192\nFramesPerDataCallback: 0\nSampleRate: 48000\nChannelCount: 2\nFormat: Float\nSharingMode: Shared\nPerformanceMode: LowLatency\nCurrentState: Open\nXRunCount: 0\nFramesRead: 0\nFramesWritten: 0\n\n[ALSOFT] (II) Post-reset: Stereo, Float32, 48000hz, 480 / 1536 buffer\n[ALSOFT] (II) Stereo rendering\n[ALSOFT] (II) Channel config, Main: 3, Real: 2\n[ALSOFT] (II) Allocating 5 channels, 20480 bytes\n[ALSOFT] (II) Enabling single-band first-order ambisonic decoder\n[ALSOFT] (II) Max sources: 256 (255 + 1), effect slots: 64, sends: 2\n[ALSOFT] (II) Dithering disabled\n[ALSOFT] (II) Output limiter disabled\n[ALSOFT] (II) Fixed device latency: 0ns\n[ALSOFT] (II) Post-start: Stereo, Float32, 48000hz, 480 / 1536 buffer\n[ALSOFT] (II) Increasing allocated voices to 256\n[ALSOFT] (II) Created context 0xb4000071c3027820\n[ALSOFT] (II) Increasing allocated context properties to 2\n[ALSOFT] (II) Increasing allocated voice properties to 32\n[ALSOFT] (II) Freeing context 0xb4000071c3027820\n[ALSOFT] (II) Freeing device 0xb400007335b1fa00\n",
-  "android_hardware_pass": true,
-  "android_fixture": {
-    "success": true,
-    "renderer": "OpenAL Soft",
-    "version": "1.1 ALSOFT 1.25.2",
-    "device": "OpenAL Soft",
-    "audio_api": 2,
-    "stream_state": 4,
-    "callbacks": 107,
-    "frames": 19392,
-    "nonzero_samples": 35652,
-    "nonfinite_samples": 0,
-    "sample_rate": 48000,
-    "channels": 2,
-    "format": 2,
-    "frames_per_burst": 192,
-    "performance_mode": 12,
-    "sharing_mode": 1,
-    "device_id": 3,
-    "xruns": 0,
-    "frames_written": 19200,
-    "frames_read": 17856,
-    "peak_abs": 0.0170898438,
-    "render_cpu_ns": 11791826,
-    "render_wall_ns": 12218021,
-    "render_cpu_percent_audio_time": 2.918769,
-    "original_x64_executed": false,
-    "game_boot_proven": false
-  }
+  "game_boot_proven": false
 }

@@ -16,6 +16,7 @@ static struct {
     uint32_t list_string_class,list_owner_class;
     /* Optional publisher fields which never change the input context. */
     uint32_t weapon_slots,weapon_request,weapon_preview,vehicle_flags,steer,steer_reverse,steer_scale;
+    uint32_t camera_fov,camera_location,camera_up,camera_right,camera_forward;
 } touch_metadata;
 
 static int touch_read32(uint32_t address, uint32_t *value)
@@ -172,6 +173,11 @@ static int touch_game_read(uint32_t out[4],int deliver_menu)
         touch_metadata.steer_scale=present ? details[6] : 0;
         touch_metadata.controller_class=touch_metadata.scene_class=0;
         touch_metadata.viewport_class=viewport_class;
+        touch_metadata.camera_fov=touch_property(viewport_class,"PortFov","FloatProperty");
+        touch_metadata.camera_location=touch_property(viewport_class,"PortViewLocation","StructProperty");
+        touch_metadata.camera_up=touch_property(viewport_class,"PortViewUp","StructProperty");
+        touch_metadata.camera_right=touch_property(viewport_class,"PortViewRight","StructProperty");
+        touch_metadata.camera_forward=touch_property(viewport_class,"PortViewForward","StructProperty");
     }
     uint32_t values[4];
     if (!touch_member(viewport, touch_metadata.mode, &values[0]) ||
@@ -240,6 +246,22 @@ int void_touch_game_read(uint32_t out[4])
         void_ui_hud_scale_observe(1.0f);
     }
     return result;
+}
+
+int void_postfx_view(float camera[13],uint32_t *epoch)
+{
+    uint32_t context[4],bits;
+    if(touch_game_read(context,0)!=1||context[0]!=1||!touch_metadata.camera_fov||
+        !touch_member(context[3],touch_metadata.camera_fov,&bits))return 0;
+    memcpy(camera,&bits,4);
+    if(!(camera[0]>1&&camera[0]<179))return 0;
+    uint32_t offsets[]={touch_metadata.camera_location,touch_metadata.camera_up,touch_metadata.camera_right,touch_metadata.camera_forward};
+    for(unsigned i=0;i<4;++i){
+        if(!offsets[i]||context[3]>UINT32_MAX-offsets[i]-12||!void_vm_readable(context[3]+offsets[i],12))return 0;
+        memcpy(camera+1+i*3,GPTR(context[3]+offsets[i]),12);
+        for(unsigned j=0;j<3;++j)if(!__builtin_isfinite(camera[1+i*3+j]))return 0;
+    }
+    camera[0]*=.017453292519943295f;*epoch=context[1];return 1;
 }
 
 /* Formatter-only read: no menu delivery, HUD observer, JNI or guest call. */
@@ -514,9 +536,9 @@ int void_touch_game_details(uint32_t out[2])
     if (!touch_metadata.weapon_slots || !touch_viewport(&viewport) ||
         !touch_member(viewport,touch_metadata.weapon_slots,&out[0]) ||
         !touch_member(viewport,touch_metadata.vehicle_flags,&out[1])) { out[0]=out[1]=0;return 0; }
-    /* HUD bits 0-15; vehicle actions/seats 0-12 and Scorpion steering 13. */
+    /* HUD bits 0-15; vehicle actions/seats 0-12, Scorpion steering 13, weapon firing 14. */
     if ((out[0]>>16) || ((out[0]>>10)&15)>9) out[0]=0;
-    if (out[1]>>14) out[1]=0;
+    if (out[1]>>15) out[1]=0;
     return 1;
 }
 
@@ -551,7 +573,7 @@ int void_touch_steer(float out[3],uint32_t *flags)
 {
     uint32_t viewport,bits,value[3];
     if (!touch_metadata.steer || !touch_viewport(&viewport) ||
-        !touch_member(viewport,touch_metadata.vehicle_flags,&bits) || (bits>>14)) return 0;
+        !touch_member(viewport,touch_metadata.vehicle_flags,&bits) || (bits>>15)) return 0;
     if (bits&8192u) {
         if (bits&8u) return 0;
         out[0]=out[1]=0;out[2]=1;*flags=bits;

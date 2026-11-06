@@ -137,7 +137,8 @@ public class SettingsCheck {
             if(t.startsWith("[")&&t.endsWith("]")) section=t.substring(1,t.length()-1);
             else if(section.startsWith("AppCompatBucket")&&t.indexOf('=')>0&&!t.startsWith(";")) {
                 int equals=t.indexOf('=');String key=t.substring(0,equals).trim();
-                assert entries(text,section,key).equals(Arrays.asList(t.substring(equals+1).trim())):section+" "+key;
+                String expected=key.equalsIgnoreCase("OnlyStreamInTextures")?"False":t.substring(equals+1).trim();
+                assert entries(text,section,key).equals(Arrays.asList(expected)):section+" "+key;
                 ++checked;
             }
         }
@@ -154,6 +155,9 @@ public class SettingsCheck {
         String result=GameSettings.minimum(current,profile,1056);
         assert result.contains("ResX=1056\r\n") && result.contains("ResY=480\r\n");
         assert result.contains("ScreenPercentage=100\r\n") && result.contains("UseVsync=False\r\n");
+        assert entries(result,"SystemSettings","OnlyStreamInTextures").equals(Arrays.asList("False"));
+        String retained=GameSettings.minimum(current+"\r\n[SystemSettings]\r\nOnlyStreamInTextures=True\r\n",profile,1056);
+        assert entries(retained,"SystemSettings","OnlyStreamInTextures").equals(Arrays.asList("False"));
         assert !result.contains("DetailMode="):"Existing graphics must not be replaced by the minimum preset";
         assert result.contains("MaxSmoothedFrameRate=60\r\n") && result.contains("bSmoothFrameRate=TRUE\r\n");
         assert result.contains("BasedOn=original.ini") && result.contains("Volume=0.75") && result.contains("Name=Игрок");
@@ -186,6 +190,10 @@ public class SettingsCheck {
         assert Arrays.equals(rates,new int[]{60,90,120});
         assert GameSettings.nearestRate(0,rates)==120&&GameSettings.nearestRate(100,rates)==90&&GameSettings.nearestRate(45,rates)==60;
         String rateOptions=GameSettings.displayOptions("base",rates);
+        String frameOption="[AndroidPort_frameGeneration UTUIDataProvider_MenuOption]\nOptionSet=AndroidPort\n";
+        if(!GameSettings.rendererOptions(frameOption,"gles",36).isEmpty())throw new AssertionError("FG on GLES");
+        if(!GameSettings.rendererOptions(frameOption,"dxvk",30).isEmpty())throw new AssertionError("FG below API31");
+        if(!GameSettings.rendererOptions(frameOption,"dxvk-turnip",31).equals(frameOption))throw new AssertionError("FG on Vulkan");
         assert rateOptions.contains(".DisplayFps=60\n.DisplayFps=90\n.DisplayFps=120\n");
         File migrated=folder.resolve("legacy-quality/UTEngine.ini").toFile();migrated.getParentFile().mkdirs();
         GameSettings.write(migrated,"[SystemSettings]\nDetailMode=2\nDynamicShadows=True\n");
@@ -313,7 +321,14 @@ public class SettingsCheck {
         try{GameSettings.validateLanguage(game.toFile(),"../INT");throw new AssertionError();}catch(IllegalArgumentException expected){}
         GameSettings.prepare(validIni,game.toFile(),2400,1080,60,"RUS");
         assert entries(GameSettings.read(validIni),"Engine.Engine","Language").equals(Arrays.asList("RUS"));
-        assert entries(GameSettings.read(validIni),"SystemSettings","ScreenPercentage").equals(Arrays.asList("100"));
+        assert entries(GameSettings.read(validIni),"SystemSettings","ScreenPercentage").equals(entries(valid,"SystemSettings","ScreenPercentage"));
+        GameSettings.write(validIni,GameSettings.section(GameSettings.read(validIni),"SystemSettings",Collections.singletonMap("ScreenPercentage","76")));
+        for(String renderer:new String[]{"gles","dxvk","dxvk-turnip"}) {
+            GameSettings.prepare(validIni,game.toFile(),2400,1080,60,"INT",renderer);
+            assert entries(GameSettings.read(validIni),"SystemSettings","ScreenPercentage").equals(Arrays.asList("76")) : "Original screen percentage reset on launch";
+            for(String field:new String[]{"CompatLevelComposite","CompatLevelCPU","CompatLevelGPU"})
+                assert entries(GameSettings.read(validIni),"AppCompat",field).equals(Arrays.asList("5"));
+        }
         assert entries(GameSettings.read(existingCompat),"AppCompatBucket5","ResY").equals(entries(updatedCompat,"AppCompatBucket5","ResY"));
         byte[] script=Files.readAllBytes(project.resolve("build/uscript/AndroidPort.u"));
         String options=new String(Files.readAllBytes(project.resolve("android/uscript/AndroidPort/AndroidPortOptions.ini")),StandardCharsets.UTF_8);

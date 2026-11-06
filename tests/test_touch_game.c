@@ -217,7 +217,8 @@ static void detail_cases(void)
     assert(void_touch_game_details(out)==1 && !out[0] && out[1]==64); /* Invalid slot; hoverboard is available. */
     put(VIEWPORT+0xEC,128|(21<<8));assert(void_touch_game_details(out)==1 && out[1]==(128|(21<<8)));
     put(VIEWPORT+0xEC,1<<13);assert(void_touch_game_details(out)==1 && out[1]==8192); /* Scorpion steering. */
-    put(VIEWPORT+0xEC,1<<14);assert(void_touch_game_details(out)==1 && !out[1]); /* Unknown flag. */
+    put(VIEWPORT+0xEC,1<<14);assert(void_touch_game_details(out)==1 && out[1]==16384); /* Weapon firing. */
+    put(VIEWPORT+0xEC,1<<15);assert(void_touch_game_details(out)==1 && !out[1]); /* Unknown flag. */
     put(VIEWPORT+0xE0,1u<<15);put(VIEWPORT+0xEC,0);assert(void_touch_game_details(out)==1 && out[0]==(1u<<15)); /* Minimap only. */
     put(VIEWPORT+0xE0,1u<<16);assert(void_touch_game_details(out)==1 && !out[0]);
     /* Weapon mailbox: a later preview replaces an unread preview, never an unread switch. */

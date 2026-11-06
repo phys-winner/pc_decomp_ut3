@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Arrays;
+import java.util.Collections;
 
 final class GameSettings {
     static int renderWidth(int displayWidth, int displayHeight) {
@@ -39,15 +40,8 @@ final class GameSettings {
     }
 
     static void prepare(File engine, File game, int width, int height, int fps, String language, String renderer) throws IOException {
-        prepare(engine, game, width, height, fps, language, renderer, 100);
-    }
-
-    /** scale: the render scale, the 3D scene's ScreenPercentage (25-100); the interface keeps the
-     *  display's resolution, as the original renders its UI after the scene's upscale. */
-    static void prepare(File engine, File game, int width, int height, int fps, String language, String renderer, int scale) throws IOException {
         boolean nativePacer = nativeFramePacer(renderer);
         validateVideo(width, height, fps);
-        validateScale(scale);
         validateLanguage(game, language);
         retireConfigBackups(engine.getParentFile());
         String previous = engine.isFile() ? read(engine) : null;
@@ -59,14 +53,19 @@ final class GameSettings {
         }
         String defaults = read(game, "UTGame/Config/DefaultCompat.ini");
         if (previous == null || repair)
-            current = section(current, "SystemSettings", minimumVideo(defaults, width, height, scale));
-        String result = minimum(current, defaults, width, height, fps, nativePacer, scale);
+            current = section(current, "SystemSettings", minimumVideo(defaults, width, height));
+        String result = minimum(current, defaults, width, height, fps, nativePacer);
         LinkedHashMap<String, String> locale = new LinkedHashMap<>();
         locale.put("Language", language);
         result = section(result, "Engine.Engine", locale);
         LinkedHashMap<String, String> input = new LinkedHashMap<>();
         input.put("AllowJoystickInput", "1");
         result = section(result, "WinDrv.WindowsClient", input);
+        LinkedHashMap<String, String> appraisal = new LinkedHashMap<>();
+        // The native appraisal is bypassed; matching saved levels stop automatic preset changes.
+        for (String field : new String[]{"CompatLevelComposite", "CompatLevelCPU", "CompatLevelGPU"})
+            appraisal.put(field, "5");
+        result = section(result, "AppCompat", appraisal);
         File compatibility = new File(engine.getParentFile(), "UTCompat.ini");
         String compat = compatibility.isFile() ? read(compatibility) : null;
         if (compat == null) {
@@ -81,6 +80,9 @@ final class GameSettings {
             for (int bucket = 1; bucket <= 5; bucket++)
                 compat = section(compat, "AppCompatBucket" + bucket, profile(original, bucket));
         }
+        // Android shares RAM with the GPU; even maximum quality must let unused mips leave memory.
+        for (int bucket = 1; bucket <= 5; bucket++)
+            compat = section(compat, "AppCompatBucket" + bucket, Collections.singletonMap("OnlyStreamInTextures", "False"));
         write(compatibility, compat);
         if (repair) {
             File backup = new File(engine.getParentFile(), "UTEngine.before-bootstrap-repair.ini.bak");
@@ -223,19 +225,17 @@ final class GameSettings {
     }
 
     static String minimum(String current, String compatibility, int width, int height, int fps, boolean nativePacer) {
-        return minimum(current, compatibility, width, height, fps, nativePacer, 100);
-    }
-
-    static String minimum(String current, String compatibility, int width, int height, int fps, boolean nativePacer, int scale) {
         validateVideo(width, height, fps);
-        validateScale(scale);
         Map<String, String> video = new LinkedHashMap<>();
         if (legacySeed(current) || !ini(current).containsKey("systemsettings"))
-            video.putAll(minimumVideo(compatibility, width, height, scale));
+            video.putAll(minimumVideo(compatibility, width, height));
+        if (ini(current).getOrDefault("systemsettings", new ArrayList<>()).stream()
+            .noneMatch(line -> key(line).equalsIgnoreCase("ScreenPercentage")))
+            video.put("ScreenPercentage", "100");
         video.put("ResX", Integer.toString(width));
         video.put("ResY", Integer.toString(height));
         video.put("UseVsync", "False");
-        video.put("ScreenPercentage", Integer.toString(scale));
+        video.put("OnlyStreamInTextures", "False");
         LinkedHashMap<String, String> timing = new LinkedHashMap<>();
         // DXVK delays its frame-latency signal at the selected native rate.
         // Keep UE3's independent adaptive limiter for the GLES path.
@@ -248,12 +248,6 @@ final class GameSettings {
     private static void validateVideo(int width, int height, int fps) {
         if (height < 8 || width < height || width > 8192 || height > 8192 || fps < 1 || fps > 1000)
             throw new IllegalArgumentException("Unsupported graphics mode");
-    }
-
-    static final int MIN_SCALE = 25;
-
-    private static void validateScale(int scale) {
-        if (scale < MIN_SCALE || scale > 100) throw new IllegalArgumentException("Unsupported render scale");
     }
 
     static final String[] LANGUAGES = {"INT", "RUS", "DEU", "FRA", "ESN", "ITA", "POL", "CZE", "HUN"};
@@ -298,6 +292,11 @@ final class GameSettings {
             if (name.equalsIgnoreCase("Startup_" + language + ".upk")) startup = true;
         if (!GameFiles.isDirectory(game, "UTGame/Localization/" + language) || !startup)
             throw new IOException("Game language files are missing: " + language);
+    }
+
+    static String rendererOptions(String options,String renderer,int sdk) {
+        return !"gles".equals(renderer)&&sdk>=31 ? options : options.replaceAll(
+            "(?ms)^\\[AndroidPort_frameGeneration UTUIDataProvider_MenuOption\\]\\r?\\n.*?(?=^\\[|\\z)", "");
     }
 
     static void prepareNativeUi(File engine, File game, File userdata, byte[] script, String options) throws IOException {
@@ -367,7 +366,7 @@ final class GameSettings {
         return out.toString();
     }
 
-    private static Map<String, String> minimumVideo(String compatibility, int width, int height, int scale) {
+    private static Map<String, String> minimumVideo(String compatibility, int width, int height) {
         LinkedHashMap<String, String> video = new LinkedHashMap<>();
         boolean active = false;
         for (String line : compatibility.split("\\r?\\n")) {
@@ -383,7 +382,7 @@ final class GameSettings {
         video.put("ResX", Integer.toString(width));
         video.put("ResY", Integer.toString(height));
         video.put("UseVsync", "False");
-        video.put("ScreenPercentage", Integer.toString(scale));
+        video.put("ScreenPercentage", "100");
         return video;
     }
 

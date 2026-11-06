@@ -41,7 +41,7 @@ def main():
         'const recomp_dispatch_entry_t recomp_dispatch_table[]={{0x0128959au,entry}};\n'
         'const uint32_t recomp_dispatch_count=1;\n' +
         ''.join('void __real_sub_' + address + '(void){__builtin_trap();}\n'
-                for address in ('00C12290', '00F75DB0', '00C85710', '00486270')))
+                for address in ('00C12290', '00F75DB0', '00C85710', '00486270', '010FC820')))
     common = ["--target=aarch64-linux-android29", "-O1", "-std=gnu11", "-fno-strict-aliasing",
               "-fwrapv", "-ffp-contract=off", "-DRECOMP_X87_WINDOW", "-DRECOMP_TRACE", "-DRECOMP_CALL_DIAG",
               "-Iandroid/runtime", "-Iandroid/host", "-Igenerated", "-Ireference/mojoshader",

@@ -12,12 +12,15 @@ void void_ui_hud_init(void);
 int void_openspy_init(void);
 int void_profiles_init(void);
 void void_texture_cache_init(const char *game);
+extern void void_crash_exit(uint32_t code);
+extern void void_features_init(void);
 
 void void_process_exit(uint32_t code, int run_detach)
 {
     if (run_detach) void_modules_detach_all(1);
     void_log("[ut3] process exit %u", code);
     void_log_flush();
+    void_crash_exit(code);
     _exit((int)code);
 }
 
@@ -44,6 +47,7 @@ int ut3_game_main(const char *game, const char *data, int selftest)
     void_texture_cache_init(game);
     void_loading_init();
     void_ui_hud_init();
+    void_features_init();
     void_machine_enter();
     if (!void_modules_start()) return 68;
     uint32_t base = void_module_exe_base();

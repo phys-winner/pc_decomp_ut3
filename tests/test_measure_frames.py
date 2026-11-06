@@ -24,6 +24,13 @@ acquire2present histogram is as below:
 
 
 class MeasureFramesTest(unittest.TestCase):
+    def test_hex_prefixed_android_surface_layer_keeps_exact_name_and_uid(self):
+        prefixed = LAYER.replace('layerName = SurfaceView', 'layerName = 2acbacb SurfaceView').replace(
+            'packageName = org.ut3.port', 'packageName = ')
+        self.assertTrue(parse_timestats(prefixed, 10574)[0]['layer_name'].startswith('2acbacb SurfaceView['))
+        with self.assertRaises(ValueError):
+            parse_timestats(prefixed, 10575)
+
     def test_actual_present_overlap_dedup_zero_pending_and_sixty_fps(self):
         def ring(values, extras=""):
             return parse_latency("16666666\r\n" + "\r\n".join(

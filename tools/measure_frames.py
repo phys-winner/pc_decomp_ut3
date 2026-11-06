@@ -45,7 +45,7 @@ def parse_timestats(text, uid):
         if len(names) != 1:
             raise ValueError("Ambiguous layer block")
         name = names[0].strip()
-        if not name.startswith((f"SurfaceView[{PACKAGE}/", f"SurfaceView - {PACKAGE}/")):
+        if not re.match(r"(?:[0-9a-fA-F]+ )?SurfaceView(?:\[| - )" + re.escape(PACKAGE) + "/", name):
             continue
         fields = dict(re.findall(r"(?m)^[ \t]*(\w+)[ \t]*=[ \t]*([^\r\n]*)$", block))
         package = fields.get("packageName", "").strip()

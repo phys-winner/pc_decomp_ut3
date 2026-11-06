@@ -11,7 +11,6 @@
 #include <cerrno>
 #include <cctype>
 #include <thread>
-#include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <jni.h>
@@ -90,8 +89,13 @@ struct Output {
     int fd=-1;uint64_t at=sizeof(tvtx_header);
     explicit Output(const std::string &path) {
         fd=open(path.c_str(),O_RDWR|O_CREAT|O_CLOEXEC,0644);require(fd>=0,"cannot create texture cache");
-        if(flock(fd,LOCK_EX|LOCK_NB)||ftruncate(fd,0)) {
-            close(fd);fd=-1;throw std::runtime_error("texture cache is busy or cannot be reset");
+        // Android's emulated storage supports OFD record locks, but can reject flock with ENOSYS.
+        struct flock lock{};lock.l_type=F_WRLCK;lock.l_whence=SEEK_SET;
+        int result=fcntl(fd,F_OFD_SETLK,&lock);const char *operation="lock";
+        if(!result) { operation="reset";result=ftruncate(fd,0); }
+        if(result) {
+            int reason=errno;close(fd);fd=-1;
+            throw std::runtime_error(std::string("cannot ")+operation+" texture cache: "+strerror(reason));
         }
     }
     ~Output() { if(fd>=0)close(fd); }

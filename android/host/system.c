@@ -644,6 +644,8 @@ WINAPI_EXPORT(DBG, SymSetContext, 3) { return 0; }
 WINAPI_EXPORT(DBG, StackWalk64, 9) { return 0; }
 WINAPI_EXPORT(DBG, MiniDumpWriteDump, 7)
 {
+    extern void void_crash_record(const char *reason);
+    void_crash_record("The original game requested a crash minidump");
     void_log("[void] MiniDumpWriteDump requested by %08X (unavailable)", g_cur_func);
     void_dump_state("guest crash handler requested a minidump");
     return 0;

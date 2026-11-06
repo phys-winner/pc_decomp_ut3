@@ -24,7 +24,7 @@ def sha(path):
 
 def native_dependencies(prepare=False):
     if prepare:
-        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py", "build_texconv.py"):
+        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py", "build_texconv.py", "build_fsr.py"):
             subprocess.run([sys.executable, str(ROOT / "tools" / tool)], cwd=ROOT, check=True)
     pinned, runtime = {}, {}
 
@@ -73,6 +73,8 @@ def native_dependencies(prepare=False):
     pin(ROOT / "dependencies-turnip.json", turnip["input_pins_sha256"])
     pinned[ROOT / "android/dxvk/turnip.inc"] = sha(ROOT / "android/dxvk/turnip.inc")
     pinned[ROOT / "android/dxvk/query_wait.inc"] = sha(ROOT / "android/dxvk/query_wait.inc")
+    for name in ("fsr3.inc","vulkan_interop.inc"):
+        pinned[ROOT / "android/dxvk" / name] = sha(ROOT / "android/dxvk" / name)
     for item in turnip["outputs"]:
         library(ROOT / item["path"], item["sha256"])
     for item in turnip["licenses"]:
@@ -93,6 +95,12 @@ def native_dependencies(prepare=False):
         for path in (ROOT / directory).glob("LICENSE*"):
             pinned[path] = sha(path)
             licenses.append(path)
+    fsr = json.loads((ROOT / "build/fsr/receipt.json").read_text(encoding="utf-8"))
+    for name,digest in fsr["inputs"].items():
+        pin(ROOT / name,digest)
+    library(ROOT / fsr["path"],fsr["sha256"])
+    for name in fsr["licenses"]:
+        licenses.append(ROOT / name)
     return runtime, pinned, licenses
 
 
@@ -252,6 +260,8 @@ def main():
                     "-Wl,--wrap=sub_00486270",
                     "-Wl,--wrap=sub_00C85710",
                     "-Wl,--wrap=sub_00C12290",
+                    "-Wl,--wrap=sub_00B6AF10",
+                    "-Wl,--wrap=sub_010FC820",
                     *(["-shared", "-Wl,-z,defs"] if args.shared else []),
                     "@" + str(response), "-o", str(out), "-lm", "-ldl", "-llog", "-landroid",
                     str(ROOT / "build/dxvk/libut3_dxvk.a"),

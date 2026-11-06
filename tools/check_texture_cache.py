@@ -34,8 +34,9 @@ def main():
     struct.pack_into('<Q',data,index+8,0xFFFFFFFFFFFFFFFF)
     malformed=out/'malformed/UTGame';malformed.mkdir(parents=True,exist_ok=True)
     (malformed/'port-textures.tvt').write_bytes(data)
-    run('push',str(malformed.parent),'/data/local/tmp/ut3-malformed-cache')
-    bad=run('shell','VOID_RENDER_THREAD=0','/data/local/tmp/ut3-cache-gpu-check','/data/local/tmp/ut3-malformed-cache','invalid').stdout
+    run('shell','mkdir','-p','/data/local/tmp/ut3-malformed-cache/UTGame')
+    run('push',str(malformed/'port-textures.tvt'),'/data/local/tmp/ut3-malformed-cache/UTGame/port-textures.tvt')
+    bad=run('shell','VOID_RENDER_THREAD=0','/data/local/tmp/ut3-cache-gpu-check','/data/local/tmp/ut3-malformed-cache','invalid',args.game).stdout
     print(bad)
     (out/'gpu-test.json').write_text(json.dumps({'device':args.device,'game':args.game,'sources':sources,
         'result':'PASS','valid':good,'malformed':bad},indent=2)+'\n')

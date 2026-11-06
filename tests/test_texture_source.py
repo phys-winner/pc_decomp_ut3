@@ -69,8 +69,6 @@ def archive(folder, mixed=False):
 class TextureSourceTest(unittest.TestCase):
     def test_folder_and_mounted_archive(self):
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / 'sys').mkdir(exist_ok=True)
-        (OUT / 'sys/file.h').write_text('#define LOCK_EX 1\n#define LOCK_NB 2\n', encoding='ascii')
         (OUT / 'zlib.h').write_text('typedef unsigned long uLongf;\n#define Z_OK 0\n'
             'inline int uncompress(unsigned char*,uLongf*,const unsigned char*,unsigned long){return -3;}\n', encoding='ascii')
         (OUT / 'unistd.h').write_text(r'''
@@ -89,13 +87,19 @@ static int fixture_open(const char *path,int flags,int=0) {
 static ssize_t fixture_pwrite(int fd,const void *data,size_t size,uint64_t at) {
     return _lseeki64(fd,at,SEEK_SET)<0?-1:_write(fd,data,(unsigned)size);
 }
-static int fixture_flock(int fd,int) { return _locking(fd,_LK_NBLCK,1); }
+#define F_WRLCK 1
+#define F_OFD_SETLK 37
+struct flock { short l_type,l_whence;long long l_start,l_len; };
+static int fixture_fcntl(int fd,int cmd,const struct flock *lock) {
+    assert(cmd==F_OFD_SETLK && lock->l_type==F_WRLCK && lock->l_whence==SEEK_SET && !lock->l_start && !lock->l_len);
+    return _locking(fd,_LK_NBLCK,1);
+}
 static int fixture_rename(const char *from,const char *to) {
     return MoveFileExA(from,to,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)?0:-1;
 }
 #define open fixture_open
 #define pwrite fixture_pwrite
-#define flock fixture_flock
+#define fcntl fixture_fcntl
 #define rename fixture_rename
 #define fsync _commit
 #define ftruncate _chsize_s
@@ -135,6 +139,14 @@ int main(int argc,char **argv) {
     auto previous=Package::read(pack(root));bool refused=false;
     std::ofstream(pack(root)+".part",std::ios::binary)<<"incomplete";
     assert(quick_scan(root)[2]==2);
+    {
+        Output active(pack(root)+".part");assert(fs::file_size(pack(root)+".part")==0);
+        active.write("keep",4,0);refused=false;
+        try{Output other(pack(root)+".part");}catch(const std::exception &e){refused=std::string(e.what()).find("cannot lock")!=std::string::npos;}
+        char kept[4];assert(_lseeki64(active.fd,0,SEEK_SET)==0 && _read(active.fd,kept,4)==4);
+        assert(refused && !memcmp(kept,"keep",4));
+        assert(Package::read(pack(root))==previous);
+    }
     unlink((pack(root)+".part").c_str());
     for(size_t offset:{size_t(0),offsetof(tvtx_header,count),offsetof(tvtx_header,payload_bytes)}) {
         auto broken=previous;broken[offset]^=0x7f;

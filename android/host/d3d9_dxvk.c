@@ -79,11 +79,21 @@ static uint32_t dxvk_guest_call(uint32_t guest,unsigned kind,unsigned slot,const
     /* Verified guest_methods.inc: Device9 kind 2/Present 17; SwapChain9 kind 17/Present 3. */
     if((kind==2u&&slot==17u)||(kind==17u&&slot==3u)) {
         extern void ut3_adpf_work_end(void);
+        extern void void_postfx_present(uint32_t);
+        void_postfx_present(kind==2u?guest:0);
         ut3_adpf_work_end();
     }
     if(slot==1){ut3_dxvk_native_addref(object->native);return void_com_addref(&object->com);}
-    if(slot==2){ut3_dxvk_native_release(object->native);return void_com_release(&object->com);}
-    uint32_t result=ut3_dxvk_native_call(kind,object->native,slot,args);
+    if(slot==2){
+        if(kind==2u&&object->com.refs==1){extern void void_postfx_reset(uint32_t);extern void ut3_dxvk_fsr_reset(void*);void_postfx_reset(guest);ut3_dxvk_fsr_reset(object->native);}
+        ut3_dxvk_native_release(object->native);return void_com_release(&object->com);
+    }
+    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
+    extern void void_postfx_reset(uint32_t);
+    if(kind==2u&&slot==16u)void_postfx_reset(guest);
+    uint32_t result;
+    if(!(kind==2u&&(slot==83u||slot==84u)&&void_postfx_draw(guest,slot,args,&result)))
+        result=ut3_dxvk_native_call(kind,object->native,slot,args);
     /* Verified guest_methods.inc: Query9 kind 16/GetData slot 7. No native
      * query or guest output pointer remains live across the machine unlock. */
     if(kind==16u&&slot==7u)dxvk_query_wait(result,args[2]);

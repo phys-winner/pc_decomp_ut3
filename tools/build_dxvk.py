@@ -102,19 +102,31 @@ def main():
                 "#if defined(DXVK_WSI_ANDROID)\n"
                 "    enabled.core.features.textureCompressionBC = supported.core.features.textureCompressionBC;\n"
                 "#else\n    enabled.core.features.textureCompressionBC = VK_TRUE;\n#endif")
-        # PowerVR D-Series 1.693.3716 reports zero samples from the 16384-entry
-        # occlusion pool despite a readback-proven visible triangle. A 64-entry
-        # pool returns the exact 6328 samples; the allocator grows more pools.
+        # Occlusion query pools: PowerVR's proprietary driver loses sample counts in a 16384-entry pool
+        # and starts a new render (store and reload of every attachment) whenever a query uses another
+        # pool than the query before it. 4096-entry pools there, and handles come from one pool until it
+        # is used up instead of upstream's LIFO list over all pools: android/dxvk/query_pools.inc.
+        write(WORK / "src/dxvk/dxvk_query_pools.inc", (ROOT / "android/dxvk/query_pools.inc").read_bytes())
+        replace(WORK / "src/dxvk/dxvk_gpu_query.h",
+                "    dxvk::mutex                     m_mutex;\n    std::vector<DxvkGpuQueryHandle> m_handles;\n    std::vector<VkQueryPool>        m_pools;\n",
+                "    dxvk::mutex                     m_mutex;\n"
+                "    // Free handles of each pool (parallel to m_pools), see dxvk_query_pools.inc\n"
+                "    std::vector<std::vector<DxvkGpuQueryHandle>> m_handles;\n"
+                "    std::vector<VkQueryPool>        m_pools;\n"
+                "    size_t                          m_currentPool = 0;\n")
         replace(WORK / "src/dxvk/dxvk_gpu_query.cpp",
-                "  DxvkGpuQueryPool::DxvkGpuQueryPool(DxvkDevice* device)\n  : m_occlusion(device, VK_QUERY_TYPE_OCCLUSION,                     16384),",
-                "  static uint32_t occlusionQueryPoolSize(DxvkDevice* device) {\n"
-                "#if defined(DXVK_WSI_ANDROID)\n"
-                "    // PowerVR's large occlusion pools lose real sample counts.\n"
-                "    // Keep precise queries and grow additional small pools.\n"
-                "    if (device->adapter()->matchesDriver(VK_DRIVER_ID_IMAGINATION_PROPRIETARY))\n"
-                "      return 64;\n"
-                "#endif\n    return 16384;\n  }\n\n"
-                "  DxvkGpuQueryPool::DxvkGpuQueryPool(DxvkDevice* device)\n"
+                "  DxvkGpuQueryHandle DxvkGpuQueryAllocator::allocQuery() {\n    std::lock_guard<dxvk::mutex> lock(m_mutex);\n\n"
+                "    if (m_handles.size() == 0)\n      this->createQueryPool();\n\n    if (m_handles.size() == 0)\n      return DxvkGpuQueryHandle();\n    \n"
+                "    DxvkGpuQueryHandle result = m_handles.back();\n    m_handles.pop_back();\n    return result;\n  }\n\n\n"
+                "  void DxvkGpuQueryAllocator::freeQuery(DxvkGpuQueryHandle handle) {\n    std::lock_guard<dxvk::mutex> lock(m_mutex);\n"
+                "    m_handles.push_back(handle);\n  }\n",
+                "#include \"dxvk_query_pools.inc\"\n")
+        replace(WORK / "src/dxvk/dxvk_gpu_query.cpp",
+                "    m_pools.push_back(queryPool);\n\n    for (uint32_t i = 0; i < m_queryPoolSize; i++)\n      m_handles.push_back({ this, queryPool, i });\n",
+                "    m_pools.push_back(queryPool);\n    m_handles.emplace_back();\n    m_handles.back().reserve(m_queryPoolSize);\n\n"
+                "    for (uint32_t i = 0; i < m_queryPoolSize; i++)\n      m_handles.back().push_back({ this, queryPool, i });\n")
+        replace(WORK / "src/dxvk/dxvk_gpu_query.cpp",
+                "  : m_occlusion(device, VK_QUERY_TYPE_OCCLUSION,                     16384),",
                 "  : m_occlusion(device, VK_QUERY_TYPE_OCCLUSION,                     occlusionQueryPoolSize(device)),")
         # Qualcomm's proprietary Adreno driver has no *_SCALED vertex buffer formats (D3D9 UBYTE4,
         # SHORT2/4, UDEC3); DXVK then drops those draws (UE3 terrain). Fetch the mandatory UINT/SINT

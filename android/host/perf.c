@@ -35,6 +35,7 @@ void void_perf_add(int kind, uint64_t ns, uint64_t bytes)
 void void_perf_frame_end(uint32_t frame)
 {
     static uint64_t last_ns, logged;
+    static int profile = -1;
     static uint64_t base_ns[VOID_PERF_COUNT], base_calls[VOID_PERF_COUNT], base_bytes[VOID_PERF_COUNT];
     uint64_t now = void_perf_now_ns();
     uint64_t wall = last_ns ? now - last_ns : 0;
@@ -48,7 +49,14 @@ void void_perf_frame_end(uint32_t frame)
         base_calls[i] += calls[i];
         base_bytes[i] += bytes[i];
     }
-    if (wall < 70000000ull || logged >= 400) return;
+    if (profile < 0) {
+        char path[1100];
+        snprintf(path, sizeof path, "%s/gpu-profile", void_data_dir());
+        FILE *flag = fopen(path, "rb");
+        profile = flag != NULL;
+        if (flag) fclose(flag);
+    }
+    if (wall < 70000000ull || (!profile && logged >= 400)) return;
     ++logged;
     char line[1024];
     int used = snprintf(line, sizeof line, "[hitch] frame %u: %.1f ms;", frame, (double)wall / 1e6);

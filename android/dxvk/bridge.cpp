@@ -96,6 +96,7 @@ struct PresentTime {
   }
 };
 std::atomic<uint32_t> display_width{640},display_height{480};
+#include "fsr3.inc"
 uint32_t render_dimension(const char *name,uint32_t fallback) {
   const char *value=getenv(name);if(!value||!*value)return fallback;
   char *end=nullptr;errno=0;unsigned long result=strtoul(value,&end,10);
@@ -221,6 +222,7 @@ uint32_t create_device(Context &c) {
   return hr;
 }
 uint32_t reset(Context &c) {
+  fsr3Clear(static_cast<IDirect3DDevice9*>(c.self));
   WorkerAffinityScope workers;
   WindowLease next;if(!next.value)return D3DERR_DEVICELOST;
   D3DPRESENT_PARAMETERS pp=native_parameters(c.a[0],next.value);HRESULT hr=static_cast<IDirect3DDevice9*>(c.self)->Reset(&pp);
@@ -275,6 +277,16 @@ uint32_t present(Context &c) {
   RECT aspect{};
   if(!dst){aspect=aspect_destination(ANativeWindow_getWidth(native_window),ANativeWindow_getHeight(native_window),display_width.load(),display_height.load());dst=&aspect;}
   PresentTime time;
+  IDirect3DDevice9 *frameDevice=nullptr;
+  bool releaseDevice=c.kind==Kind::IDirect3DSwapChain9;
+  if(releaseDevice)static_cast<IDirect3DSwapChain9*>(c.self)->GetDevice(&frameDevice);
+  else frameDevice=static_cast<IDirect3DDevice9*>(c.self);
+  if(frameDevice&&!src&&fsr3Begin(frameDevice)){
+    HRESULT middle=releaseDevice?static_cast<IDirect3DSwapChain9*>(c.self)->Present(src,dst,nullptr,nullptr,c.a[4]):frameDevice->Present(src,dst,nullptr,nullptr);
+    bool restored=fsr3Restore(frameDevice);
+    if(FAILED(middle)||!restored){if(releaseDevice)frameDevice->Release();return FAILED(middle)?middle:D3DERR_DEVICELOST;}
+  }
+  if(releaseDevice&&frameDevice)frameDevice->Release();
   HRESULT hr=c.kind==Kind::IDirect3DSwapChain9?static_cast<IDirect3DSwapChain9*>(c.self)->Present(src,dst,nullptr,nullptr,c.a[4]):static_cast<IDirect3DDevice9*>(c.self)->Present(src,dst,nullptr,nullptr);
   // A surface replaced during the native call is a recoverable display loss.
   if(FAILED(hr)&&surface_status(c)!=D3D_OK)return D3DERR_DEVICELOST;
@@ -391,6 +403,8 @@ uint32_t query_interface(Context &c,bool container) {
   }return hr;
 }
 uint32_t special(Context &c,const char *name) {
+  if(c.kind==Kind::IDirect3DDevice9&&(!strcmp(name,"DrawPrimitive")||!strcmp(name,"DrawIndexedPrimitive")||!strcmp(name,"DrawPrimitiveUP")||!strcmp(name,"DrawIndexedPrimitiveUP")))
+    fsr3Observe(static_cast<IDirect3DDevice9*>(c.self));
   if(!strcmp(name,"QueryInterface"))return query_interface(c,false);
   if(!strcmp(name,"GetContainer"))return query_interface(c,true);
   if(!strcmp(name,"CreateDevice"))return create_device(c);
@@ -429,6 +443,7 @@ template<class T>uint32_t private_data(Context &c,T *p,const char *name) {
 
 extern "C" int ut3_dxvk_get_display_mode(uint32_t *w,uint32_t *h,uint32_t *rate){*w=display_width;*h=display_height;*rate=60;return 1;}
 extern "C" uint32_t ut3_dxvk_native_addref(void *p){native_calls.fetch_add(1,std::memory_order_relaxed);return static_cast<IUnknown*>(p)->AddRef();}
+extern "C" void ut3_dxvk_fsr_reset(void *p){fsr3Clear(static_cast<IDirect3DDevice9*>(p));}
 extern "C" uint32_t ut3_dxvk_native_release(void *p){
   native_calls.fetch_add(1,std::memory_order_relaxed);
   uint32_t refs=static_cast<IUnknown*>(p)->Release();
@@ -457,7 +472,9 @@ extern "C" uint32_t ut3_dxvk_native_create9(uint32_t sdk) {
       auto set_loader=reinterpret_cast<SetLoader>(dlsym(library,"ut3_dxvk_set_vulkan_loader"));
       if(!loader||!set_loader){ut3_dxvk_host_log(loader?"DXVK custom-loader callback unavailable":error);return 0;}
       set_loader(loader);ut3_dxvk_host_log("Using verified Turnip Vulkan1.3 custom driver; system driver retained");
+      fsr3Loader=loader;
     }
+    if(fsr3Wanted()&&!fsr3Loader){void *vk=dlopen("libvulkan.so",RTLD_NOW|RTLD_LOCAL);if(vk)fsr3Loader=reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(vk,"vkGetInstanceProcAddr"));}
     using Callbacks=void(*)(int(*)(uint32_t*,uint32_t*,uint32_t*),void(*)(const void*,uint64_t,int32_t),void(*)());
     auto callbacks=reinterpret_cast<Callbacks>(dlsym(library,"ut3_dxvk_set_callbacks_v2"));
     if(!callbacks){ut3_dxvk_host_log(dlerror());return 0;}

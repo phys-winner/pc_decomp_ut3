@@ -47,7 +47,7 @@
     {
       "id": "ut3",
       "title": "Unreal Tournament 3",
-      "activity": "org.ut3.port.GameActivity",
+      "activity": "org.ut3.port.GameWatchActivity",
       "renderers": ["gles", "dxvk", "dxvk-turnip"],
       "intro": {"default": true},
       "parts": [
@@ -95,6 +95,22 @@
                        "pl": "DXVK na dołączonym sterowniku Mesa Turnip: Vulkan 1.3 na Adreno 6xx/7xx, nawet gdy sterownik systemu jest starszy."}}
     ]
   },
+  "options": [
+    {"key": "fps_counter", "type": "choice", "default": "0",
+     "title": {"en": "FPS counter in the top left corner of the game (every renderer)",
+               "ru": "Счётчик FPS в левом верхнем углу игры (в любом режиме рендера)",
+               "de": "FPS-Anzeige oben links im Spiel (mit jedem Renderer)",
+               "pl": "Licznik FPS w lewym górnym rogu gry (w każdym trybie renderowania)"},
+     "choices": [
+       {"value": "0", "title": {"en": "Off", "ru": "Выключен", "de": "Aus", "pl": "Wyłączony"}},
+       {"value": "1", "title": {"en": "Frame rate and frame times", "ru": "Частота и время кадров",
+                                "de": "Bildrate und Bildzeiten", "pl": "Liczba i czasy klatek"}},
+       {"value": "2", "title": {"en": "Frame rate, frame times and the system: CPU and its clocks, the game's load, GPU and driver, memory, thermal state, battery, screen",
+                                "ru": "Частота и время кадров, а также система: процессор и его частоты, нагрузка игры, видеоускоритель и драйвер, память, тепловое состояние, батарея, экран",
+                                "de": "Bildrate, Bildzeiten und das System: CPU und Takte, Last des Spiels, GPU und Treiber, Speicher, thermischer Zustand, Akku, Bildschirm",
+                                "pl": "Liczba i czasy klatek oraz system: procesor i jego taktowanie, obciążenie gry, GPU i sterownik, pamięć, stan termiczny, bateria, ekran"}}
+     ]}
+  ],
   "textures": {"backend": "org.ut3.port.TextureConverter"},
   "cleanup": {
     "categories": [

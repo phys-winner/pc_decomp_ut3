@@ -46,7 +46,7 @@ static void sample(d3d_texture *texture,int level,uint8_t pixel[4]) {
     glDrawArrays(GL_TRIANGLES,0,3);glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);assert(glGetError()==GL_NO_ERROR);
 }
 int main(int argc,char **argv) {
-    assert(argc==2||argc==3);
+    assert(argc==2||argc==4);
     EGLDisplay display=eglGetDisplay(EGL_DEFAULT_DISPLAY);assert(eglInitialize(display,NULL,NULL));
     EGLint attr[]={EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,0x40,EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
     EGLConfig config;EGLint count;assert(eglChooseConfig(display,attr,&config,1,&count)&&count);
@@ -60,7 +60,8 @@ int main(int argc,char **argv) {
     GLuint cube_fs=shader(GL_FRAGMENT_SHADER,"#version 300 es\nprecision highp float;uniform samplerCube image;uniform vec3 direction;uniform float level;out vec4 color;void main(){color=textureLod(image,direction,level);}");
     cube_program=glCreateProgram();glAttachShader(cube_program,vs);glAttachShader(cube_program,cube_fs);glLinkProgram(cube_program);glGetProgramiv(cube_program,GL_LINK_STATUS,&linked);assert(linked);
     void_texture_cache_init(argv[1]);
-    char path[4096];snprintf(path,sizeof path,"%s/UTGame/" TVTX_FILE,argv[1]);FILE *file=fopen(path,"rb");assert(file);
+    /* A rejected cache may contain invalid offsets; take the known texture from its valid source. */
+    char path[4096];snprintf(path,sizeof path,"%s/UTGame/" TVTX_FILE,argc==4?argv[3]:argv[1]);FILE *file=fopen(path,"rb");assert(file);
     tvtx_header header;assert(fread(&header,1,sizeof header,file)==sizeof header);assert(fseeko(file,header.index_offset,SEEK_SET)==0);
     utx_entry selected={0};
     for(uint32_t i=0;i<header.count;i++) { utx_entry e;assert(fread(&e,1,sizeof e,file)==sizeof e);if(e.width>=8&&e.width==e.height&&e.levels>=3){selected=e;break;} }
@@ -68,7 +69,7 @@ int main(int argc,char **argv) {
     uint8_t *raw=malloc(selected.raw_bytes);assert(raw&&fseeko(file,selected.raw_offset,SEEK_SET)==0&&fread(raw,1,selected.raw_bytes,file)==selected.raw_bytes);fclose(file);
     uint32_t pitch=((selected.width+3)/4)*(selected.dxt==1?8:16);
     const utx_entry *entry=void_texture_cache_find(format,selected.width,selected.height,3,raw,pitch);
-    if(argc==3) { assert(!entry);puts("PASS: malformed cache rejected; ordinary DXT loader remains available");return 0; }
+    if(argc==4) { assert(!entry);puts("PASS: malformed cache rejected; ordinary DXT loader remains available");return 0; }
     assert(entry);
     for(int partial=0;partial<2;partial++) {
         d3d_texture *texture=d3d_texture_new(NULL,D3DRTYPE_TEXTURE,selected.width,selected.height,1,3,0,format,D3DPOOL_DEFAULT);assert(texture);
@@ -84,10 +85,11 @@ int main(int argc,char **argv) {
         const uint8_t *mip=raw;for(unsigned l=0;l<2;l++) {
             uint32_t a=selected.width>>l,b=selected.height>>l;mip+=utx_level_size(format,a?a:1,b?b:1);
         }
-        float expected[4*16384];assert((selected.width>>2)*(selected.height>>2)<=16384);
-        uint32_t w=selected.width>>2,h=selected.height>>2;d3d_format_decode(texture->fmt,mip,w,h,d3d_format_pitch(texture->fmt,w),expected);
+        uint32_t w=selected.width>>2,h=selected.height>>2;
+        float *expected=malloc((size_t)w*h*4*sizeof *expected);assert(expected);
+        d3d_format_decode(texture->fmt,mip,w,h,d3d_format_pitch(texture->fmt,w),expected);
         sample(texture,2,pixel);for(unsigned c=0;c<3;c++)assert(abs((int)pixel[c]-(int)lrintf(expected[c]*255))<=2);
-        glDeleteTextures(1,&texture->gl);free(texture->surfaces);free(texture);free(changed);
+        glDeleteTextures(1,&texture->gl);free(texture->surfaces);free(texture);free(changed);free(expected);
     }
     size_t bytes=(size_t)utx_level_size(format,selected.width,selected.height);
     uint8_t *changed=malloc(bytes);assert(changed);memcpy(changed,raw,bytes);
@@ -105,10 +107,12 @@ int main(int argc,char **argv) {
             d3d_texture_upload_rect(cube,2,0,0,0,4,4,changed,pitch);
             assert(!cube->cache_active&&cube->cache_disabled);
             const uint8_t *mip=raw+utx_level_size(format,selected.width,selected.height)+utx_level_size(format,selected.width/2,selected.height/2);
-            uint32_t w=selected.width/4,h=selected.height/4;float expected[4*16384];assert(w*h<=16384);
+            uint32_t w=selected.width/4,h=selected.height/4;
+            float *expected=malloc((size_t)w*h*4*sizeof *expected);assert(expected);
             d3d_format_decode(cube->fmt,mip,w,h,d3d_format_pitch(cube->fmt,w),expected);
             sample_cube(cube,5,2,pixel);
             for(unsigned c=0;c<3;c++)assert(abs((int)pixel[c]-(int)lrintf(expected[((h/2)*w+w/2)*4+c]*255))<=2);
+            free(expected);
         }
         glDeleteTextures(1,&cube->gl);free(cube->surfaces);free(cube);
     }
