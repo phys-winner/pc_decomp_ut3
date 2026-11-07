@@ -190,10 +190,6 @@ public class SettingsCheck {
         assert Arrays.equals(rates,new int[]{60,90,120});
         assert GameSettings.nearestRate(0,rates)==120&&GameSettings.nearestRate(100,rates)==90&&GameSettings.nearestRate(45,rates)==60;
         String rateOptions=GameSettings.displayOptions("base",rates);
-        String frameOption="[AndroidPort_frameGeneration UTUIDataProvider_MenuOption]\nOptionSet=AndroidPort\n";
-        if(!GameSettings.rendererOptions(frameOption,"gles",36).isEmpty())throw new AssertionError("FG on GLES");
-        if(!GameSettings.rendererOptions(frameOption,"dxvk",30).isEmpty())throw new AssertionError("FG below API31");
-        if(!GameSettings.rendererOptions(frameOption,"dxvk-turnip",31).equals(frameOption))throw new AssertionError("FG on Vulkan");
         assert rateOptions.contains(".DisplayFps=60\n.DisplayFps=90\n.DisplayFps=120\n");
         File migrated=folder.resolve("legacy-quality/UTEngine.ini").toFile();migrated.getParentFile().mkdirs();
         GameSettings.write(migrated,"[SystemSettings]\nDetailMode=2\nDynamicShadows=True\n");

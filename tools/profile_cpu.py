@@ -37,6 +37,8 @@ def main():
     parser.add_argument("--duration", type=float, default=15)
     parser.add_argument("--event", default="cpu-cycles:u", help="Simpleperf event; cpu-cycles also samples kernel time")
     parser.add_argument("--receipt", type=Path, default=ROOT / "build/apk/ut3.json", help="Exact installed APK receipt, including archived comparison builds")
+    parser.add_argument("--extra-symbols", type=Path, nargs="*", default=[],
+                        help="Unstripped copies of packaged libraries (same build ID), e.g. the native-audio build's libopenal.so")
     args = parser.parse_args()
     if args.pid <= 0 or not 1 <= args.duration <= 60:
         parser.error("Use a positive existing PID and a duration between 1 and 60 seconds")
@@ -105,6 +107,8 @@ def main():
                     with archive.open(member) as source, (symbols / Path(member).name).open("wb") as target:
                         shutil.copyfileobj(source, target)
         shutil.copy2(library, symbols / "libut3.so")
+        for extra in args.extra_symbols:
+            shutil.copy2(extra, symbols / extra.name)
         if digest(symbols / "libut3.so") != receipt["library_sha256"]:
             raise RuntimeError("Local libut3.so changed while taking the symbol snapshot")
         metadata["symbol_snapshots"] = {path.name: digest(path) for path in sorted(symbols.glob("*.so"))}

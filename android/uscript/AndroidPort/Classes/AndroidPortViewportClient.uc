@@ -15,8 +15,6 @@ var transient UTUIFrontEnd_SettingsVideoAdvanced PortAdvancedScene;
 var transient int PortInputMode;
 var transient int PortInputEpoch;
 var transient int PortVehicleProfile;
-var transient float PortFov;
-var transient vector PortViewLocation, PortViewForward, PortViewRight, PortViewUp;
 // Native text editor mailbox; only the viewport Tick calls the original editbox API.
 var transient int PortTextCommand, PortTextFlags, PortTextEpoch;
 var transient UIEditBox PortTextTarget;
@@ -181,7 +179,6 @@ function UpdatePortInputContext()
     local bool bCapturingUI;
     local name ConsoleState;
     local int PreviousEpoch;
-    local rotator ViewRotation;
     PreviousEpoch = PortInputEpoch;
     CurrentWorld = GetCurrentWorldInfo();
     if (GamePlayers.Length > 0 && GamePlayers[0] != None)
@@ -206,13 +203,6 @@ function UpdatePortInputContext()
             bCapturingUI = true;
     }
     PublishPortInputContext(CurrentWorld, CurrentController, CurrentPawn, CurrentScene, bCapturingUI);
-    PortFov = 0;
-    if (CurrentController != None && PortInputMode == 1)
-    {
-        PortFov = CurrentController.GetFOVAngle();
-        CurrentController.GetPlayerViewPoint(PortViewLocation, ViewRotation);
-        GetAxes(ViewRotation, PortViewForward, PortViewRight, PortViewUp);
-    }
     if (PreviousEpoch != PortInputEpoch)
     {
         PortScrollSteps = 0;
@@ -1605,7 +1595,8 @@ function PreparePortWidgets()
                     Label = UILabel(Options.GeneratedObjects[Index].LabelObj);
                     if (Label != None && Label.GetDataStoreBinding() != Provider.CustomFriendlyName)
                         Label.SetDataStoreBinding(Provider.CustomFriendlyName);
-                    if (Options.CurrentIndex == Index)
+                    // A finger focuses a row without moving the list's anchor (PortOptionState).
+                    if (Options.CurrentIndex == Index || (PortScrolledOptions == Options && PortOptionFocused == Index))
                     {
                         Parent = Options.GetOwner();
                         while (Parent != None && UTUITabPage_Options(Parent) == None)

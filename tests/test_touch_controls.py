@@ -566,7 +566,7 @@ final class TouchCheck {
         t.move(4,920,410);close(c.dx,40);close(c.dy,20);assert c.held==TouchInput.FIRE;
         assert t.down(30,900,400,TouchInput.FIRE,false);
         t.up(4,925,410);close(c.totalX,50);assert c.held==TouchInput.FIRE;
-        float before=c.totalX;t.move(30,1000,400);close(c.totalX,before); // no ownership transfer
+        float before=c.totalX;t.move(30,1000,400);close(c.totalX,before+200); // a second Fire contact turns on its own
         t.up(30,1000,400);assert c.held==0;
         t.up(17,200,100);close(c.x,0);close(c.y,0);
         t.down(5,0,0,TouchInput.FIRE,false);t.down(6,0,0,TouchInput.JUMP,false);
@@ -601,6 +601,25 @@ final class TouchCheck {
         t.move(4,100,400);close(c.y,1);assert c.held==TouchInput.FIRE&&!t.looking();
         assert t.down(5,800,400,0,TouchInput.LOOK,-1);t.move(5,805,400);close(c.dx,10);close(c.y,1);
         t.up(4,100,400);close(c.y,0);assert c.held==0&&t.looking();t.cancel();
+        // A held Fire button (a shoulder trigger mapped onto it) never blocks a look-zone finger.
+        assert t.down(1,2000,900,TouchInput.FIRE,TouchInput.BUTTON,-1)&&t.looking();
+        assert t.down(2,1500,500,0,TouchInput.LOOK,-1);
+        t.move(2,1510,495);close(c.dx,20);close(c.dy,-10);assert c.held==TouchInput.FIRE;
+        // Jump and crouch drags turn the camera too, together with the other finger.
+        assert t.down(3,2100,950,TouchInput.JUMP,TouchInput.BUTTON,-1);
+        t.move(3,2090,950);close(c.dx,-20);assert c.held==(TouchInput.FIRE|TouchInput.JUMP);
+        assert t.down(4,2200,950,TouchInput.DUCK,TouchInput.BUTTON,-1);
+        t.move(4,2200,960);close(c.dy,20);
+        before=c.totalX;t.move(2,1520,495);t.move(3,2100,950);close(c.totalX,before+40);
+        t.up(1,2000,900);assert t.looking();t.move(2,1530,495);close(c.dx,20);t.cancel();assert !t.looking();
+        // Secondary fire looks too; other buttons and combined actions only hold.
+        assert t.down(1,2000,900,TouchInput.ALT,TouchInput.BUTTON,-1)&&t.looking();t.move(1,2001,900);close(c.dx,2);t.cancel();
+        assert t.down(5,0,0,TouchInput.USE,TouchInput.BUTTON,-1)&&!t.looking();
+        assert t.down(6,0,0,TouchInput.FIRE|TouchInput.JUMP,TouchInput.BUTTON,-1)&&!t.looking();t.cancel();
+        // The left Fire on a busy stick fires and turns the camera instead of only holding Fire.
+        assert t.down(1,100,500,0,TouchInput.MOVEMENT,-1)&&!t.looking();
+        assert t.down(2,140,520,TouchInput.FIRE,TouchInput.MOVEMENT,-1)&&t.looking()&&c.held==TouchInput.FIRE;
+        t.move(2,150,520);close(c.dx,20);t.cancel();
         // A fixed stick starts at its saved centre; cancellation always releases movement.
         assert t.fixed(7,100,400,100,500,-1);close(c.y,1);close(t.anchorY(),500);
         assert !t.fixed(8,100,400,100,500,-1);t.cancel();close(c.y,0);
@@ -650,7 +669,8 @@ final class TouchCheck {
         a.move(1,50,0,50);a.move(1,60,0,-1);close(c.totalX,60);
         assert TouchInput.accelerationGain(0)==1&&TouchInput.accelerationGain(10)==TouchInput.ACCEL_MAX;
         assert TouchInput.accelerationGain(Float.NaN)==1;
-        System.out.println("PASS stable IDs, radial dead zone/diagonal normalization, independent move/fire/look, fire drag, duplicate holders, final-UP sample, no look handover, cancel/repeated-UP, ALT sensitivity/invert, relative sensor deltas, invalid packets, 10-pointer bound, fast pulse edges, finite configuration");
+        System.out.println("PASS stable IDs, radial dead zone/diagonal normalization, independent move/fire/look, fire drag, duplicate holders, final-UP sample, every look contact turns on its own, cancel/repeated-UP, ALT sensitivity/invert, relative sensor deltas, invalid packets, 10-pointer bound, fast pulse edges, finite configuration");
+        System.out.println("PASS held Fire never blocks the look zone; Fire, secondary fire, Jump and Crouch drags look; left Fire on a busy stick looks");
         System.out.println("PASS second stick finger looks, passive holds, weapon picker shoulder/direction/neutral release, 28-bit actions, speed-based look acceleration independent of sample batching");
     }
 }

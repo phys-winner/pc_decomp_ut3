@@ -14,7 +14,7 @@ Unreal Tournament 3. Unreal Tournament 3 and its content belong to their respect
 
 ## Status and features
 
-Current version: **0.4-dev** (versionCode 7). The versionCode also counts internal test builds.
+Current version: **0.4.1-dev** (versionCode 8). The versionCode also counts internal test builds.
 
 - The original game code runs as statically recompiled native code; the PE images it was recompiled from are
   made at start from the game's own `Binaries` (relocated to the port's bases, size and CRC-32 checked). The
@@ -60,6 +60,9 @@ Current version: **0.4-dev** (versionCode 7). The versionCode also counts intern
   the FPS selector lists the display's supported refresh rates at its current resolution.
 - The in-game Android settings support English, Russian, Czech, German, Spanish, French, Hungarian,
   Italian and Polish. Weapon-button swipes and weapon-bar swipes can be configured separately.
+- Every finger turns the camera by its own movement: a held Fire button (also a phone's shoulder trigger
+  mapped onto it) never blocks look drags with another finger, and dragging from Fire, secondary fire, Jump or
+  Crouch turns the camera too, so the thumb that fired or jumped keeps aiming.
 - LAN games between the PC game and the port, both ways.
 - OpenSpy service and authentication compatibility, adapted from `mods/fix_mp/dinput8.dll` to the pinned Steam
   executable. The original login/profile menu is available; an OpenSpy account is needed for online play.
@@ -72,17 +75,21 @@ Current version: **0.4-dev** (versionCode 7). The versionCode also counts intern
 - **PhysX effects (CPU)** enables the original hardware-effect path with the game's PhysX 2.7.3 CPU solver:
   hardware scene, cloth and fluid descriptors are translated at the SDK boundary. No AGEIA PPU or CUDA GPU is
   emulated. **OpenAL (AAudio / EAX)** selects native OpenAL Soft with EAX 1–5 and EFX effects; **Generic Software**
-  is the basic mode. Android processes the physics and audio effects on the CPU.
-- Android settings include **FSR1 EASU/RCAS**, **FXAA**, and **FSR3.1 frame generation**. Spatial filtering runs on
-  the 3D scene before the HUD, using the original Screen Percentage. Frame generation requires DXVK and
-  Android 12 or newer; it uses optical flow, real scene depth and the camera, submits on DXVK's queue, and
-  presents an intermediate frame followed by the restored real frame. Moving HUD elements can have artifacts,
-  and interpolation has a GPU/memory cost; it is off by default. FSR1 and FXAA also work with GLES.
+  is the basic mode. Android processes the physics and audio effects on the CPU: on the tested Dimensity tablet
+  OpenAL with EAX gave about 20% fewer frames per second in the benchmark demo (29.2 against 23.4). The PhysX
+  option is the profile setting the game applies on every map start; the CPU simulates scenes, cloth and fluids
+  in both settings, and with it on DM-HeatRay_PhysX ran about 6% slower on a Helio G90T. Maps made for PhysX
+  hardware are CPU-heavy either way: DM-HeatRay_PhysX runs at about 10–11 fps on that phone (2.1 before the
+  native fluid kernels, x87 values in C locals and the native pair removal of the second PhysX thread).
+- Android settings include **FSR1 EASU/RCAS** and **FXAA**. Spatial filtering runs on the 3D scene
+  before the HUD, using the original Screen Percentage; both work with GLES and DXVK.
 - Gyroscope mode **Firing or aiming** follows weapon firing, sniper zoom and guided Redeemer control without
   holding a separate activation key. Existing gyroscope modes retain their saved indices.
-- Native crashes and uncaught Java exceptions produce persistent reports in `userdata/crashes`. A separate
-  Android process shows the cause and report path, with **Copy to clipboard** and **Exit** buttons. Reports
-  include the native journal, game-log tails and Android's available exit trace/tombstone.
+- Native crashes and uncaught Java exceptions are journaled in `userdata/ut3-crash.txt` next to `userdata/ut3.log`.
+  With the launcher's **Crash monitor** option (Options, off by default) a separate Android process (about 30 MB
+  of memory for the whole game) shows the cause and report path after a crash, with **Copy to clipboard** and
+  **Exit** buttons, and keeps persistent reports in `userdata/crashes`: the native journal, game-log tails and
+  Android's available exit trace/tombstone.
 
 Known limitations: a stable 60 FPS at the display's native resolution is not reached on the tested phones;
 the port needs Android 11 or newer on 64-bit ARM. OpenSpy endpoint initialization, protocol boundaries and an
@@ -134,11 +141,8 @@ bundled Turnip driver (`reference/adrenotools`, `reference/turnip-android`). Eve
 SHA-256 in the `dependencies-*.json` files; `tools/build_dxvk.py --rebuild` and `tools/build_native_audio.py
 --rebuild` rebuild DXVK and OpenAL from upstream sources at the pinned revisions.
 
-The optional API-31 FSR3 plugin is built by `tools/build_fsr.py` from the pinned ARM64 SDK libraries and
-headers in `reference/fsr3-runtime`; `dependencies-fsr.json` records the upstream commits, release archive
-digest and retained file hashes. `tools/build_postfx_shaders.py` regenerates the checked-in Shader Model 3
-FSR1/FXAA kernels using Windows' D3DCompiler. To change `android/postfx/motion.comp`, regenerate its SPIR-V with
-`tools/build_fsr.py --shader-compiler <path-to-glslangValidator.exe>`.
+`tools/build_postfx_shaders.py` regenerates the checked-in Shader Model 3 FSR1/FXAA kernels using
+Windows' D3DCompiler.
 
 To prepare the PhysX Mod Pack without running its MSI installer:
 
@@ -149,9 +153,15 @@ python tools/extract_physx_mod.py mods/UT3_PhysXModPack.msi mods/UT3_PhysXModPac
 Copy the extracted `game` directory's contents into the game root. The tool verifies all 73 MSI files and
 writes a SHA-256 manifest and installation notes; original documents and licences are retained separately.
 On the tested Android device, HeatRay's hardware-requested fluids and Tornado's hardware-requested cloth
-create successfully with the CPU solver. Some Mod Pack materials request HLSL permutations absent from the
-port's offline shader cache and currently use fallback materials. This does not prevent installing the pack,
-but the Mod Pack's rendering is not yet complete.
+create successfully with the CPU solver.
+
+Shaders that no shader cache holds, such as the materials of this pack or of any other mod, are compiled on
+the device: `android/host/hlsl_vkd3d.c` answers the game's `D3DXCompileShader` with vkd3d-shader
+(`reference/vkd3d`, built by `tools/build_vkd3d.py`), and the results are kept in `<data>/shadercache` while
+the game also stores them in its own local shader cache. The first load of a map with new materials takes
+longer (on the tested Dimensity tablet about 17 ms per shader, 1100 shaders for DM-HeatRay_PhysX and 5600
+for CTF-Tornado_PhysX); later loads read the caches. `tools/test_vkd3d.py` checks the compiler on a phone
+against bytecode of Microsoft's `d3dx9_35.dll` made from recorded requests (`tools/compile_shader_requests.py`).
 
 The optional converter, `libtexconv.so`, is built with `tools/build_texconv.py` from the upstream ASTC/ETC2
 submodules in `reference/astcenc` and `reference/etcpak`. Their revisions are pinned by Git; source hashes in
@@ -206,7 +216,6 @@ python tests/test_touch_controls.py
 python tests/test_native_settings.py          # original UE3 VM and SaveConfig
 python -m unittest tests.test_crash_report
 python tools/test_openal.py --run --serial DEVICE_SERIAL  # actual EAX and AAudio output
-python tools/test_fsr.py --serial DEVICE_SERIAL           # actual FSR3 images on Turnip/DXVK
 python -m unittest tests.test_openspy tests.test_native_bundle tests.test_ui_hud tests.test_ui_list_scale
 python -m unittest tests.test_render_thread_cores tests.test_dxvk_scaled_spirv tests.test_dxvk_pipeline_cache_prune
 python -m unittest tests.test_text_dialog tests.test_weapon_gestures tests.test_localized_options tests.test_fsincos

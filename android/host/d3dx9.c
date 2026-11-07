@@ -618,26 +618,233 @@ WINAPI_EXPORT(D3DX, D3DXFillCubeTextureTX, 2)
     return tx_fill((d3d_texture *)void_com_host(ARG(0)), ((txshader_t *)void_com_host(ARG(1)))->proc);
 }
 
-/* Shader bytecode from the content-addressed cache <data>/shadercache, keyed
- * by everything the result depends on. A miss is recorded as a request for
- * Microsoft's d3dx9_36.dll on the PC (tools/shader_service.py) and, with
- * VOID_SHADER_WAIT=<seconds>, waited for. `function` "@asm" with profile
- * "asm" stands for D3DXAssembleShader. Failures are cached as well (<hash>.err,
+/* The files the game's ID3DXInclude serves for a source, in the order a depth-first walk of its
+ * #include lines meets them. UE3 generates Material.usf and VertexFactory.usf for every material,
+ * so they belong to the cache key and to a recorded request: two materials with equal macros
+ * differ only there, and the PC compiler must see exactly the game's files. A #include inside an
+ * inactive #if is asked for too; the compiler then gets a file it does not open. */
+#define SHADER_INCLUDES 128
+typedef struct { char name[256]; uint8_t *data; uint32_t size; } shader_include;
+typedef struct { shader_include file[SHADER_INCLUDES]; int count, overflow; } shader_includes;
+
+static void collect_includes(shader_includes *set, uint32_t handler, const uint8_t *text, uint32_t size,
+    uint32_t parent, int depth);
+
+static void open_include(shader_includes *set, uint32_t handler, uint32_t type, const char *name, uint32_t parent,
+    int depth)
+{
+    size_t length = strlen(name);
+    uint32_t scratch = void_galloc((uint32_t)(8 + length + 1));
+    if (!scratch) return;
+    MEM32(scratch) = 0;
+    MEM32(scratch + 4) = 0;
+    memcpy(GPTR(scratch + 8), name, length + 1);
+    /* ID3DXInclude: Open(this, type, name, parent, &data, &bytes) and Close(this, data), __stdcall. */
+    uint32_t table = MEM32(handler);
+    uint32_t args[6] = { handler, type, scratch + 8, parent, scratch, scratch + 4 };
+    uint32_t hr = void_call_guest(MEM32(table), 6, args, 1);
+    uint32_t data = MEM32(scratch), bytes = MEM32(scratch + 4);
+    void_gfree(scratch);
+    if (hr || !data) return;
+    if (bytes <= (16u << 20) && void_vm_readable(data, bytes ? bytes : 1)) {
+        shader_include *file = &set->file[set->count++];
+        snprintf(file->name, sizeof file->name, "%s", name);
+        file->data = (uint8_t *)malloc(bytes ? bytes : 1);
+        if (file->data) memcpy(file->data, GPTR(data), bytes);
+        file->size = file->data ? bytes : 0;
+        collect_includes(set, handler, file->data, file->size, data, depth + 1);
+    }
+    uint32_t close_args[2] = { handler, data };
+    void_call_guest(MEM32(table + 4), 2, close_args, 1);
+}
+
+static void collect_includes(shader_includes *set, uint32_t handler, const uint8_t *text, uint32_t size,
+    uint32_t parent, int depth)
+{
+    if (!handler || !text || depth > 32) return;
+    for (uint32_t line = 0; line < size;) {
+        uint32_t end = line;
+        while (end < size && text[end] != '\n') ++end;
+        uint32_t p = line;
+        while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
+        if (p < end && text[p] == '#') {
+            ++p;
+            while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
+            if (end - p > 7 && !memcmp(text + p, "include", 7)) {
+                p += 7;
+                while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
+                if (p < end && (text[p] == '"' || text[p] == '<')) {
+                    char close = text[p] == '"' ? '"' : '>';
+                    uint32_t type = text[p] == '"' ? 0u : 1u;      /* D3DXINC_LOCAL, D3DXINC_SYSTEM */
+                    uint32_t start = ++p;
+                    while (p < end && text[p] != close) ++p;
+                    if (p < end && p > start && p - start < 256) {
+                        char name[256];
+                        memcpy(name, text + start, p - start);
+                        name[p - start] = 0;
+                        int seen = 0;
+                        for (int i = 0; i < set->count && !seen; ++i) seen = !strcasecmp(set->file[i].name, name);
+                        if (!seen) {
+                            if (set->count == SHADER_INCLUDES) set->overflow = 1;
+                            else open_include(set, handler, type, name, parent, depth);
+                        }
+                    }
+                }
+            }
+        }
+        line = end + 1;
+    }
+}
+
+static void free_includes(shader_includes *set)
+{
+    for (int i = 0; i < set->count; ++i) free(set->file[i].data);
+    set->count = 0;
+}
+
+/* A cache entry, written whole: <data>/shadercache/<key>.bin or .err. */
+static void cache_store(uint64_t key, const char *suffix, const void *head, size_t head_size, const void *data, size_t size)
+{
+    char dir[1100], path[1200], partial[1210];
+    snprintf(dir, sizeof dir, "%s/shadercache", void_data_dir());
+    mkdir(dir, 0775);
+    snprintf(path, sizeof path, "%s/%016llx.%s", dir, (unsigned long long)key, suffix);
+    snprintf(partial, sizeof partial, "%s.part", path);
+    FILE *f = fopen(partial, "wb");
+    if (!f) return;
+    int ok = (!head_size || fwrite(head, 1, head_size, f) == head_size) && fwrite(data, 1, size, f) == size;
+    if (fclose(f)) ok = 0;
+    if (!ok || rename(partial, path)) unlink(partial);
+}
+
+/* HLSL no cache holds is compiled here (hlsl_vkd3d.c, vkd3d-shader) and kept in the cache, so any
+ * mod's materials work: the game's thread waits for it as UE3 waits for D3DX on Windows, and the
+ * guest machine is released meanwhile (the compile touches no guest memory). Its answers carry
+ * DEVICE_COMPILER in their names (<key>.vkd3d-2.1-r1.bin/.err): bytecode or errors of d3dx9_35
+ * itself (<key>.bin/.err, from tools/compile_shader_requests.py) win over them, and a port with a
+ * changed compiler (a new tag) compiles again instead of trusting the old one's results. */
+#define DEVICE_COMPILER "vkd3d-2.1-r1"
+extern int void_hlsl_compile(const char *source, size_t size, const char *entry, const char *profile, uint32_t flags,
+    const char *const *macro_names, const char *const *macro_values, unsigned macro_count,
+    const char *const *include_names, const unsigned char *const *include_data, const uint32_t *include_sizes,
+    unsigned include_count, void **code, size_t *code_size, char **messages);
+
+static int compile_on_device(uint64_t key, uint32_t src, uint32_t len, uint32_t defines, const char *function,
+    const char *profile, uint32_t flags, const shader_includes *includes, uint32_t *out, uint32_t *hr)
+{
+    static uint64_t compiles, failures, nanoseconds;
+    char *source = (char *)malloc(len ? len : 1), *entry = strdup(function), *target = strdup(profile);
+    const char *names[256], *values[256];
+    unsigned count = 0;
+    for (uint32_t d = defines; d && MEM32(d) && count < 256; d += 8, ++count) {
+        names[count] = strdup((const char *)GPTR(MEM32(d)));
+        values[count] = strdup(MEM32(d + 4) ? (const char *)GPTR(MEM32(d + 4)) : "");
+    }
+    const char *include_names[SHADER_INCLUDES];
+    const unsigned char *include_data[SHADER_INCLUDES];
+    uint32_t include_sizes[SHADER_INCLUDES];
+    for (int i = 0; i < includes->count; ++i) {
+        include_names[i] = includes->file[i].name;
+        include_data[i] = includes->file[i].data;
+        include_sizes[i] = includes->file[i].size;
+    }
+    if (source && len) memcpy(source, GPTR(src), len);
+    void *code = NULL;
+    size_t code_size = 0;
+    char *messages = NULL;
+    uint64_t started = void_perf_now_ns();
+    int ok = 0;
+    if (source && entry && target) {
+        void_blocking_begin();
+        ok = void_hlsl_compile(source, len, entry, target, flags, names, values, count, include_names, include_data,
+            include_sizes, (unsigned)includes->count, &code, &code_size, &messages);
+        if (ok) {
+            /* The bytecode must suit MojoShader too: the GLES renderer translates it, and UE3 stops
+             * with appError when D3DXDisassembleShader (MojoShader's D3D profile here) fails on a
+             * shader it compiled. Bytecode MojoShader rejects is a compile error instead: UE3 then
+             * draws the material with its default one, as for any shader Windows does not compile. */
+            const MOJOSHADER_parseData *pd = MOJOSHADER_parse(MOJOSHADER_PROFILE_GLSL, "main", (const unsigned char *)code,
+                (unsigned)code_size, NULL, 0, NULL, 0, NULL, NULL, NULL);
+            if (!pd || pd->error_count) {
+                char text[600];
+                snprintf(text, sizeof text, "error X0000: the device's compiler made bytecode the port cannot translate: %s\n",
+                    pd && pd->error_count && pd->errors[0].error ? pd->errors[0].error : "MojoShader parse failed");
+                free(messages);
+                messages = strdup(text);
+                free(code);
+                code = NULL;
+                ok = 0;
+            }
+            if (pd) MOJOSHADER_freeParseData(pd);
+        }
+        void_blocking_end();
+    }
+    uint64_t took = void_perf_now_ns() - started;
+    void_perf_add(VOID_PERF_SHADER_COMPILE, took, len);
+    ++compiles;
+    nanoseconds += took;
+    int answer;
+    if (ok) {
+        *out = make_buffer(code, (uint32_t)code_size);
+        /* The bytecode walker D3DXDisassembleShader and CreateVertex/PixelShader use must see all of it. */
+        if (d3d_shader_bytecode_size(((dxbuffer_t *)void_com_host(*out))->data) != (uint32_t)code_size) {
+            void_com_release((void_com_object *)void_com_host(*out));
+            *out = 0;
+            free(messages);
+            messages = strdup("error X0000: the device's compiler made bytecode the port's shader reader rejects\n");
+            ok = 0;
+        }
+    }
+    if (ok) {
+        cache_store(key, DEVICE_COMPILER ".bin", NULL, 0, code, code_size);
+        answer = 1;
+    } else {
+        /* The compiler's messages, as d3dx would return them; the next run reads the same answer. */
+        const char *text = messages ? messages : "error X0000: HLSL compilation failed\n";
+        char head[32];
+        int head_size = snprintf(head, sizeof head, "hr=%08X\n", (unsigned)E_FAIL_);
+        cache_store(key, DEVICE_COMPILER ".err", head, (size_t)head_size, text, strlen(text));
+        size_t n = strlen(text);
+        *out = make_buffer(text, (uint32_t)n + 1);
+        *hr = E_FAIL_;
+        ++failures;
+        answer = -1;
+        if (failures <= 16) void_log("[d3dx] %s/%s %016llx did not compile on the device: %.400s", function, profile,
+            (unsigned long long)key, text);
+    }
+    if (compiles <= 4 || compiles % 50 == 0)
+        void_log("[d3dx] %llu shaders compiled on the device (%llu failed), %.1f ms average, last %s/%s %.1f ms",
+            (unsigned long long)compiles, (unsigned long long)failures, (double)nanoseconds / 1e6 / (double)compiles,
+            function, profile, (double)took / 1e6);
+    free(code); free(messages); free(source); free(entry); free(target);
+    for (unsigned i = 0; i < count; ++i) { free((void *)names[i]); free((void *)values[i]); }
+    return answer;
+}
+
+/* Shader bytecode from the content-addressed cache <data>/shadercache, keyed by
+ * everything the result depends on (source, macros, entry, profile, flags and
+ * the files the game's ID3DXInclude served). HLSL it does not hold is compiled
+ * on the device (compile_on_device). Bytecode of the game's own d3dx9_35.dll,
+ * made on the PC from recorded requests (tools/compile_shader_requests.py),
+ * wins over the device's: <hash>.bin/.err before <hash>.<DEVICE_COMPILER>.*.
+ * A miss the device cannot answer is recorded as such a request and, with
+ * VOID_SHADER_WAIT=<seconds>, waited for. `function` "@asm" with profile "asm"
+ * stands for D3DXAssembleShader. Failures are cached as well (.err,
  * "hr=XXXXXXXX" then the messages), so the game sees the error Windows gives.
  * Returns 1 with *out an ID3DXBuffer of bytecode, -1 with *out an ID3DXBuffer
  * of messages and *hr the HRESULT, or 0 when the cache cannot answer. */
-static int cache_answer(uint64_t h, uint32_t *out, uint32_t *hr)
+static int cache_file(uint64_t h, const char *tag, uint32_t *out, uint32_t *hr)
 {
     char path[1200];
     size_t size = 0;
-    snprintf(path, sizeof path, "%s/shadercache/%016llx.bin", void_data_dir(), (unsigned long long)h);
+    snprintf(path, sizeof path, "%s/shadercache/%016llx%s.bin", void_data_dir(), (unsigned long long)h, tag);
     char *blob = read_all(path, &size);
     if (blob) {
         *out = make_buffer(blob, (uint32_t)size);
         free(blob);
         return 1;
     }
-    snprintf(path, sizeof path, "%s/shadercache/%016llx.err", void_data_dir(), (unsigned long long)h);
+    snprintf(path, sizeof path, "%s/shadercache/%016llx%s.err", void_data_dir(), (unsigned long long)h, tag);
     blob = read_all(path, &size);
     if (!blob) return 0;
     unsigned long code = 0;
@@ -652,6 +859,12 @@ static int cache_answer(uint64_t h, uint32_t *out, uint32_t *hr)
     ((char *)GPTR(((dxbuffer_t *)void_com_host(*out))->data))[n] = 0;
     free(blob);
     return -1;
+}
+
+static int cache_answer(uint64_t h, uint32_t *out, uint32_t *hr)
+{
+    int answer = cache_file(h, "", out, hr);
+    return answer ? answer : cache_file(h, "." DEVICE_COMPILER, out, hr);
 }
 
 static int shader_service(uint32_t src, uint32_t len, uint32_t defines, uint32_t include, const char *function,
@@ -673,30 +886,70 @@ static int shader_service(uint32_t src, uint32_t len, uint32_t defines, uint32_t
     h = fnv(h, function, strlen(function) + 1);
     h = fnv(h, profile, strlen(profile) + 1);
     h = fnv(h, &flags, 4);
+    static shader_includes includes;                  /* the game's thread compiles one shader at a time */
+    includes.overflow = 0;
+    collect_includes(&includes, include, (const uint8_t *)GPTR(src), len, 0, 0);
+    for (int i = 0; i < includes.count; ++i) {
+        uint32_t size = includes.file[i].size;
+        h = fnv(h, includes.file[i].name, strlen(includes.file[i].name) + 1);
+        h = fnv(h, &size, 4);
+        h = fnv(h, includes.file[i].data, size);
+    }
     char dir[1100], path[1200];
-    snprintf(dir, sizeof dir, "%s/shadercache", void_data_dir());
-    mkdir(dir, 0775);
     int answer = cache_answer(h, out, hr);
     if (answer) {
         D3DX_VLOG("[d3dx] %s/%s from cache %016llx (%s)", function, profile, (unsigned long long)h, answer > 0 ? "bytecode" : "error");
+        free_includes(&includes);
         return answer;
     }
-    /* Record the request for offline compilation. */
-    snprintf(dir, sizeof dir, "%s/shadercache/requests", void_data_dir());
-    mkdir(dir, 0775);
-    snprintf(path, sizeof path, "%s/%016llx.req", dir, (unsigned long long)h);
-    FILE *f = fopen(path, "wb");
-    if (f) {
-        fprintf(f, "function=%s\nprofile=%s\nflags=%u\ninclude=%s\nmacros=%zu\n%ssource=%u\n", function, profile, flags,
-            include ? "yes" : "no", mlen, macros, len);
-        fwrite(GPTR(src), 1, len, f);
-        fclose(f);
+    static int wait_seconds = -1;          /* VOID_SHADER_WAIT: the PC-side service of development */
+    if (wait_seconds < 0) {
+        const char *wait = getenv("VOID_SHADER_WAIT");
+        wait_seconds = wait && atoi(wait) > 0 ? atoi(wait) : 0;
     }
-    D3DX_LOG("[d3dx] %s/%s flags %X: cache miss %016llx recorded (%u bytes)", function, profile, flags,
-        (unsigned long long)h, len);
+    int device = 0;
+    if (function[0] != '@') {
+        device = compile_on_device(h, src, len, defines, function, profile, flags, &includes, out, hr);
+        if (device > 0) { free_includes(&includes); return 1; }
+    } else if (!wait_seconds) {
+        /* D3DXDisassembleShader/D3DXAssembleShader answer from MojoShader; UE3 disassembles every
+         * shader it compiles (for its instruction count), so these misses are not recorded. */
+        free_includes(&includes);
+        return 0;
+    }
+    /* A miss repeats while the game retries a material: record it once a process. */
+    static uint64_t recorded[256];
+    static unsigned recorded_count;
+    int known = 0;
+    for (unsigned i = 0; i < recorded_count && i < 256 && !known; ++i) known = recorded[i] == h;
+    if (!known) {
+        recorded[recorded_count++ % 256] = h;
+        snprintf(dir, sizeof dir, "%s/shadercache", void_data_dir());
+        mkdir(dir, 0775);
+        snprintf(dir, sizeof dir, "%s/shadercache/requests", void_data_dir());
+        mkdir(dir, 0775);
+        snprintf(path, sizeof path, "%s/%016llx.req", dir, (unsigned long long)h);
+        FILE *f = fopen(path, "wb");
+        if (f) {
+            /* tools/compile_shader_requests.py reads this layout. */
+            fprintf(f, "UT3SHADERREQ 2\nkey=%016llx\nfunction=%s\nprofile=%s\nflags=%u\nmacros=%zu\n",
+                (unsigned long long)h, function, profile, flags, mlen);
+            fwrite(macros, 1, mlen, f);
+            for (int i = 0; i < includes.count; ++i) {
+                fprintf(f, "include %u %s\n", includes.file[i].size, includes.file[i].name);
+                fwrite(includes.file[i].data, 1, includes.file[i].size, f);
+            }
+            fprintf(f, "source=%u\n", len);
+            fwrite(GPTR(src), 1, len, f);
+            fclose(f);
+        }
+        D3DX_LOG("[d3dx] %s/%s flags %X: cache miss %016llx recorded (%u bytes, %d included files%s)", function,
+            profile, flags, (unsigned long long)h, len, includes.count, includes.overflow ? ", list truncated" : "");
+    }
+    free_includes(&includes);
+    if (device < 0) return -1;              /* the device compiler's error, as Windows reports one */
     /* Development: wait for the PC-side service (tools/shader_service.py --watch). */
-    const char *wait = getenv("VOID_SHADER_WAIT");
-    int wait_ms = wait ? atoi(wait) * 1000 : 0;
+    int wait_ms = wait_seconds * 1000;
     if (wait_ms <= 0) return 0;
     char bin[1200], err[1200];
     snprintf(bin, sizeof bin, "%s/shadercache/%016llx.bin", void_data_dir(), (unsigned long long)h);
@@ -804,6 +1057,24 @@ WINAPI_EXPORT(D3DX, D3DXAssembleShader, 7)
     return D3D_OK;
 }
 
+/* The instructions of Shader Model 2/3 bytecode of `words` tokens that execute: all but comments,
+ * declarations, definitions and nops (d3dx9's count also weighs macros such as m4x4 as several
+ * slots; UE3 only shows it). 0 for Shader Model 1, whose tokens carry no instruction length. */
+static unsigned shader_instruction_slots(const uint32_t *t, uint32_t words)
+{
+    if (words < 2 || ((t[0] >> 8) & 255) < 2) return 0;
+    unsigned slots = 0;
+    for (uint32_t i = 1; i < words;) {
+        uint32_t token = t[i], opcode = token & 0xFFFF;
+        if (token == 0x0000FFFFu) break;
+        uint32_t length = opcode == 0xFFFE ? (token >> 16) & 0x7FFF : (token >> 24) & 15;
+        if (opcode != 0xFFFE && opcode != 0 && opcode != 0x1F && opcode != 0x51 && opcode != 0x30 && opcode != 0x2F)
+            ++slots;                       /* not NOP, DCL, DEF, DEFI or DEFB */
+        i += 1 + length;
+    }
+    return slots;
+}
+
 /* D3DXDisassembleShader(code, colorcode, comments, ppDisassembly): Microsoft's
  * text through the shader cache, since games edit and reassemble it (request
  * "@disasm": the bytecode as source, the colour flag as flags, the comment
@@ -831,13 +1102,30 @@ WINAPI_EXPORT(D3DX, D3DXDisassembleShader, 4)
         if (answer > 0) { MEM32(out) = buffer; return D3D_OK; }
         if (answer < 0) { void_com_release((void_com_object *)void_com_host(buffer)); MEM32(out) = 0; return hr; }
     }
-    const MOJOSHADER_parseData *pd = size ? MOJOSHADER_parse(MOJOSHADER_PROFILE_D3D, "main", (const unsigned char *)GPTR(code),
-        size, NULL, 0, NULL, 0, NULL, NULL, NULL) : NULL;
-    if (!pd || pd->error_count || !pd->output) {
-        if (pd) MOJOSHADER_freeParseData(pd);
-        return D3DXERR_INVALIDDATA;
-    }
-    MEM32(out) = make_buffer(pd->output, (uint32_t)strlen(pd->output) + 1);
+    /* UE3 disassembles every shader it compiles, reads the instruction count from the last line
+     * ("// approximately N instruction slots used", as d3dx9 writes it) and stops with appError
+     * when this fails (D3D9ShaderCompiler.cpp), so an answer is always given: MojoShader's text,
+     * or only the count when MojoShader cannot read the bytecode. */
+    const MOJOSHADER_parseData *pd = MOJOSHADER_parse(MOJOSHADER_PROFILE_D3D, "main", (const unsigned char *)GPTR(code),
+        size, NULL, 0, NULL, 0, NULL, NULL, NULL);
+    const int readable = pd && !pd->error_count && pd->output;
+    const char *body = readable ? pd->output : "";
+    char note[256] = "";
+    if (!readable)
+        snprintf(note, sizeof note, "// (no disassembly: %s)\n",
+            pd && pd->error_count && pd->errors[0].error ? pd->errors[0].error : "MojoShader cannot read the bytecode");
+    char tail[96] = "";
+    unsigned slots = shader_instruction_slots((const uint32_t *)GPTR(code), size / 4);
+    if (slots) snprintf(tail, sizeof tail, "\n// approximately %u instruction slots used\n", slots);
+    size_t body_size = strlen(body), note_size = strlen(note), tail_size = strlen(tail);
+    char *text = (char *)malloc(note_size + body_size + tail_size + 1);
+    if (!text) { if (pd) MOJOSHADER_freeParseData(pd); return E_OUTOFMEMORY_; }
+    memcpy(text, note, note_size);
+    memcpy(text + note_size, body, body_size);
+    memcpy(text + note_size + body_size, tail, tail_size + 1);
+    if (!readable) D3DX_LOG("[d3dx] D3DXDisassembleShader: %s", note);
+    MEM32(out) = make_buffer(text, (uint32_t)(note_size + body_size + tail_size + 1));
+    free(text);
     if (pd) MOJOSHADER_freeParseData(pd);
     return D3D_OK;
 }

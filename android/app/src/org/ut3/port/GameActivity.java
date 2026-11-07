@@ -36,7 +36,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     private static boolean crashHandlerInstalled;
     static native void nativeSurface(Surface surface);
     static native int nativeStart(String userdata, String renderer, boolean fixedSeed, int renderWidth, int renderHeight);
-    static native int nativePostfx(boolean fsr1, boolean antialias, boolean frameGeneration);
+    static native int nativePostfx(boolean fsr1, boolean antialias);
     static native int nativeStatus();
     static native void nativePause(boolean paused);
     static native void nativeKey(int vk, boolean down);
@@ -284,7 +284,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 if (launch != null) launch.firstFrame(root);
                 if((nativeTouchContext()&3)==3)offerTouchVisibility();
             } else if (result != Integer.MIN_VALUE) {
-                if (result != 0) {
+                if (result != 0 && getIntent().getBooleanExtra("crash.watched", false)) {
+                    /* The crash monitor (GameWatchActivity) shows the report; without it the message below stays. */
                     setResult(RESULT_FIRST_USER, new Intent().putExtra("crash.exitCode", result));
                     finish();
                     android.os.Process.killProcess(android.os.Process.myPid());
@@ -336,9 +337,25 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             }
         };
 
+    /** The launcher's "crash_monitor" option (port.json) as the player set it. Read from the launcher's
+     *  choices file: the launcher runs in its own process, and Launch.attach() exports options to this
+     *  process's environment only later in onCreate. */
+    private boolean crashMonitorWanted() {
+        java.util.Properties choices = new java.util.Properties();
+        try (java.io.FileInputStream in = new java.io.FileInputStream(new File(getFilesDir(), "launcher/choices.properties"))) {
+            choices.load(in);
+        } catch (IOException | IllegalArgumentException unreadable) {
+            return false;
+        }
+        String monitor = choices.getProperty("option.crash_monitor", "0");
+        return "1".equals(monitor) || "true".equals(monitor);
+    }
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        if (!getIntent().getBooleanExtra("crash.watched", false)) {
+        /* The launcher's crash monitor option: GameWatchActivity, in a second process that stays for the
+           whole game, starts the game and shows the reason after a crash. Off, the game starts here. */
+        if (!getIntent().getBooleanExtra("crash.watched", false) && crashMonitorWanted()) {
             Intent watch = new Intent(this, GameWatchActivity.class);
             if (getIntent().getExtras() != null) watch.putExtras(getIntent().getExtras());
             startActivity(watch);
@@ -484,14 +501,13 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             String language = portPreferences.getString("language", "INT");
             String options = "INT".equals(language) ? "AndroidPortOptions.ini" : "AndroidPortOptions-" + language + ".ini";
             GameSettings.prepareNativeUi(engine, game, userdata,
-                asset("AndroidPort.u"), GameSettings.rendererOptions(GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()),renderer,android.os.Build.VERSION.SDK_INT));
+                asset("AndroidPort.u"), GameSettings.displayOptions(new String(asset(options), StandardCharsets.UTF_8), displayRates()));
         } catch (IOException | IllegalArgumentException error) {
             refuse(say("Could not prepare the game's settings: ", "Не удалось подготовить настройки игры: ",
                 "Die Spieleinstellungen konnten nicht vorbereitet werden: ", "Nie udało się przygotować ustawień gry: ") + error.getMessage());
             return;
         }
-        int error = nativePostfx(portPreferences.getBoolean("fsr1",false),portPreferences.getBoolean("antialias",false),
-            !"gles".equals(renderer)&&android.os.Build.VERSION.SDK_INT>=31&&portPreferences.getBoolean("frameGeneration",false));
+        int error = nativePostfx(portPreferences.getBoolean("fsr1",false),portPreferences.getBoolean("antialias",false));
         if (error == 0) error = nativeConfigure(fpsLimit(), getIntent().getIntExtra("queryWaitUs", 0),
             getIntent().getIntExtra("precacheWaitUs", 50), getIntent().getBooleanExtra("benchmark", false));
         if (error == 0) error = nativeStart(userdata.getAbsolutePath(), renderer, getIntent().getBooleanExtra("fixedSeed", false), renderWidth, renderHeight);

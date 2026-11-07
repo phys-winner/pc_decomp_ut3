@@ -294,11 +294,6 @@ final class GameSettings {
             throw new IOException("Game language files are missing: " + language);
     }
 
-    static String rendererOptions(String options,String renderer,int sdk) {
-        return !"gles".equals(renderer)&&sdk>=31 ? options : options.replaceAll(
-            "(?ms)^\\[AndroidPort_frameGeneration UTUIDataProvider_MenuOption\\]\\r?\\n.*?(?=^\\[|\\z)", "");
-    }
-
     static void prepareNativeUi(File engine, File game, File userdata, byte[] script, String options) throws IOException {
         if (script.length < 32 || (script[0] & 255) != 0xC1 || (script[1] & 255) != 0x83 ||
             (script[2] & 255) != 0x2A || (script[3] & 255) != 0x9E)

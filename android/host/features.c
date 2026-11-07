@@ -58,8 +58,11 @@ void __wrap_sub_00B6AF10(void)
     g_esp += 4;
 }
 
+extern void void_physx_native_init(void);
+
 void void_features_init(void)
 {
+    void_physx_native_init();
     void_dispatch_add(0x00B6AF10u, __wrap_sub_00B6AF10);
     physx_scene = void_dispatch_find(0x1E12A1D0u);
     physx_cloth = void_dispatch_find(0x1E13C930u);

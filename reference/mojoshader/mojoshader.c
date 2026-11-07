@@ -6,6 +6,8 @@
  *
  *  This file written by Ryan C. Gordon.
  *  Altered locally for Heroes V: Shader Model 1.x texture inputs and samplers.
+ *  Altered locally for Unreal Tournament 3 (2026-11-07): TEXKILL with a partial write mask or a
+ *  constant register, and vFace declared with one component (vkd3d-shader output).
  */
 
 // !!! FIXME: this file really needs to be split up.
@@ -972,8 +974,10 @@ static int parse_args_DCL(Context *ctx)
             else if (mt == MISCTYPE_TYPE_FACE)
             {
                 reserved_mask = 0x7FFFFFFF;
-                if (!writemask_xyzw(ctx->dest_arg.orig_writemask))
-                    fail(ctx, "DCL face writemask must be full");
+                // UT3 port: vkd3d-shader declares the scalar vFace with its one component
+                //  ("dcl vFace.x"); d3dx9 writes the full mask. The register reads the same.
+                if (ctx->dest_arg.orig_writemask == 0)
+                    fail(ctx, "DCL face writemask must not be empty");
                 if (ctx->dest_arg.result_mod != 0)
                     fail(ctx, "DCL face result modifier must be zero");
                 if (ctx->dest_arg.result_shift != 0)
@@ -1758,10 +1762,14 @@ static void state_TEXKILL(Context *ctx)
     //  say it's a dest arg. That's annoying.
     const DestArgInfo *info = &ctx->dest_arg;
     const RegisterType regtype = info->regtype;
-    if (!writemask_xyzw(info->writemask))
-        fail(ctx, "TEXKILL writemask must be .xyzw");
-    else if ((regtype != REG_TYPE_TEMP) && (regtype != REG_TYPE_TEXTURE))
-        fail(ctx, "TEXKILL must use a temp or texture register");
+    // UT3 port: the driver documentation's mask names the components tested. d3dx9 always
+    //  writes .xyzw; vkd3d-shader writes the ones clip() reads (.x for a scalar).
+    if (info->writemask == 0)
+        fail(ctx, "TEXKILL writemask must not be empty");
+    // UT3 port: vkd3d-shader kills on the constant register a folded clip() argument landed in
+    //  ("def c2, 0.6667, ..." then "texkill c2"); the GLSL profile names it like any constant.
+    else if ((regtype != REG_TYPE_TEMP) && (regtype != REG_TYPE_TEXTURE) && (regtype != REG_TYPE_CONST))
+        fail(ctx, "TEXKILL must use a temp, texture or constant register");
 
     // !!! FIXME: "If a temporary register is used, all components must have been previously written."
     // !!! FIXME: "If a texture register is used, all components that are read must have been declared."

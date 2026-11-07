@@ -85,7 +85,7 @@ static uint32_t dxvk_guest_call(uint32_t guest,unsigned kind,unsigned slot,const
     }
     if(slot==1){ut3_dxvk_native_addref(object->native);return void_com_addref(&object->com);}
     if(slot==2){
-        if(kind==2u&&object->com.refs==1){extern void void_postfx_reset(uint32_t);extern void ut3_dxvk_fsr_reset(void*);void_postfx_reset(guest);ut3_dxvk_fsr_reset(object->native);}
+        if(kind==2u&&object->com.refs==1){extern void void_postfx_reset(uint32_t);void_postfx_reset(guest);}
         ut3_dxvk_native_release(object->native);return void_com_release(&object->com);
     }
     extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);

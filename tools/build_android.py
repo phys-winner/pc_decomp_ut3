@@ -9,6 +9,15 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import x87_slots
+
+# Lifted modules whose functions keep their x87 stack in C locals (tools/x87_slots.py): the game's own
+# scalar float code, PhysXCore (its CPU solver carries the PhysX Mod Pack maps), the PhysX cooking and
+# character libraries, and Bink, Vorbis and the resampler. A function with another x87 interface keeps
+# the global window; so do the CRT's math helpers (msvcr80), whose interfaces are x87 values.
+X87_SLOT_MODULES = ("ut3", "physxcore", "nxcooking", "nxcharacter", "binkw32", "vorbis", "libresample")
+
 ROOT = Path(__file__).resolve().parents[1]
 SDK = Path(os.environ.get("ANDROID_SDK_ROOT", Path.home() / "AppData/Local/Android/Sdk"))
 MOJO_SOURCES = ["mojoshader.c", "mojoshader_common.c", "mojoshader_assembler.c",
@@ -24,7 +33,8 @@ def sha(path):
 
 def native_dependencies(prepare=False):
     if prepare:
-        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py", "build_texconv.py", "build_fsr.py"):
+        for tool in ("build_native_audio.py", "build_dxvk.py", "build_turnip.py", "build_texconv.py",
+                     "build_vkd3d.py"):
             subprocess.run([sys.executable, str(ROOT / "tools" / tool)], cwd=ROOT, check=True)
     pinned, runtime = {}, {}
 
@@ -73,8 +83,6 @@ def native_dependencies(prepare=False):
     pin(ROOT / "dependencies-turnip.json", turnip["input_pins_sha256"])
     pinned[ROOT / "android/dxvk/turnip.inc"] = sha(ROOT / "android/dxvk/turnip.inc")
     pinned[ROOT / "android/dxvk/query_wait.inc"] = sha(ROOT / "android/dxvk/query_wait.inc")
-    for name in ("fsr3.inc","vulkan_interop.inc"):
-        pinned[ROOT / "android/dxvk" / name] = sha(ROOT / "android/dxvk" / name)
     for item in turnip["outputs"]:
         library(ROOT / item["path"], item["sha256"])
     for item in turnip["licenses"]:
@@ -95,11 +103,15 @@ def native_dependencies(prepare=False):
         for path in (ROOT / directory).glob("LICENSE*"):
             pinned[path] = sha(path)
             licenses.append(path)
-    fsr = json.loads((ROOT / "build/fsr/receipt.json").read_text(encoding="utf-8"))
-    for name,digest in fsr["inputs"].items():
-        pin(ROOT / name,digest)
-    library(ROOT / fsr["path"],fsr["sha256"])
-    for name in fsr["licenses"]:
+    # vkd3d-shader: the device's HLSL compiler (android/host/hlsl_vkd3d.c), linked into libut3.so.
+    vkd3d = json.loads((ROOT / "build/vkd3d/receipt.json").read_text(encoding="utf-8"))
+    pin(ROOT / "tools/build_vkd3d.py", vkd3d["tool_sha256"])
+    pin(ROOT / "dependencies-vkd3d.json", vkd3d["manifest_sha256"])
+    pin(ROOT / vkd3d["library"], vkd3d["sha256"])
+    for name, digest in vkd3d["headers"].items():
+        pin(ROOT / name, digest)
+    for name in vkd3d["licenses"]:
+        pinned[ROOT / name] = sha(ROOT / name)
         licenses.append(ROOT / name)
     return runtime, pinned, licenses
 
@@ -184,13 +196,52 @@ def main():
     generated_flags = common + ["-w", "-DRECOMP_GENERATED_CODE", "-DRECOMP_GUEST_STATE_SEPARATE",
                                 "-mllvm", "-basic-aa-separate-storage", "-include",
                                 str(ROOT / "android/runtime/guest_state_prefix.h")]
+    # The rewritten sources are made from the game's lifted code: generated into the build tree only.
+    # x87_slots/manifest.json remembers, per lifted source and x87_slots.py version, what the rewrite
+    # gave, so an unchanged source is not analysed again.
+    x87_counts = [0, 0]
+    x87_dir = out.parent / "x87_slots"
+    x87_manifest_path = x87_dir / "manifest.json"
+    x87_tool = sha(ROOT / "tools/x87_slots.py")
+    try:
+        x87_manifest = json.loads(x87_manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        x87_manifest = {}
+    x87_next = {}
     for source in lifted:
+        if source.parent.name in X87_SLOT_MODULES and source.parent.parent == generated:
+            key = source.relative_to(generated).as_posix()
+            target = x87_dir / source.parent.name / source.name
+            source_sha = sha(source)
+            known = x87_manifest.get(key)
+            if (known and known["source"] == source_sha and known["tool"] == x87_tool and
+                    (not known["rewritten"] or (target.is_file() and sha(target) == known["target"]))):
+                rewritten, kept = known["rewritten"], known["kept"]
+            else:
+                text, rewritten, kept = x87_slots.transform_file(source.read_text(encoding="utf-8"), source.parent.name)
+                if rewritten:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if not target.is_file() or target.read_text(encoding="utf-8") != text:
+                        target.write_text(text, encoding="utf-8", newline="\n")
+            x87_next[key] = {"source": source_sha, "tool": x87_tool, "rewritten": rewritten, "kept": kept,
+                             "target": sha(target) if rewritten else None}
+            x87_counts[0] += rewritten
+            x87_counts[1] += kept
+            # A file with nothing rewritten keeps its own path, so its cached object stays valid.
+            if rewritten:
+                source = target
         tasks.append((source, common + ["-w", "-DRECOMP_GENERATED_CODE"]
                       if source == generated / "dispatch.c" else generated_flags))
+    if x87_next != x87_manifest:
+        x87_dir.mkdir(parents=True, exist_ok=True)
+        x87_manifest_path.write_text(json.dumps(x87_next, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"x87 stack in locals: {x87_counts[0]} functions, {x87_counts[1]} keep the window", flush=True)
     for source in sorted((ROOT / "android/host").glob("*.c")):
         flags = common + ["-std=gnu11", "-Wall", "-Wno-unused-function", "-Wno-unused-variable"]
         if source.name == "openal.c":
             flags.append("-Ireference/openal-soft/source/include")
+        if source.name == "hlsl_vkd3d.c":
+            flags.append("-Ireference/vkd3d/include")
         if args.rt_check and source.name.startswith("d3d9_"):
             flags.append("-DVOID_RT_CHECK")
         tasks.append((source, flags))
@@ -211,6 +262,8 @@ def main():
         if source.name == "openal.c":
             extra = b"".join(header.read_bytes() for header in
                              sorted((ROOT / "reference/openal-soft/source/include").rglob("*.h")))
+        if source.name == "hlsl_vkd3d.c":
+            extra = b"".join(header.read_bytes() for header in sorted((ROOT / "reference/vkd3d/include").glob("*.h")))
         if source.name == "d3d9_dxvk.c":
             extra = (ROOT / "build/dxvk/guest_methods.inc").read_bytes() + (ROOT / "android/dxvk/query_wait.inc").read_bytes()
         if source.parent == ROOT / "android/host":
@@ -262,9 +315,14 @@ def main():
                     "-Wl,--wrap=sub_00C12290",
                     "-Wl,--wrap=sub_00B6AF10",
                     "-Wl,--wrap=sub_010FC820",
+                    "-Wl,--wrap=sub_1E23D3A0",          # PhysX fluid collision kernels (physx_native.c)
+                    "-Wl,--wrap=sub_1E23A700",
+                    "-Wl,--wrap=sub_1E23D300",
+                    "-Wl,--wrap=sub_1E213B70",          # PhysX pair manager hash removal
                     *(["-shared", "-Wl,-z,defs"] if args.shared else []),
                     "@" + str(response), "-o", str(out), "-lm", "-ldl", "-llog", "-landroid",
                     str(ROOT / "build/dxvk/libut3_dxvk.a"),
+                    str(ROOT / "build/vkd3d/libvkd3d_shader.a"), "-Wl,--exclude-libs,libvkd3d_shader.a",
                     "-L" + str(runtime["libc++_shared.so"].parent), "-lc++_shared",
                     "-lEGL", "-lGLESv3", "-laaudio", "-lz"], cwd=ROOT, check=True)
     receipt = {"output": str(out), "sha256": sha(out), "compiler": compiler,

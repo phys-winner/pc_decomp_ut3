@@ -10,6 +10,9 @@ final class TouchInput {
     static final int TAUNT = 1 << 26, PICKER = 1 << 27;
     /** What a contact does: drive the stick, turn the camera, or only hold its action. */
     static final int MOVEMENT = 1, LOOK = 2, BUTTON = 3, PASSIVE = 4;
+    /** Buttons whose contact also turns the camera when dragged: an arena shooter needs the camera
+     *  from the thumb that just fired, jumped or crouched, without lifting it first. */
+    static final int LOOK_BUTTONS = FIRE | ALT | JUMP | DUCK;
     /**
      * Look acceleration: a drag slower than ACCEL_SLOW dp/ms turns linearly; the
      * gain then rises evenly to ACCEL_MAX at ACCEL_FAST, so a quick swipe across
@@ -28,7 +31,10 @@ final class TouchInput {
     private final int[] ids = new int[10], actions = new int[10], roles = new int[10];
     private final float[] x = new float[10], y = new float[10], speed = new float[10], untimed = new float[10];
     private final long[] times = new long[10];
-    private int movement = -1, look = -1;
+    /** Every looking contact turns the camera by its own movement: a held button (a phone's
+     *  shoulder trigger mapped onto Fire, a thumb resting on Jump) never blocks another finger. */
+    private final boolean[] looks = new boolean[10];
+    private int movement = -1;
     private int latched, extHeld;
     /** A gamepad's left stick beside the touch contacts: it moves while no finger drives the stick. */
     private float extX, extY;
@@ -71,13 +77,14 @@ final class TouchInput {
         if (id < 0 || find(id) >= 0 || !valid(px, py) || (action & ~((PICKER << 1) - 1)) != 0) return false;
         int slot = find(-1);
         if (slot < 0) return false;
-        // The stick zone holds one stick; a second finger there turns the camera.
-        if (role == MOVEMENT && movement >= 0) role = action == FIRE ? PASSIVE : LOOK;
+        // The stick zone holds one stick; a second finger there turns the camera, also on the left Fire.
+        if (role == MOVEMENT && movement >= 0) role = LOOK;
         ids[slot] = id; actions[slot] = action; roles[slot] = role; x[slot] = px; y[slot] = py;
         times[slot] = time; speed[slot] = untimed[slot] = 0;
         if (role == MOVEMENT) {
             movement = slot; anchorX = px; anchorY = py; moveX = moveY = 0;
-        } else if (look < 0 && (role == LOOK || (role == BUTTON && (action == FIRE || action == ALT)))) look = slot;
+        }
+        looks[slot] = role == LOOK || (role == BUTTON && Integer.bitCount(action) == 1 && (action & LOOK_BUTTONS) != 0);
         send(0, 0);
         return true;
     }
@@ -105,7 +112,7 @@ final class TouchInput {
             moveX = length > 0 ? nx / length * magnitude : 0;
             moveY = length > 0 ? ny / length * magnitude : 0;
         }
-        if (slot == look) {
+        if (looks[slot]) {
             float multiplier = ((held() & ALT) != 0 ? altGain : 1) * lookGain(slot, px - x[slot], py - y[slot], time);
             dx = (px - x[slot]) * gain * multiplier;
             dy = (py - y[slot]) * gain * multiplier * (invertY ? -1 : 1);
@@ -160,9 +167,8 @@ final class TouchInput {
         if (slot < 0) return;
         move(id, px, py, time);
         boolean picker = (actions[slot] & PICKER) != 0;
-        ids[slot] = -1; actions[slot] = roles[slot] = 0;
+        ids[slot] = -1; actions[slot] = roles[slot] = 0; looks[slot] = false;
         if (movement == slot) { movement = -1; moveX = moveY = 0; pad = false; }
-        if (look == slot) look = -1; // No mid-gesture ownership transfer.
         if (picker && (held() & PICKER) == 0) stickX = stickY = 0;
         send(0, 0);
     }
@@ -223,7 +229,10 @@ final class TouchInput {
     float stickX() { return stickX; }
     float stickY() { return stickY; }
     boolean moving() { return movement >= 0; }
-    boolean looking() { return look >= 0; }
+    boolean looking() {
+        for (int i = 0; i < ids.length; ++i) if (ids[i] >= 0 && looks[i]) return true;
+        return false;
+    }
     boolean hasContacts() {
         for (int id : ids) if (id >= 0) return true;
         return false;
@@ -236,8 +245,8 @@ final class TouchInput {
         return !Float.isNaN(x) && !Float.isNaN(y) && !Float.isInfinite(x) && !Float.isInfinite(y);
     }
     private void clear() {
-        for (int i = 0; i < ids.length; ++i) { ids[i] = -1; actions[i] = roles[i] = 0; }
-        movement = look = -1; moveX = moveY = stickX = stickY = 0; latched = 0; pad = false;
+        for (int i = 0; i < ids.length; ++i) { ids[i] = -1; actions[i] = roles[i] = 0; looks[i] = false; }
+        movement = -1; moveX = moveY = stickX = stickY = 0; latched = 0; pad = false;
         extX = extY = 0; extHeld = 0;
     }
     void cancel() { clear(); sink.reset(); }

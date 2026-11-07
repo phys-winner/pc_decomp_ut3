@@ -107,7 +107,7 @@ def main():
     settings = saved.read_text(encoding="utf-16" if saved.read_bytes().startswith(b"\xff\xfe") else "utf-8-sig")
     assert "[AndroidPortChecks.AndroidPortSettings]" in settings
     for expected in ("renderer=dxvk-turnip", "language=RUS", "fpsLimit=90", "touchGyroMode=4",
-                     "touchWasd=True", "uiScale=1.250000", "fsr1=True", "antialias=True", "frameGeneration=True"):
+                     "touchWasd=True", "uiScale=1.250000", "fsr1=True", "antialias=True"):
         assert expected.lower() in settings.lower(), expected
     evidence = ROOT / "research/native-settings-selfcheck"
     evidence.mkdir(exist_ok=True)

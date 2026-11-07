@@ -76,15 +76,15 @@ class NativeBundleTest(unittest.TestCase):
                         "tool_sha256": self.digest("tools/build_texconv.py"),
                         "sha256": self.digest("build/texconv/libtexconv.so"),
                         "sources": {"android/texconv/ut3tex.cpp": self.digest("android/texconv/ut3tex.cpp")}}
-        for name in ("fsr3.inc", "vulkan_interop.inc"):
-            self.write("android/dxvk/" + name, b"FSR3 bridge")
-        self.write("build/fsr/libut3_fsr3.so", self.elf)
-        self.write("reference/fsr3-runtime/FSR3-Android-MIT.txt", b"FSR3 license")
-        self.write("build/fsr/receipt.json", json.dumps({
-            "inputs": {}, "path": "build/fsr/libut3_fsr3.so",
-            "sha256": self.digest("build/fsr/libut3_fsr3.so"),
-            "licenses": ["reference/fsr3-runtime/FSR3-Android-MIT.txt"]
-        }).encode())
+        # vkd3d-shader, the device's HLSL compiler, is a static library linked into libut3.so.
+        self.write("tools/build_vkd3d.py", b"vkd3d tool")
+        self.write("dependencies-vkd3d.json", b"{}")
+        self.write("build/vkd3d/libvkd3d_shader.a", b"!<arch>" + bytes([10]))
+        self.write("reference/vkd3d/COPYING", b"vkd3d license")
+        self.vkd3d = {"tool_sha256": self.digest("tools/build_vkd3d.py"),
+                      "manifest_sha256": self.digest("dependencies-vkd3d.json"),
+                      "library": "build/vkd3d/libvkd3d_shader.a", "sha256": self.digest("build/vkd3d/libvkd3d_shader.a"),
+                      "headers": {}, "licenses": ["reference/vkd3d/COPYING"]}
         self.receipts()
 
     def write(self, name, data):
@@ -99,11 +99,13 @@ class NativeBundleTest(unittest.TestCase):
         for name, value in (("native-audio", self.audio), ("dxvk", self.dxvk), ("turnip-runtime", self.turnip)):
             self.write(f"build/{name}/build-receipt.json", json.dumps(value).encode())
         self.write("build/texconv/receipt.json", json.dumps(self.texture).encode())
+        self.write("build/vkd3d/receipt.json", json.dumps(self.vkd3d).encode())
 
     def test_complete_bundle_deduplicates_identical_cpp_runtime(self):
         runtime, pins, licenses = build_android.native_dependencies()
-        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so", "libtexconv.so", "libut3_fsr3.so"})
+        self.assertEqual(set(runtime), {"libopenal.so", "libc++_shared.so", "libdxvk_d3d9.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so", "libgsl_alloc_hook.so", "libut3_turnip.so", "libtexconv.so"})
         self.assertIn(self.root / "build/dxvk/libut3_dxvk.a", pins)
+        self.assertIn(self.root / "build/vkd3d/libvkd3d_shader.a", pins)
         self.assertEqual(len(licenses), 9)
 
     def test_modified_converter_is_rejected(self):

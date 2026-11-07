@@ -15,8 +15,9 @@ in `dependencies-host.json`; the lifter has its separate dependency records.
 | Adapted x87 sliding-window algorithm by sistemas3cecasem | NFSU2 revision `62a1d3a17fc7619b9d32df182b4b47d1a4f2e959` | MIT | Original patch and attribution in `reference/homm5/x87-attribution/` |
 
 MojoShader's copied sources already contain the H5/The Void port's marked local
-extensions. They are an altered source snapshot and must not be represented as
-an unmodified upstream release. This UT3 adaptation removes the H5-specific
+extensions, and this port adds marked changes for TEXKILL with a partial write
+mask or a constant register, as vkd3d-shader writes it. They are an altered
+source snapshot and must not be represented as an unmodified upstream release. This UT3 adaptation removes the H5-specific
 guest-address overrides and uses the same general Win32 and graphics mechanisms.
 
 The D3D9 fallback texture decoder is part of the copied compatibility host; the optional
@@ -133,4 +134,17 @@ distributed. The original game files remain unchanged. Upstream project:
 
 FSR1 EASU/RCAS use AMD's scalar kernels, adapted to Shader Model 3 with individual texture samples and float constants. Source: https://github.com/GPUOpen-Effects/FidelityFX-FSR at a21ffb8f6c13233ba336352bdff293894c706575, MIT licence in reference/fsr1/FSR1-MIT.txt.
 
-The optional Vulkan frame-generation plugin uses FidelityFX SDK 1.1.4 / FSR3.1.4 from https://github.com/Snowapril/fsr3-android, pinned ARM64 release v0.1.0. AMD and Android-port MIT notices are retained in reference/fsr3-runtime/FSR3-Android-MIT.txt and the SDK headers. Library and header hashes are in dependencies-fsr.json. These licences are included in the APK's third-party components page.
+## HLSL compiler (vkd3d-shader)
+
+Shaders that no cache holds, such as the materials of mods, are compiled on the device by
+vkd3d-shader 2.1 (https://gitlab.winehq.org/wine/vkd3d, release tarball
+https://dl.winehq.org/vkd3d/source/vkd3d-2.1.tar.xz), LGPL-2.1-or-later, copyright the
+authors listed in `reference/vkd3d/AUTHORS`; the licence is `reference/vkd3d/COPYING`.
+`libut3.so` links it statically. `reference/vkd3d` holds the complete source it is built
+from: the release's shader-compiler subset, parsers generated with GNU Bison 3.8.2 and
+flex 2.6.4, a hand-written `config.h` and a stub for the unused SPIR-V backend.
+`hlsl_codegen.c` and `hlsl.c` carry dated modifications marked "UT3 port" (bounded
+folding loops, one walk for the expression folds, no unconditional trace). Every file is
+hash-pinned in `dependencies-vkd3d.json`, and `tools/build_vkd3d.py` rebuilds the library
+from it, so a changed vkd3d-shader can be built and linked in its place. The licence and
+the authors list are included in the APK's third-party components page.

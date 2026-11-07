@@ -211,8 +211,6 @@ event int Main(string Params)
     Value.StringValue = "1";
     if (!Check(ValueStore.SetFieldValue("fsr1", Value) && ValueStore.SetFieldValue("antialias", Value)
         && Store.Settings.fsr1 && Store.Settings.antialias, "post-process options reach canonical settings")) return 1;
-    if (!Check(ValueStore.SetFieldValue("frameGeneration", Value) && Store.Settings.frameGeneration,
-        "frame generation reaches canonical settings")) return 1;
     Store.Settings.touchGyroMode = -1;
     Store.Settings.touchGyro = 2;
     if (!Check(Store.Settings.GyroMode() == 3, "an older build's always-on gyroscope stays always on")) return 1;
@@ -230,7 +228,7 @@ event int Main(string Params)
     Store.CommitCollection('touchVehicleProfile');
     if (!Check(Store.Settings.touchVehicleProfile == 4, "turret profile")) return 1;
     ValueStore.GetSupportedScriptFields(Fields);
-    if (!Check(Fields.Length == 19, "scalar fields discoverable")) return 1;
+    if (!Check(Fields.Length == 18, "scalar fields discoverable")) return 1;
     if (!Check(ValueStore.GetFieldValue("uiScale", Value)
         && Value.RangeValue.CurrentValue == 100 && Value.RangeValue.MinValue == 100
         && Value.RangeValue.MaxValue == 150 && Value.RangeValue.NudgeValue == 5,

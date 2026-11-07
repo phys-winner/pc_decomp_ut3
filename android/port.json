@@ -47,7 +47,7 @@
     {
       "id": "ut3",
       "title": "Unreal Tournament 3",
-      "activity": "org.ut3.port.GameWatchActivity",
+      "activity": "org.ut3.port.GameActivity",
       "renderers": ["gles", "dxvk", "dxvk-turnip"],
       "intro": {"default": true},
       "parts": [
@@ -96,6 +96,12 @@
     ]
   },
   "options": [
+    {"key": "crash_monitor", "type": "bool", "default": "0",
+     "title": {"en": "Crash monitor", "ru": "Монитор вылетов", "de": "Absturzmonitor", "pl": "Monitor awarii"},
+     "hint": {"en": "After a crash, shows its reason and offers the log. Keeps a second Android process (about 30 MB of memory) for the whole game; turn it on to report a crash.",
+              "ru": "После вылета показывает его причину и предлагает журнал. Всю игру держит второй процесс Android (около 30 МБ памяти); включайте, чтобы сообщить о вылете.",
+              "de": "Zeigt nach einem Absturz den Grund und bietet das Protokoll an. Hält während des ganzen Spiels einen zweiten Android-Prozess (etwa 30 MB Speicher); zum Melden eines Absturzes einschalten.",
+              "pl": "Po awarii pokazuje jej przyczynę i proponuje dziennik. Przez całą grę utrzymuje drugi proces Androida (około 30 MB pamięci); włącz, aby zgłosić awarię."}},
     {"key": "fps_counter", "type": "choice", "default": "0",
      "title": {"en": "FPS counter in the top left corner of the game (every renderer)",
                "ru": "Счётчик FPS в левом верхнем углу игры (в любом режиме рендера)",

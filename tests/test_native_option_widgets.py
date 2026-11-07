@@ -292,7 +292,7 @@ class NativeOptionWidgets(unittest.TestCase):
         values = ["touchSensitivity", "touchAltSensitivity", "touchScale", "uiScale", "touchOpacity",
                   "touchLeftHanded", "touchInvertY", "touchWasd", "touchGyroSensitivity",
                   "touchVisible", "touchStaticStick", "touchWeaponSwipe", "touchWeaponButtonSwipe",
-                  "touchWeaponTap", "weaponBarScale", "weaponWheelScale", "fsr1", "antialias", "frameGeneration"]
+                  "touchWeaponTap", "weaponBarScale", "weaponWheelScale", "fsr1", "antialias"]
         port = ["touchVehicleProfile", "touchGyro", "language", "fpsLimit"]
         languages = sorted(path.name for path in (ROOT / "android/uscript/AndroidPort").glob("AndroidPortOptions*.ini"))
         self.assertEqual(languages, ["AndroidPortOptions-%s.ini" % code for code in

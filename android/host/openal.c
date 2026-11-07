@@ -8,6 +8,8 @@
 #include "../../reference/audio-runtime/rebuild/android/audio/metrics.h"
 #include <dlfcn.h>
 #include <strings.h>
+#include <time.h>
+#include <unistd.h>
 _Static_assert(sizeof(ALint)==4 && sizeof(ALuint)==4 && sizeof(ALsizei)==4 && sizeof(ALenum)==4,"AL scalar ABI");
 _Static_assert(sizeof(ALboolean)==1 && sizeof(ALCboolean)==1 && sizeof(ALfloat)==4 && sizeof(ALdouble)==8,"AL float/boolean ABI");
 
@@ -141,6 +143,17 @@ static void *native_library;
 static pthread_once_t native_once=PTHREAD_ONCE_INIT;
 static pthread_mutex_t bridge_lock=PTHREAD_MUTEX_INITIALIZER;
 static int native_ok, audio_paused;
+/* Per-entry call counts (always) and native time (with <data dir>/audio-profile), logged with the
+ * stats: which AL calls the game makes per second and what they cost its thread. */
+typedef struct audio_stat { const char *name; uint64_t calls, ns, logged_calls, logged_ns; struct audio_stat *next; int linked; } audio_stat;
+static audio_stat *audio_stats;
+static int audio_profile;
+static uint64_t audio_clock(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return (uint64_t)t.tv_sec*1000000000ull+(uint64_t)t.tv_nsec; }
+static void audio_count(audio_stat *stat,uint64_t start)
+{
+    if(!stat->linked){stat->linked=1;stat->next=audio_stats;audio_stats=stat;}
+    ++stat->calls;if(start)stat->ns+=audio_clock()-start;
+}
 extern uint64_t void_audio_pause_state(void) __attribute__((weak));
 extern void void_native_worker_affinity_begin(void);
 extern void void_native_worker_affinity_end(void);
@@ -168,6 +181,8 @@ static void load_native(void)
     if (!native_pause || !native_resume || !native_reopen || !native_eax_set || !native_eax_get) ++missing;
     native_ok=!missing;
     if(native_ok && native_probe_enable)native_probe_enable(1);
+    char profile[1100];snprintf(profile,sizeof profile,"%s/audio-profile",void_data_dir());
+    audio_profile=access(profile,F_OK)==0;
     void_log("[openal] pinned native library %s (85 core + 33 EFX + EAX 1-5, real Oboe/AAudio)",native_ok?"loaded":"incomplete");
 }
 
@@ -345,6 +360,27 @@ void ut3_openal_log_stats(void)
             metrics.audio_api,metrics.stream_state,(unsigned long long)metrics.callbacks,(unsigned long long)metrics.frames,
             (unsigned long long)metrics.nonzero_samples,(unsigned long long)metrics.nonfinite_samples,metrics.peak_abs,
             metrics.xruns,metrics.device_id,metrics.sample_rate,metrics.channels);
+    /* The busiest entries since the last stats line (by native time when profiled, else by calls). */
+    static uint64_t last_log;
+    uint64_t now=audio_clock(),span=last_log?now-last_log:0;last_log=now;
+    if(span) {
+        audio_stat *top[8]={0};
+        for(audio_stat *s=audio_stats;s;s=s->next){
+            uint64_t key=audio_profile?s->ns-s->logged_ns:s->calls-s->logged_calls;
+            for(int i=0;i<8;++i){
+                uint64_t other=!top[i]?0:audio_profile?top[i]->ns-top[i]->logged_ns:top[i]->calls-top[i]->logged_calls;
+                if(!top[i]||key>other){memmove(&top[i+1],&top[i],(size_t)(7-i)*sizeof *top);top[i]=s;break;}
+            }
+        }
+        char line[1024];int used=snprintf(line,sizeof line,"[openal] calls/s%s:",audio_profile?" and native ms/s":"");
+        for(int i=0;i<8&&top[i]&&used<(int)sizeof line-80;++i){
+            double seconds=(double)span/1e9;
+            used+=snprintf(line+used,sizeof line-(size_t)used," %s %.0f",top[i]->name,(double)(top[i]->calls-top[i]->logged_calls)/seconds);
+            if(audio_profile)used+=snprintf(line+used,sizeof line-(size_t)used,"/%.2f",(double)(top[i]->ns-top[i]->logged_ns)/1e6/seconds);
+        }
+        for(audio_stat *s=audio_stats;s;s=s->next){s->logged_calls=s->calls;s->logged_ns=s->ns;}
+        void_log("%s",line);
+    }
     pthread_mutex_unlock(&bridge_lock);
 }
 static void played(ALuint source)
@@ -355,8 +391,11 @@ static void played(ALuint source)
 }
 #define AUDIO_EXPORT(name,fp,allow) \
     static uint32_t name##_impl(void); \
+    static audio_stat name##_stat={#name,0,0,0,0,NULL,0}; \
     static void name##_entry(void) { pthread_mutex_lock(&bridge_lock);pthread_once(&native_once,load_native);uint32_t result=0; \
+        uint64_t started=audio_profile?audio_clock():0; \
         if(native_ok || (allow)) result=name##_impl(); else {al_error(AL_INVALID_OPERATION);alc_error(NULL,ALC_INVALID_DEVICE);if(fp)fp_push(0);}\
+        audio_count(&name##_stat,started); \
         pthread_mutex_unlock(&bridge_lock);g_eax=result;g_esp+=4; } \
     static const void_shim name##_shim VOID_SHIM_SECTION={"openal32.dll",#name,0,name##_entry}; \
     static uint32_t name##_impl(void)

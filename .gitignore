@@ -14,7 +14,7 @@
 !/dependencies-host.json
 !/dependencies-turnip.json
 !/dependencies-textures.json
-!/dependencies-fsr.json
+!/dependencies-vkd3d.json
 
 !/android/
 /android/**
@@ -69,6 +69,7 @@
 !/reference/dxvk/
 !/reference/astcenc/
 !/reference/etcpak/
+!/reference/vkd3d/
 /reference/dxvk/**
 !/reference/dxvk/**/
 !/reference/dxvk/LICENSE
@@ -116,13 +117,3 @@ AGENTS.md
 !/reference/fsr1/
 !/reference/fsr1/ffx_fsr1.h
 !/reference/fsr1/FSR1-MIT.txt
-!/reference/fsr3-runtime/
-/reference/fsr3-runtime/**
-!/reference/fsr3-runtime/include/
-!/reference/fsr3-runtime/include/**/
-!/reference/fsr3-runtime/include/**/*.h
-!/reference/fsr3-runtime/lib/
-!/reference/fsr3-runtime/lib/libffx_backend_vk_android_arm64.a
-!/reference/fsr3-runtime/lib/libffx_frameinterpolation_android_arm64.a
-!/reference/fsr3-runtime/lib/libffx_opticalflow_android_arm64.a
-!/reference/fsr3-runtime/FSR3-Android-MIT.txt

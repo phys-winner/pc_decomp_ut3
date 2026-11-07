@@ -13,10 +13,26 @@ static struct {
 
 void void_postfx_present(uint32_t device){if(!device||device==postfx.device)postfx.frame_done=0;}
 
-JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativePostfx(JNIEnv *env,jclass cls,jboolean fsr,jboolean aa,jboolean frames)
+/* The choices of this run: 1 FSR1, 2 FXAA. Read once: every DrawPrimitiveUP asks, and two
+ * getenv scans per draw cost the game thread time. */
+enum { POSTFX_FSR1 = 1, POSTFX_FXAA = 2 };
+static int postfx_choices = -1;
+static int postfx_enabled(void)
+{
+    int choices = __atomic_load_n(&postfx_choices, __ATOMIC_RELAXED);
+    if (choices < 0) {
+        const char *fsr = getenv("UT3_FSR1"), *aa = getenv("UT3_ANTIALIAS");
+        choices = (fsr && atoi(fsr) ? POSTFX_FSR1 : 0) | (aa && atoi(aa) ? POSTFX_FXAA : 0);
+        __atomic_store_n(&postfx_choices, choices, __ATOMIC_RELAXED);
+    }
+    return choices;
+}
+
+JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativePostfx(JNIEnv *env,jclass cls,jboolean fsr,jboolean aa)
 {
     (void)env;(void)cls;
-    return setenv("UT3_FSR1",fsr?"1":"0",1)||setenv("UT3_ANTIALIAS",aa?"1":"0",1)||setenv("UT3_FRAME_GENERATION",frames?"1":"0",1)?errno:0;
+    __atomic_store_n(&postfx_choices, -1, __ATOMIC_RELAXED);
+    return setenv("UT3_FSR1",fsr?"1":"0",1)||setenv("UT3_ANTIALIAS",aa?"1":"0",1)?errno:0;
 }
 
 static uint32_t fxcall(uint32_t object,unsigned slot,unsigned count,const uint32_t *values)
@@ -81,9 +97,8 @@ static int fxpass(uint32_t source,uint32_t target,unsigned shader,uint32_t w,uin
 /* Called before the original UP draw. A full-screen scene resolve precedes all HUD draws. */
 int void_postfx_draw(uint32_t device,unsigned slot,const uint32_t *a,uint32_t *result)
 {
-    int fsr=getenv("UT3_FSR1")&&atoi(getenv("UT3_FSR1"));
-    int aa=getenv("UT3_ANTIALIAS")&&atoi(getenv("UT3_ANTIALIAS"));
-    if(postfx.busy||postfx.frame_done||(!fsr&&!aa))return 0;
+    int choices=postfx_enabled(),fsr=choices&POSTFX_FSR1,aa=choices&POSTFX_FXAA;
+    if(postfx.busy||postfx.frame_done||!choices)return 0;
     if(!((a[0]==4||a[0]==5)&&a[slot==83?1:3]==2))return 0;
     postfx.busy=1;
     uint32_t s=void_galloc(1024),rt=0,bb=0,tex=0,decl=0,ds=0,state=0;

@@ -6,6 +6,7 @@
  *
  *  This file written by Ryan C. Gordon.
  *  Altered locally for Heroes V: Shader Model 1.x texture GLSL translation.
+ *  Altered locally for Unreal Tournament 3 (2026-11-07): TEXKILL with a partial write mask.
  */
 
 #define __MOJOSHADER_INTERNAL__ 1
@@ -1892,7 +1893,24 @@ void emit_GLSL_TEXCRD(Context *ctx)
 void emit_GLSL_TEXKILL(Context *ctx)
 {
     char dst[64]; get_GLSL_destarg_varname(ctx, dst, sizeof (dst));
-    output_line(ctx, "if (any(lessThan(%s.xyz, vec3(0.0)))) discard;", dst);
+    const int mask = ctx->dest_arg.writemask;
+    if (writemask_xyzw(mask))
+        output_line(ctx, "if (any(lessThan(%s.xyz, vec3(0.0)))) discard;", dst);
+    else
+    {
+        // UT3 port: a partial mask (vkd3d-shader) tests exactly its components.
+        char swizzle[5];
+        int count = 0;
+        if (mask & 1) swizzle[count++] = 'x';
+        if (mask & 2) swizzle[count++] = 'y';
+        if (mask & 4) swizzle[count++] = 'z';
+        if (mask & 8) swizzle[count++] = 'w';
+        swizzle[count] = '\0';
+        if (count == 1)
+            output_line(ctx, "if (%s.%s < 0.0) discard;", dst, swizzle);
+        else
+            output_line(ctx, "if (any(lessThan(%s.%s, vec%d(0.0)))) discard;", dst, swizzle, count);
+    } // else
 } // emit_GLSL_TEXKILL
 
 void emit_GLSL_TEXLD(Context *ctx)

@@ -40,6 +40,11 @@ LICENSE_TITLES = {
     "linkernsbypass.BSD-2-Clause.txt": "linkernsbypass.txt",
     "Turnip-LICENSE-NOTE.txt": "Mesa Turnip.txt",
 }
+# Generic file names of a component's own folder (reference/<folder>/<name>).
+FOLDER_LICENSE_TITLES = {
+    ("vkd3d", "COPYING"): "vkd3d-shader (LGPL-2.1).txt",
+    ("vkd3d", "AUTHORS"): "vkd3d-shader authors.txt",
+}
 
 
 def main():
@@ -117,7 +122,9 @@ def main():
         native_licenses = assets / "native-licenses"
         native_licenses.mkdir()
         for source in licenses:
-            title = source.parent.name + ".txt" if source.parent.name in ("astcenc", "etcpak") else LICENSE_TITLES.get(source.name, source.name)
+            title = FOLDER_LICENSE_TITLES.get((source.parent.name, source.name))
+            if not title:
+                title = source.parent.name + ".txt" if source.parent.name in ("astcenc", "etcpak") else LICENSE_TITLES.get(source.name, source.name)
             target = native_licenses / title
             if target.exists():
                 parser.error(f"Two native licenses would share the name {target.name}")

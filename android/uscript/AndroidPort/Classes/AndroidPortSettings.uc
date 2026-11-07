@@ -12,7 +12,7 @@ var config int touchGyroMode;
 var config float touchGyroSensitivity;
 var config string renderer, language;
 var config int fpsLimit;
-var config bool fsr1, antialias, frameGeneration;
+var config bool fsr1, antialias;
 
 function int GyroMode()
 {
