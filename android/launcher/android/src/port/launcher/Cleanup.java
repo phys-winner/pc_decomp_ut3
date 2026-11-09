@@ -75,9 +75,10 @@ final class Cleanup {
         final Plan plan;
 
         Job(Context context, Plan plan) {
-            super(Texts.t(context, Texts.JOB_CLEAN), plan.root);
+            super(Texts.SPACE, Texts.t(context, Texts.JOB_CLEAN), plan.root);
             this.plan = plan;
             total = plan.bytes;
+            itemsTotal = plan.files.size();
         }
 
         /** All or nothing: every file is checked first, then the files go, then emptied folders. */
@@ -98,6 +99,7 @@ final class Cleanup {
             for (Entry e : plan.files) {
                 file = e.file.getName();
                 if (e.file.delete()) done += e.size;
+                ++itemsDone;
                 for (File parent = e.file.getParentFile(); parent != null && !parent.equals(plan.root); parent = parent.getParentFile())
                     if (!folders.contains(parent)) folders.add(parent);
             }

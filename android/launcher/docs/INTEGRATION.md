@@ -36,7 +36,7 @@ git submodule update --init
 | `app.processes.launcher` | процесс лаунчера (по умолчанию `:launcher`; игра остаётся в своём) |
 | `app.licenses` | файлы ассетов и папки (с `/` на конце) для экрана «Лицензии»: строка или `{"path": …, "title": …}` (понятное имя вместо имени файла); `licenses/` добавляется всегда |
 | `app.mountSidecarLimitMB` | сколько сжатых файлов архива допустимо распаковать рядом при игре из архива (256) |
-| `theme.*` | `background` (массив цветов градиента), `card`, `cardStroke`, `cell`, `accent`, `accentDark`, `primaryFill`, `text`, `muted`, `error`, `good`, `titleFont` (`sans-serif-medium`, `serif-bold`, …) |
+| `theme.*` | `background` (массив цветов градиента), `card`, `cardStroke`, `cell`, `accent`, `accentDark`, `primaryFill`, `playGlow`, `playParticles`, `text`, `muted`, `error`, `good`, `titleFont` (`sans-serif-medium`, `serif-bold`, …) |
 | `distributions[]` | дистрибутивы игры (см. ниже) |
 | `renderers` | `default`, `modes[]`: `id`, `kind` (`gles`/`vulkan`/`turnip`), `title`, `description`, `vulkan` (`"1.3"`), `minSdk`, `adreno` (`[600, 799]`), `libraries` (что должно лежать в `nativeLibraryDir`), `driver` (для `turnip` обязательно: библиотека драйвера, которую проба грузит через adrenotools), `needsBC` (игре нужны BC1–3; без них режим недоступен) |
 | `options[]` | `key`, `type` (`bool`/`choice`/`text`), `default`, `title`, `hint`, `only` (id дистрибутивов), `choices` (`value`, `title`) |
@@ -52,6 +52,7 @@ git submodule update --init
 | `id` | `[a-z0-9_]+` |
 | `title`, `version` | для карточки |
 | `activity` | полное имя Activity игры этого дистрибутива |
+| `theme` | цвета кнопки издания: `primaryFill`, `accentDark`, `playGlow`, `playParticles` (`#RRGGBB`); см. [PLAY_BUTTON.md](PLAY_BUTTON.md) |
 | `renderers` | какие режимы из `renderers.modes` ему доступны |
 | `intro` | `{"default": true}` — показать галку «Пропускать вступительные ролики» |
 | `parts[]` | части файлов: `id`, `title`, `folder` (шаблон: `{storage}`, `{files}`, `{private}`), `fixed` (порт читает часть только из этой папки — импорт копирует/переносит/распаковывает туда), `marker` (путь, по которому часть узнаётся в папке или архиве), `required` (что должно быть; папки — с `/` на конце; регистр не важен), `needed` (что брать при импорте; по умолчанию всё), `mount` (разрешить игру прямо из несжатого ZIP) |

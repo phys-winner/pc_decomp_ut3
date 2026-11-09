@@ -343,7 +343,8 @@ public class SettingsCheck {
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,options);
         assert GameSettings.read(validIni).equals(uiEngine):"Native UI engine config must be idempotent";
         assert GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini")).equals(uiGame):"Native options config must be idempotent";
-        assert entries(uiGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
+        assert entries(uiGame,"AndroidPort.AndroidPortDataStore","Choices").size()==4;
+        assert uiGame.contains("<AndroidPort:executionMode>") && uiGame.contains("Optimal (ARM64)") && uiGame.contains("Exact (x86)");
         assert entries(uiGame,"AndroidPort.AndroidPortDataStore","StringData").isEmpty();
         File runtimeOptions=new File(validIni.getParentFile(),"UTGame.ini");
         GameSettings.write(runtimeOptions,uiGame+"[AndroidPort_editLayout UTUIDataProvider_MenuOption]\nOptionSet=AndroidPort\n"+
@@ -353,12 +354,13 @@ public class SettingsCheck {
         String russianOptions=new String(Files.readAllBytes(project.resolve("android/uscript/AndroidPort/AndroidPortOptions-RUS.ini")),StandardCharsets.UTF_8);
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,russianOptions);
         String russianGame=GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini"));
-        assert entries(russianGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
+        assert entries(russianGame,"AndroidPort.AndroidPortDataStore","Choices").size()==4;
+        assert russianGame.contains("<AndroidPort:executionMode>") && russianGame.contains("Оптимальный (ARM64)") && russianGame.contains("Точный (x86)");
         assert russianGame.contains("Размер полосы оружия");
         assert entries(russianGame,"AndroidPort.AndroidPortDataStore","LayoutCaption").equals(Collections.singletonList("РЕДАКТОР УПРАВЛЕНИЯ"));
         GameSettings.prepareNativeUi(validIni,game.toFile(),folder.toFile(),script,options);
         String englishGame=GameSettings.read(new File(validIni.getParentFile(),"UTGame.ini"));
-        assert !englishGame.contains("Размер полосы оружия") && entries(englishGame,"AndroidPort.AndroidPortDataStore","Choices").size()==3;
+        assert !englishGame.contains("Размер полосы оружия") && entries(englishGame,"AndroidPort.AndroidPortDataStore","Choices").size()==4;
         assert entries(englishGame,"AndroidPort.AndroidPortDataStore","LayoutCaption").equals(Collections.singletonList("CONTROL LAYOUT"));
         Path legacyProvider=validIni.toPath().resolveSibling("UTGame.before-widescreen-120.ini");
         Path retiredProvider=validIni.toPath().resolveSibling("UTGame.before-widescreen-120.ini.bak");

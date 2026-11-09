@@ -22,6 +22,9 @@ import sys
 import tempfile
 import zipfile
 import zlib
+import test_group_ui
+import test_play_button
+import test_diagnostics
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -208,6 +211,15 @@ def tool_checks(folder):
         except launcher.SpecError:
             pass
     launcher.validate(dict(spec, app=dict(spec["app"], licenses=["LICENSE.txt", {"path": "native-licenses/", "title": "Native"}])))
+    memory_option = dict(key="large_address_aware", type="bool", default="0", defaultMinRamGiB=5, arm64Only=True)
+    launcher.validate(dict(spec, options=[memory_option]))
+    for change in ({"defaultMinRamGiB": -1}, {"defaultMinRamGiB": 5.5}, {"defaultMinRamGiB": True},
+                   {"defaultMinRamGiB": 1025}, {"type": "text"}, {"arm64Only": "true"}):
+        try:
+            launcher.validate(dict(spec, options=[dict(memory_option, **change)]))
+            raise AssertionError("invalid RAM default must be refused: " + repr(change))
+        except launcher.SpecError:
+            pass
     print("tools: port.json validation, sources and manifest expansion work")
     return True
 
@@ -217,6 +229,9 @@ def main():
         folder = Path(temporary)
         fixtures(folder)
         ok = java_checks(folder)
+        ok &= test_group_ui.check(ROOT, folder)
+        ok &= test_diagnostics.check(ROOT, folder)
+        ok &= test_play_button.check(ROOT, folder)
         ok &= native_checks(folder)
         ok &= tool_checks(folder)
     print("ALL PASSED" if ok else "FAILURES")

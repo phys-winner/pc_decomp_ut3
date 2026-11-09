@@ -5,6 +5,8 @@
  * GetProcAddress resolving to host shims. */
 #define _GNU_SOURCE
 #include "host.h"
+
+uint32_t void_vm_user_top(void);
 #include <ctype.h>
 #include <errno.h>
 #include <strings.h>
@@ -251,7 +253,7 @@ static int map_image(void_module *m, const char *path, uint8_t *file, size_t fil
     uint16_t optional = *(uint16_t *)(file + lfanew + 0x14);
     uint64_t table_end = (uint64_t)lfanew + 0x18 + optional + 40u * sections;
     if (optional < 0xE0 || table_end > file_size || headers > file_size || headers > image_size ||
-        !image_size || (uint64_t)image_base + image_size > GUEST_USER_TOP || entry_rva >= image_size) {
+        !image_size || (uint64_t)image_base + image_size > void_vm_user_top() || entry_rva >= image_size) {
         void_log("[ut3] malformed PE headers in %s", path);
         free(file);
         return 0;
@@ -286,6 +288,11 @@ static int map_image(void_module *m, const char *path, uint8_t *file, size_t fil
             }
             memcpy(GPTR(image_base + va), file + raw, copy);
         }
+    }
+    if (m->kind == MOD_LIFTED_EXE) {
+        uint16_t characteristics = MEM16(image_base + lfanew + 0x16);
+        MEM16(image_base + lfanew + 0x16) = void_vm_user_top() > 0x80000000u
+            ? characteristics | 0x20u : characteristics & (uint16_t)~0x20u;
     }
     free(file);
     m->base = image_base;

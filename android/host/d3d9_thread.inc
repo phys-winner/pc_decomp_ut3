@@ -74,6 +74,7 @@ void d3d_rt_stats(d3d_rt_stats_t *out);
 #define D3D_RT_STATE_PIECES ((uint32_t)((sizeof(d3d_state) + 63u) / 64u))
 #define D3D_RT_DIRTY_WORDS ((D3D_RT_STATE_PIECES + 31u) / 32u)
 extern uint32_t d3d_rt_dirty_bits[D3D_RT_DIRTY_WORDS];
+extern uint32_t d3d_rt_dirty_summary;          /* one bit per word of d3d_rt_dirty_bits that holds something */
 
 static inline void d3d_rt_dirty(d3d_device *d, const void *p, size_t n)
 {
@@ -85,6 +86,7 @@ static inline void d3d_rt_dirty(d3d_device *d, const void *p, size_t n)
         uint32_t lo = word == (first >> 5) ? first & 31u : 0;
         uint32_t hi = word == (last >> 5) ? last & 31u : 31;
         d3d_rt_dirty_bits[word] |= (UINT32_MAX << lo) & (UINT32_MAX >> (31u - hi));
+        d3d_rt_dirty_summary |= 1u << word;
     }
 }
 #define D3D_RT_DIRTY(d, lvalue) d3d_rt_dirty((d), &(lvalue), sizeof(lvalue))

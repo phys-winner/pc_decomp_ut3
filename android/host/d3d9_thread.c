@@ -60,11 +60,18 @@ static uint32_t open_size;
 static void *open_big;
 static d3d_rt_fn open_fn;
 static int threaded = -1;
+/* userdata/rt-state-check: `sent` follows the patches and every sync compares it with the whole device state
+ * (a piece a setter failed to mark would leave the mirror stale); read once by d3d_rt_start. */
+static int state_check;
 static pthread_t render_thread;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t to_render = PTHREAD_COND_INITIALIZER, to_game = PTHREAD_COND_INITIALIZER;
 static _Atomic uint32_t frames_queued LINE;
-static __thread int on_render;
+/* The render thread is known by its thread pointer: a __thread variable of a dlopened library is read
+ * through a TLS descriptor call, several per draw on the game's thread. Published once, before the
+ * render thread runs a record; other threads compare it with their own, so a stale read cannot match. */
+static _Atomic(void *) render_thread_pointer;
+#define on_render (__builtin_thread_pointer() == atomic_load_explicit(&render_thread_pointer, memory_order_relaxed))
 static __thread int executing;          /* inline mode: inside a record */
 static int (*_Atomic idle_poll)(int idle);
 /* Inline mode: each open call's arguments, a level per nested call. */
@@ -78,7 +85,8 @@ static _Atomic uint64_t render_busy_ns;
 
 int d3d_rt_threaded(void) { return threaded > 0; }
 int d3d_rt_on_render(void) { return on_render || threaded <= 0; }
-int d3d_rt_executing(void) { return on_render || executing; }
+/* With the thread on, only the render thread runs records (the game's thread never sets executing). */
+int d3d_rt_executing(void) { return threaded > 0 ? on_render : executing != 0; }
 void d3d_rt_set_idle(int (*poll)(int idle)) { idle_poll = poll; }
 
 static inline void cpu_relax(void)
@@ -255,7 +263,7 @@ static void run_leave_game_cores(void *unused) { (void)unused; leave_game_cores(
 static void *render_main(void *unused)
 {
     (void)unused;
-    on_render = 1;
+    atomic_store_explicit(&render_thread_pointer, __builtin_thread_pointer(), memory_order_relaxed);
     atomic_store(&render_tid, (int)syscall(SYS_gettid));
     pthread_setname_np(pthread_self(), "d3d9-render");
     uint64_t at = 0;
@@ -285,14 +293,19 @@ static void *render_main(void *unused)
         }
         uint64_t published = atomic_load_explicit(&head, memory_order_acquire);
         uint64_t start = void_monotonic_ns();
+        uint32_t retired = 0;
         while (at != published) {
             rec_t *r = (rec_t *)(ring + (at % RING_BYTES));
             if (r->wrap) at += RING_BYTES - (at % RING_BYTES);
             else { r->fn((uint8_t *)r + sizeof *r); at += r->size; }
-            atomic_store_explicit(&tail, at, memory_order_release);
-            /* Byte waits finish at their target; frame waits need a completed present. */
-            if (atomic_load(&game_sleeping) && game_waiting_done(atomic_load(&game_wait_until),
-                atomic_load(&game_wait_frames))) wake(&game_sleeping, &to_game);
+            /* shortcut: callbacks must not wait on the producer; split the batch before adding one that does. */
+            if (++retired == PUBLISH_RECORDS || at == published) {
+                retired = 0;
+                atomic_store_explicit(&tail, at, memory_order_release);
+                /* Byte waits finish at their target; frame waits need a completed present. */
+                if (atomic_load(&game_sleeping) && game_waiting_done(atomic_load(&game_wait_until),
+                    atomic_load(&game_wait_frames))) wake(&game_sleeping, &to_game);
+            }
         }
         /* Between batches too: a busy render thread still answers polls. */
         int (*poll)(int) = idle_poll;
@@ -318,6 +331,12 @@ static int switched_on(void)
 void d3d_rt_start(void)
 {
     if (threaded >= 0) return;
+    {
+        char path[1100];
+        snprintf(path, sizeof path, "%s/rt-state-check", void_data_dir());
+        FILE *f = fopen(path, "rb");
+        if (f) { fclose(f); state_check = 1; void_log("[rt] state check on: every sync compares the whole device state"); }
+    }
     threaded = switched_on();
     if (!threaded) { void_log("[rt] render thread off: GL calls run inline"); return; }
     ring = (uint8_t *)aligned_alloc(64, RING_BYTES);
@@ -534,11 +553,13 @@ void d3d_rt_gl_check(const char *name)
  * The render thread draws through a device of its own whose state follows the
  * game's: before each call that reads it the game's thread sends what changed
  * since the last one, as (offset, bytes) patches of whole 64-byte pieces that
- * setters touched and that differ from what was sent. Object pointers travel
+ * setters marked (a setter marks only a value that changes). Object pointers travel
  * as they are: the game's state holds a reference on each, and an object's
  * destruction is recorded after the state change that let it go. The render
  * targets travel after the state, at TARGETS_AT. */
 uint32_t d3d_rt_dirty_bits[D3D_RT_DIRTY_WORDS];
+uint32_t d3d_rt_dirty_summary;
+_Static_assert(D3D_RT_DIRTY_WORDS <= 32, "the summary has one bit per dirty word");
 static d3d_device mirror;
 static d3d_state sent;
 typedef struct { d3d_surface *rt[4], *ds, *backbuffer; } targets_t;
@@ -554,6 +575,25 @@ extern uint32_t d3d_constant_generation;
 d3d_device *d3d_rt_device(void) { return &mirror; }
 
 typedef struct { uint8_t *at, *last; uint32_t last_end; } patcher;
+
+/* A whole piece: the compiler copies 64 bytes in line, one piece is the usual patch. */
+static inline void patch_piece(patcher *w, uint32_t off, const uint8_t *data)
+{
+    if (w->last && w->last_end == off) {
+        uint16_t h[2];
+        memcpy(h, w->last, 4);
+        h[1] = (uint16_t)(h[1] + 16);
+        memcpy(w->last, h, 4);
+    } else {
+        uint16_t h[2] = { (uint16_t)(off / 4), 16 };
+        w->last = w->at;
+        memcpy(w->at, h, 4);
+        w->at += 4;
+    }
+    memcpy(w->at, data, 64);
+    w->at += 64;
+    w->last_end = off + 64;
+}
 
 static void patch(patcher *w, uint32_t off, const void *data, uint32_t len)
 {
@@ -571,19 +611,6 @@ static void patch(patcher *w, uint32_t off, const void *data, uint32_t len)
     memcpy(w->at, data, len);
     w->at += len;
     w->last_end = off + len;
-}
-
-/* Whether 64 bytes differ: inline, the compiler's vector compare. */
-static inline int piece_differs(const uint8_t *a, const uint8_t *b)
-{
-    uint64_t x = 0;
-    for (int i = 0; i < 8; ++i) {
-        uint64_t u, v;
-        memcpy(&u, a + 8 * i, 8);
-        memcpy(&v, b + 8 * i, 8);
-        x |= u ^ v;
-    }
-    return x != 0;
 }
 
 static void apply_state(void *args)
@@ -610,33 +637,50 @@ static void apply_state(void *args)
     }
 }
 
-void d3d_rt_sync_state(d3d_device *d)
+/* The setters leave a value that does not change out of the dirty pieces (d3d9_device.c), so a marked piece
+ * goes as it is: the second compare and copy that used to filter pieces here are gone, and the words without
+ * a mark are skipped through the summary. An extra patch that repeats a value is harmless. */
+void d3d_bound_check(d3d_device *d);     /* d3d9_device.c: the slots against the guest pointers the setters compare */
+static __attribute__((noinline, cold)) void state_check_failed(d3d_device *d)
 {
-    /* Worst case: every piece in its own patch, the targets, the end mark. */
-    uint32_t reserve = (uint32_t)sizeof(d3d_state) + 4u * D3D_RT_STATE_PIECES + 8u + (uint32_t)sizeof(targets_t);
+    static uint32_t reported;
     const uint8_t *now = (const uint8_t *)&d->st;
     uint8_t *was = (uint8_t *)&sent;
+    for (uint32_t off = 0; off < (uint32_t)sizeof(d3d_state); off += 4)
+        if (memcmp(now + off, was + off, 4)) {
+            if (reported++ < 16)
+                void_log("[rt] state check: mirror differs at offset %u of d3d_state: %08X sent %08X",
+                         off, *(const uint32_t *)(now + off), *(const uint32_t *)(was + off));
+            memcpy(was + off, now + off, 4);
+        }
+}
+
+void d3d_rt_sync_state(d3d_device *d)
+{
     targets_t t;
     memcpy(t.rt, d->rt, sizeof t.rt);
     t.ds = d->ds;
     t.backbuffer = d->backbuffer;
-    int targets = memcmp(&t, &sent_targets, sizeof t) != 0;
-    int any = targets;
-    for (uint32_t word = 0; word < D3D_RT_DIRTY_WORDS && !any; ++word) any = d3d_rt_dirty_bits[word] != 0;
-    if (!any) return;
+    const int targets = memcmp(&t, &sent_targets, sizeof t) != 0;
+    uint32_t summary = d3d_rt_dirty_summary;
+    if (!summary && !targets) return;
+    /* Worst case: every piece in its own patch, the targets, the end mark. */
+    uint32_t reserve = (uint32_t)sizeof(d3d_state) + 4u * D3D_RT_STATE_PIECES + 8u + (uint32_t)sizeof(targets_t);
+    const uint8_t *now = (const uint8_t *)&d->st;
     uint8_t *start = (uint8_t *)d3d_rt_begin(apply_state, reserve);
     patcher w = { start, NULL, 0 };
-    for (uint32_t word = 0; word < D3D_RT_DIRTY_WORDS; ++word) {
+    d3d_rt_dirty_summary = 0;
+    const uint32_t last = (D3D_RT_STATE_PIECES - 1u) * 64u;
+    while (summary) {
+        const uint32_t word = (uint32_t)__builtin_ctz(summary);
+        summary &= summary - 1;
         uint32_t b = d3d_rt_dirty_bits[word];
         d3d_rt_dirty_bits[word] = 0;
         while (b) {
-            uint32_t off = (word * 32u + (uint32_t)__builtin_ctz(b)) * 64u;
+            const uint32_t off = (word * 32u + (uint32_t)__builtin_ctz(b)) * 64u;
             b &= b - 1;
-            if (off >= sizeof(d3d_state)) continue;
-            uint32_t len = sizeof(d3d_state) - off < 64 ? (uint32_t)sizeof(d3d_state) - off : 64;
-            if (len == 64 ? !piece_differs(now + off, was + off) : !memcmp(now + off, was + off, len)) continue;
-            memcpy(was + off, now + off, len);
-            patch(&w, off, now + off, len);
+            if (off < last) patch_piece(&w, off, now + off);
+            else if (off == last) patch(&w, off, now + off, (uint32_t)sizeof(d3d_state) - off);
         }
     }
     if (targets) {
@@ -647,6 +691,18 @@ void d3d_rt_sync_state(d3d_device *d)
     uint16_t end[2] = { 0, 0 };
     memcpy(w.at, end, 4);
     w.at += 4;
+    if (__builtin_expect(state_check, 0)) {
+        for (const uint8_t *p = start;;) {
+            uint16_t h[2];
+            memcpy(h, p, 4);
+            p += 4;
+            if (!h[1]) break;
+            if (h[0] * 4u < TARGETS_AT) memcpy((uint8_t *)&sent + h[0] * 4u, p, h[1] * 4u);
+            p += h[1] * 4u;
+        }
+        if (memcmp(&sent, &d->st, sizeof sent)) state_check_failed(d);
+        d3d_bound_check(d);
+    }
     d3d_rt_commit_size((uint32_t)(w.at - start));
 }
 
@@ -668,6 +724,7 @@ void d3d_rt_device_reset(d3d_device *d)
     a.frame = d->frame;
     /* Everything again: what was sent belongs to the state before. */
     memset(d3d_rt_dirty_bits, 0xFF, sizeof d3d_rt_dirty_bits);
+    d3d_rt_dirty_summary = UINT32_MAX >> (32u - D3D_RT_DIRTY_WORDS);
     memset(&sent, 0xA5, sizeof sent);
     memset(&sent_targets, 0, sizeof sent_targets);
     sent_targets.backbuffer = (d3d_surface *)(uintptr_t)1;    /* never a real one: targets are sent too */

@@ -54,6 +54,7 @@ function PrepareSelections()
     FieldFps();
     SetCurrentValueIndex('touchGyro', Settings.GyroMode());
     SetCurrentValueIndex('touchVehicleProfile', Clamp(Settings.touchVehicleProfile, 0, 4));
+    SetCurrentValueIndex('executionMode', Settings.executionMode == 1 ? 1 : 0);
 }
 
 function FieldFps()
@@ -101,6 +102,9 @@ function CommitCollection(name Field)
         Settings.fpsLimit = DisplayFps[Index]; break;
     case 'touchGyro': Settings.touchGyroMode = Clamp(Index, 0, 4); break;
     case 'touchVehicleProfile': Settings.touchVehicleProfile = Clamp(Index, 0, 4); break;
+    case 'executionMode':
+        if (Index > 1) return;
+        Settings.executionMode = Index; break;
     default: return;
     }
     Settings.SaveConfig();
@@ -125,4 +129,5 @@ defaultproperties
     StringData(1)=(Tag="fpsLimit",Strings=("60"),DefaultValueIndex=0)
     StringData(2)=(Tag="touchGyro",Strings=("Off","Sniper mode","While firing","Always","Firing or aiming"),DefaultValueIndex=0)
     StringData(3)=(Tag="touchVehicleProfile",Strings=("On foot","Ground vehicle / walker","Aircraft","Hoverboard","Turret"),DefaultValueIndex=0)
+    StringData(4)=(Tag="executionMode",Strings=("Optimal (ARM64)","Exact (x86)"),DefaultValueIndex=0)
 }

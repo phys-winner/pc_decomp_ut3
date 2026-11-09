@@ -22,7 +22,7 @@ def sections(path):
 class LocalizedOptionsTest(unittest.TestCase):
     def test_all_game_languages_have_complete_option_definitions(self):
         base = sections(OPTIONS / 'AndroidPortOptions.ini')
-        self.assertEqual(len(base), 25)
+        self.assertEqual(len(base), 26)
         for language in ('RUS', 'DEU', 'FRA', 'ITA', 'ESN', 'CZE', 'HUN', 'POL'):
             translated = sections(OPTIONS / ('AndroidPortOptions-' + language + '.ini'))
             self.assertEqual(base.keys(), translated.keys(), language)

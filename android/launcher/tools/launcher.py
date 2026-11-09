@@ -60,6 +60,15 @@ def validate(spec):
         if not condition:
             errors.append(message)
 
+    def theme_colours(theme, path, keys):
+        need(isinstance(theme, dict), f"{path} must be an object")
+        if isinstance(theme, dict):
+            for key in keys:
+                if key in theme:
+                    need(isinstance(theme[key], str) and re.fullmatch(r"#[0-9a-fA-F]{6}", theme[key]),
+                         f"{path}.{key} must be an opaque #RRGGBB colour")
+
+    theme_colours(spec.get("theme", {}), "theme", ("playGlow", "playParticles"))
     need(spec.get("schema") == 1, "schema must be 1")
     app = spec.get("app") or {}
     need(isinstance(app.get("label"), str) and app.get("label"), "app.label is required")
@@ -99,6 +108,8 @@ def validate(spec):
     ids = set()
     for d in distributions:
         did = d.get("id")
+        theme_colours(d.get("theme", {}), f"distribution {did}: theme",
+                      ("primaryFill", "accentDark", "playGlow", "playParticles"))
         need(isinstance(did, str) and re.fullmatch(r"[a-z0-9_]+", did or ""), f"distribution id {did!r} must be [a-z0-9_]+")
         need(did not in ids, f"distribution {did} is listed twice")
         ids.add(did)
@@ -120,6 +131,13 @@ def validate(spec):
     for o in spec.get("options", []):
         need(o.get("type", "bool") in OPTION_TYPES, f"option {o.get('key')}: type must be one of {', '.join(OPTION_TYPES)}")
         need(re.fullmatch(r"[a-z0-9_]+", o.get("key", "")), f"option key {o.get('key')!r} must be [a-z0-9_]+")
+        minimum = o.get("defaultMinRamGiB", 0)
+        need(type(minimum) is int and 0 <= minimum <= 1024,
+             f"option {o.get('key')}: defaultMinRamGiB must be an integer from 0 to 1024")
+        need(not minimum or o.get("type", "bool") == "bool",
+             f"option {o.get('key')}: defaultMinRamGiB requires a bool option")
+        need(type(o.get("arm64Only", False)) is bool,
+             f"option {o.get('key')}: arm64Only must be a boolean")
         for only in o.get("only", []):
             need(only in ids, f"option {o.get('key')}: unknown distribution {only}")
         if o.get("type") == "choice":

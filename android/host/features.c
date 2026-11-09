@@ -1,5 +1,6 @@
 /* UT3's PC hardware appraisal cannot classify Android renderers or CPUs. */
 #include "host.h"
+#include "native_mode.inc"
 
 static void_fn physx_scene, physx_cloth, physx_fluid;
 extern void __real_sub_010FC820(void);
@@ -59,10 +60,53 @@ void __wrap_sub_00B6AF10(void)
 }
 
 extern void void_physx_native_init(void);
+extern void void_render_native_init(void);
+extern void void_game_native_init(void);
+extern void void_render_hash_init(void);
+extern void void_render_draw_native_init(void);
+extern void void_render_visibility_native_init(void);
+extern void void_render_sparse_native_init(void);
+extern void void_render_bitarray_native_init(void);
+extern void void_render_light_native_init(void);
+extern void void_render_occlusion_native_init(void);
+extern void void_ai_native_init(void);
+extern void void_ai_reach_native_init(void);
+extern void void_ai_perception_native_init(void);
+extern void void_ai_trace_native_init(void);
+extern void void_crt_native_init(void);
+extern void void_core_native_init(void);
+extern void void_collision_native_init(void);
+extern void void_particle_native_init(void);
+extern void void_site_cache_init(void);
+extern void void_query_wait_init(void);
+extern void void_rhi_native_init(void);
 
 void void_features_init(void)
 {
+    void_site_cache_init();
+    void_log("[execution] %s; applies until process restart", void_native_mode(1) ?
+             "optimal (ARM64 optimizations; experimental defaults preserved)" :
+             "exact (recompiled x86 algorithms; manual game kernels disabled)");
     void_physx_native_init();
+    void_render_native_init();
+    void_game_native_init();
+    void_render_hash_init();
+    void_render_draw_native_init();
+    void_render_visibility_native_init();
+    void_render_sparse_native_init();
+    void_render_bitarray_native_init();
+    void_render_light_native_init();
+    void_render_occlusion_native_init();
+    void_ai_native_init();
+    void_ai_reach_native_init();
+    void_ai_perception_native_init();
+    void_ai_trace_native_init();
+    void_crt_native_init();
+    void_core_native_init();
+    void_collision_native_init();
+    void_particle_native_init();
+    void_query_wait_init();
+    void_rhi_native_init();
     void_dispatch_add(0x00B6AF10u, __wrap_sub_00B6AF10);
     physx_scene = void_dispatch_find(0x1E12A1D0u);
     physx_cloth = void_dispatch_find(0x1E13C930u);

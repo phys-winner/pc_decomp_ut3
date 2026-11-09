@@ -14,6 +14,9 @@ int void_profiles_init(void);
 void void_texture_cache_init(const char *game);
 extern void void_crash_exit(uint32_t code);
 extern void void_features_init(void);
+#ifdef VOID_FUNCTION_COVERAGE
+extern int void_function_coverage_start(const char *userdata);
+#endif
 
 void void_process_exit(uint32_t code, int run_detach)
 {
@@ -35,6 +38,9 @@ int ut3_game_main(const char *game, const char *data, int selftest)
     char log_path[1024];
     if (snprintf(log_path, sizeof log_path, "%s/ut3.log", data) >= (int)sizeof log_path) return 64;
     void_log_open(log_path);
+#ifdef VOID_FUNCTION_COVERAGE
+    if (!void_function_coverage_start(data)) return 69;
+#endif
     void_log("[ut3] ARM64 static host: game=%s data=%s", game, data);
     if (!void_guest_reserve()) return 65;
     void_threads_init();

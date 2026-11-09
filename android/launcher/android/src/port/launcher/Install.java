@@ -393,7 +393,7 @@ final class Install {
             this.zip = zip;
             this.plans = plans;
             this.targets = targets;
-            for (ArchivePart plan : plans) total += plan.size;
+            for (ArchivePart plan : plans) { total += plan.size; itemsTotal += plan.entries.size(); }
         }
 
         @Override void work() throws IOException {
@@ -405,7 +405,8 @@ final class Install {
         }
 
         private void unpack(ArchivePart plan, File target) throws IOException {
-            if (Storage.free(target.getParentFile()) < plan.size + (64L << 20)) throw new Failure(Failure.FULL, null);
+            long free = Storage.free(target.getParentFile()), required = plan.size + (64L << 20);
+            if (free < required) throw new Failure(Failure.FULL, null, required, free);
             File staged = staging(target);
             try {
                 byte[] buffer = new byte[1 << 20];
@@ -429,6 +430,7 @@ final class Install {
                     }
                     if (written != e.size || crc.getValue() != e.crc) throw new Failure(Failure.CORRUPT, path);
                     if (e.time > 0) out.setLastModified(e.time);
+                    ++itemsDone;
                 }
                 check();
                 commit(staged, target);
@@ -458,8 +460,10 @@ final class Install {
                 list(sources.get(i), "", files, needed.get(i));
                 long bytes = 0;
                 for (String path : files) bytes += new File(sources.get(i), path).length();
-                if (Storage.free(targets.get(i).getParentFile()) < bytes + (64L << 20)) throw new Failure(Failure.FULL, null);
+                long free = Storage.free(targets.get(i).getParentFile()), required = bytes + (64L << 20);
+                if (free < required) throw new Failure(Failure.FULL, null, required, free);
                 total += bytes;
+                itemsTotal += files.size();
                 lists.add(files);
             }
             for (int i = 0; i < sources.size(); ++i) copy(sources.get(i), targets.get(i), lists.get(i));
@@ -482,6 +486,7 @@ final class Install {
                         }
                     }
                     out.setLastModified(in.lastModified());
+                    ++itemsDone;
                 }
                 check();
                 commit(staged, target);

@@ -85,8 +85,23 @@ public final class Launch {
 
     /** An option of port.json as the player set it, else its default. */
     public String option(String key) {
-        for (Spec.Option o : spec.options) if (o.key.equals(key)) return State.get(activity, State.CHOICES, "option." + key, o.value);
+        for (Spec.Option o : spec.options) if (o.key.equals(key)) return option(activity, o);
         return null;
+    }
+
+    static String option(Context context, Spec.Option option) {
+        if (option.arm64Only && !android.os.Process.is64Bit()) return "0";
+        String saved = State.get(context, State.CHOICES, "option." + option.key, null);
+        if (saved != null) return saved;
+        if (option.defaultMinRamGiB <= 0) return option.value;
+        ActivityManager manager = (ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memory = new ActivityManager.MemoryInfo();
+        if (manager != null) manager.getMemoryInfo(memory);
+        return memoryDefault(option, memory.totalMem);
+    }
+
+    static String memoryDefault(Spec.Option option, long totalMem) {
+        return totalMem >= option.defaultMinRamGiB * (1L << 30) ? "1" : "0";
     }
 
     public boolean skipIntro() {

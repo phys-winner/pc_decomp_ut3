@@ -59,6 +59,28 @@ event int Main(string Params)
     if (!Check(Len(Store.LayoutCaption) == 19 && Asc(Left(Store.LayoutCaption, 1)) == 1056
         && Asc(Right(Store.LayoutCaption, 1)) == 1071, "localized layout caption preserves Unicode")) return 1;
     Store.EnsureSettings();
+    if (!Check(Store.Settings.executionMode == 0, "execution mode defaults to optimal")) return 1;
+    Store.PrepareSelections();
+    if (!Check(Store.GetCurrentValueIndex('executionMode') == 0
+        && Store.StringData[Store.GetFieldIndex('executionMode')].Strings.Length == 2,
+        "execution mode exposes two choices")) return 1;
+    Store.SetCurrentValueIndex('executionMode', 1);
+    Store.CommitCollection('executionMode');
+    if (!Check(Store.Settings.executionMode == 1, "exact execution mode saves index")) return 1;
+    Store.PrepareSelections();
+    if (!Check(Store.GetCurrentValueIndex('executionMode') == 1, "exact execution mode selection restored")) return 1;
+    Store.InsertStr('executionMode', "Unsupported", 2, true);
+    Store.SetCurrentValueIndex('executionMode', 2);
+    Store.CommitCollection('executionMode');
+    if (!Check(Store.Settings.executionMode == 1, "unknown execution mode choice rejected")) return 1;
+    Store.RemoveStrByIndex('executionMode', 2, 1, true);
+    Store.Settings.executionMode = 99;
+    Store.PrepareSelections();
+    if (!Check(Store.GetCurrentValueIndex('executionMode') == 0, "unknown saved mode displays startup fallback")) return 1;
+    Store.CommitCollection('executionMode');
+    if (!Check(Store.Settings.executionMode == 0, "optimal execution mode saves index")) return 1;
+    Store.SetCurrentValueIndex('executionMode', 1);
+    Store.CommitCollection('executionMode');
     TestEngine = new(None) class'GameEngine';
     Viewport = new(TestEngine) class'AndroidPortViewportClient';
     Viewport.PortStore = Store;

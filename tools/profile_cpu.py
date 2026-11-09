@@ -40,8 +40,8 @@ def main():
     parser.add_argument("--extra-symbols", type=Path, nargs="*", default=[],
                         help="Unstripped copies of packaged libraries (same build ID), e.g. the native-audio build's libopenal.so")
     args = parser.parse_args()
-    if args.pid <= 0 or not 1 <= args.duration <= 60:
-        parser.error("Use a positive existing PID and a duration between 1 and 60 seconds")
+    if args.pid <= 0 or not 1 <= args.duration <= 600:
+        parser.error("Use a positive existing PID and a duration between 1 and 600 seconds")
     adb_path = shutil.which("adb") or str(SDK / "platform-tools/adb.exe")
     host_perf = NDK / "simpleperf/bin/windows/x86_64/simpleperf.exe"
     device_perf = NDK / "simpleperf/bin/android/arm64/simpleperf"
@@ -106,6 +106,10 @@ def main():
                 if member.startswith("lib/arm64-v8a/") and member.endswith(".so"):
                     with archive.open(member) as source, (symbols / Path(member).name).open("wb") as target:
                         shutil.copyfileobj(source, target)
+        packaged_sha = receipt.get("packaged_library_sha256", receipt["library_sha256"])
+        if digest(symbols / "libut3.so") != packaged_sha:
+            raise RuntimeError("Packaged libut3.so differs from the installed APK receipt")
+        metadata["packaged_library_sha256"] = packaged_sha
         shutil.copy2(library, symbols / "libut3.so")
         for extra in args.extra_symbols:
             shutil.copy2(extra, symbols / extra.name)

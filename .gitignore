@@ -38,10 +38,13 @@
 /config/*
 !/config/inputs.json
 !/config/modules.json
+!/config/warm-functions.txt
 
 !/tools/
 /tools/*
 !/tools/*.py
+!/tools/function_coverage_runtime.c
+!/tools/function_coverage_runtime.h
 
 !/tests/
 /tests/*

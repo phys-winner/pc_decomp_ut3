@@ -841,11 +841,13 @@ static const d3d_vertex_element *find_element(d3d_device *d, int usage, int inde
     d3d_decl *decl = (d3d_decl *)d->st.decl;
     if (!decl) return NULL;
     for (int i = 0; i < decl->count; ++i)
-        if (decl->elements[i].usage == usage && decl->elements[i].usage_index == index && decl->elements[i].type < 17)
+        if (decl->elements[i].usage == usage && decl->elements[i].usage_index == index &&
+            decl->elements[i].type < 17 && decl->elements[i].stream < 16)
             return &decl->elements[i];
     /* POSITIONT feeds a POSITION input, as for pre-transformed vertices. */
     if (usage == 0) for (int i = 0; i < decl->count; ++i)
-        if (decl->elements[i].usage == 9 && decl->elements[i].usage_index == index) return &decl->elements[i];
+        if (decl->elements[i].usage == 9 && decl->elements[i].usage_index == index &&
+            decl->elements[i].type < 17 && decl->elements[i].stream < 16) return &decl->elements[i];
     return NULL;
 }
 
@@ -1353,19 +1355,22 @@ static int gl_draw(d3d_device *d, uint32_t primitive, uint32_t start_vertex, uin
     }
     uint32_t instances = (d->st.stream_freq[0] & 0x40000000u) ? (d->st.stream_freq[0] & 0x3FFFFFFFu) : 0;
     uint32_t first_vertex = 0, last_vertex = 0;
-    int vertex_bounds = draw_vertex_bounds((d3d_buffer *)d->st.indices, up_indices, up_index32,
-        start_vertex, vertex_count, indexed, base_vertex, start_index, &first_vertex, &last_vertex);
+    const d3d_vertex_element *elements[16];
     uint32_t stream_end[16] = {0}, stream_lo[16] = {0}, stream_bytes[16] = {0};
-    int local_streams = 0;
+    int buffer_streams = 0, local_streams = 0;
     for (int i = 0; i < attr_count; ++i) {
-        const d3d_vertex_element *e = find_element(d, attr_usage[i], attr_index[i]);
-        if (!e || e->stream >= 16) continue;
+        const d3d_vertex_element *e = elements[i] = find_element(d, attr_usage[i], attr_index[i]);
+        if (!e || (up_vertices && e->stream == 0)) continue;
         d3d_buffer *b = (d3d_buffer *)d->st.streams[e->stream];
         if (!b) continue;
+        buffer_streams = 1;
         uint32_t end = e->offset + attr_bytes[e->type];
         if (end > stream_end[e->stream]) stream_end[e->stream] = end;
         if (b->dirty_pages) local_streams = 1;
     }
+    /* UP stream zero already has its exact copied size; only buffer streams need index bounds. */
+    int vertex_bounds = buffer_streams && draw_vertex_bounds((d3d_buffer *)d->st.indices, up_indices, up_index32,
+        start_vertex, vertex_count, indexed, base_vertex, start_index, &first_vertex, &last_vertex);
     int32_t draw_base = (int32_t)base_vertex;
     local_streams = local_streams && !up_vertices && !up_indices && vertex_bounds &&
         draw_rebase(base_vertex, first_vertex, indexed, &draw_base);
@@ -1404,8 +1409,9 @@ static int gl_draw(d3d_device *d, uint32_t primitive, uint32_t start_vertex, uin
         for (int i = 0; i < 16; ++i) attr_cache[i].buffer = FB_UNKNOWN;
         attr_cache_ready = 1;
     }
+    GLuint array_buffer = FB_UNKNOWN;
     for (int i = 0; i < attr_count; ++i) {
-        const d3d_vertex_element *e = find_element(d, attr_usage[i], attr_index[i]);
+        const d3d_vertex_element *e = elements[i];
         if (!e) {
             if (attr_usage[i] == 10) glVertexAttrib4f((GLuint)i, 1, 1, 1, 1);
             else glVertexAttrib4f((GLuint)i, 0, 0, 0, 1);
@@ -1443,7 +1449,7 @@ static int gl_draw(d3d_device *d, uint32_t primitive, uint32_t start_vertex, uin
         attr_state *c = &attr_cache[i];
         if (c->buffer != buffer || c->size != f->size || c->type != f->type || c->norm != f->norm || c->stride != stride ||
             c->offset != offset) {
-            glBindBuffer(GL_ARRAY_BUFFER, buffer);
+            if (array_buffer != buffer) { glBindBuffer(GL_ARRAY_BUFFER, buffer); array_buffer = buffer; }
             glVertexAttribPointer((GLuint)i, f->size, f->type, f->norm, stride, (const void *)offset);
             c->buffer = buffer; c->size = f->size; c->type = f->type; c->norm = f->norm; c->stride = stride; c->offset = offset;
         }
@@ -1722,8 +1728,8 @@ int d3d_gl_draw(d3d_device *d, uint32_t primitive, uint32_t start_vertex, uint32
     d3d_rt_commit();
     uint64_t at = d3d_rt_position();
     if (at) {
-        for (int i = 0; i < 16; ++i) if (d->st.streams[i]) d3d_buffer_read_by((d3d_buffer *)d->st.streams[i], at);
-        if (d->st.indices) d3d_buffer_read_by((d3d_buffer *)d->st.indices, at);
+        for (int i = 0; i < 16; ++i) if (d->st.streams[i]) BUF_RT((d3d_buffer *)d->st.streams[i])->read_at = at;
+        if (d->st.indices) BUF_RT((d3d_buffer *)d->st.indices)->read_at = at;
     }
     return 1;
 }

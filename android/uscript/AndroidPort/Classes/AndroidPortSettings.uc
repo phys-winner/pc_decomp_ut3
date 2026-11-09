@@ -13,6 +13,7 @@ var config float touchGyroSensitivity;
 var config string renderer, language;
 var config int fpsLimit;
 var config bool fsr1, antialias;
+var config int executionMode;
 
 function int GyroMode()
 {
@@ -38,4 +39,5 @@ defaultproperties
     renderer="gles"
     language="INT"
     fpsLimit=60
+    executionMode=0
 }

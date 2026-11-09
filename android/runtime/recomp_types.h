@@ -1464,6 +1464,33 @@ recomp_func_t recomp_lookup_import(uint32_t va);    /* import bridges */
  * the Windows host's strict recomp_lookup_manual makes it. */
 recomp_func_t void_resolve(uint32_t va);
 
+/* Per-site indirect-call caches. Each RECOMP_ICALL/ITAIL expansion owns one
+ * zero-initialised entry: the key holds ~VA (so the zero entry matches no real
+ * target), fn the resolved host function. A hit costs one load and compare on
+ * a line shared with the site's neighbours, instead of the global hash cache,
+ * whose 4K-16K random entries missed L1 on most virtual calls in a WAR-Torlan
+ * bot match. void_resolve_site fills an entry at most RECOMP_ICACHE_FILLS times,
+ * so a megamorphic site (the UnrealScript native dispatch) stops storing and
+ * keeps the global cache; void_dispatch_add clears every filled entry when an
+ * already registered VA changes target. Only the machine holder runs lifted
+ * code, so the entries need no synchronisation. */
+typedef struct recomp_icache {
+    uint32_t key;
+    uint32_t fills;
+    recomp_func_t fn;
+} recomp_icache_t;
+#define RECOMP_ICACHE_FILLS 64u
+recomp_func_t void_resolve_site(recomp_icache_t *site, uint32_t va);
+#define RECOMP_SITE_RESOLVE(va) ({ \
+    static recomp_icache_t _ic; \
+    const uint32_t _site_va = (uint32_t)(va); \
+    __builtin_expect(_ic.key == ~_site_va, 1) ? _ic.fn : void_resolve_site(&_ic, _site_va); })
+/* The resolver every indirect call and tail macro expands to. Site caches cost
+ * code at every site, so tools/protocol_transform.py switches them on only
+ * around the bodies a WAR-Torlan census saw run (#undef/#define around each). */
+#define RECOMP_RESOLVE_PLAIN(va) void_resolve(va)
+#define RECOMP_RESOLVE(va) RECOMP_RESOLVE_PLAIN(va)
+
 /* The dummy return address pushed before a recompiled call. The callee's lifted
  * `ret` pops it. 0xDEAD0000 is a recognizable marker, but if a stack imbalance
  * ever leaks it into a value (e.g. a size argument) the high bits are destructive.
@@ -1514,7 +1541,7 @@ recomp_func_t void_resolve(uint32_t va);
     uint32_t _va = (uint32_t)(target_va); \
     RECOMP_DIAG_ICALL(_va); \
     RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
-    recomp_func_t _fn = void_resolve(_va); \
+    recomp_func_t _fn = RECOMP_RESOLVE(_va); \
     RECOMP_DIAG_CALLER \
     PUSH32(esp, RECOMP_RETADDR); \
     g_esp = esp; \
@@ -1530,7 +1557,7 @@ recomp_func_t void_resolve(uint32_t va);
     if (_va != RECOMP_RETADDR) { /* setjmp and friends return by jumping \
         to the saved return address; that is a return, not a missing target. */ \
         RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
-        recomp_func_t _fn = void_resolve(_va); \
+        recomp_func_t _fn = RECOMP_RESOLVE(_va); \
         _fn(); RECOMP_REGS_IN(); \
     } \
 } while(0)
@@ -1584,7 +1611,7 @@ void recomp_protocol_violation(uint32_t site, uint32_t target, uint32_t regs);
 } while (0)
 #define RECOMP_ICALL_P(target_va, pub, rel, fl, site) do { \
     uint32_t _va = (uint32_t)(target_va); \
-    recomp_func_t _fn = void_resolve(_va); \
+    recomp_func_t _fn = RECOMP_RESOLVE(_va); \
     PUSH32(esp, RECOMP_RETADDR); \
     RECOMP_FLAGS_OUT(); \
     RECOMP_PUBLISH(0xFFu); \
@@ -1600,7 +1627,7 @@ void recomp_protocol_violation(uint32_t site, uint32_t target, uint32_t regs);
 #define RECOMP_ITAIL_P(target_va, pub, fl) do { \
     uint32_t _va = (uint32_t)(target_va); \
     if (_va != RECOMP_RETADDR) { \
-        recomp_func_t _fn = void_resolve(_va); \
+        recomp_func_t _fn = RECOMP_RESOLVE(_va); \
         RECOMP_FLAGS_OUT(); \
         RECOMP_PUBLISH(0xFFu); \
         _fn(); \
@@ -1617,7 +1644,7 @@ void recomp_protocol_violation(uint32_t site, uint32_t target, uint32_t regs);
 } while (0)
 #define RECOMP_ICALL_P(target_va, pub, rel, fl, site) do { \
     uint32_t _va = (uint32_t)(target_va); \
-    recomp_func_t _fn = void_resolve(_va); \
+    recomp_func_t _fn = RECOMP_RESOLVE(_va); \
     PUSH32(esp, RECOMP_RETADDR); \
     if (fl) RECOMP_FLAGS_OUT(); \
     RECOMP_PUBLISH(pub); \
@@ -1634,7 +1661,7 @@ void recomp_protocol_violation(uint32_t site, uint32_t target, uint32_t regs);
 #define RECOMP_ITAIL_P(target_va, pub, fl) do { \
     uint32_t _va = (uint32_t)(target_va); \
     if (_va != RECOMP_RETADDR) { \
-        recomp_func_t _fn = void_resolve(_va); \
+        recomp_func_t _fn = RECOMP_RESOLVE(_va); \
         if (fl) RECOMP_FLAGS_OUT(); \
         RECOMP_PUBLISH(pub); \
         _fn(); \

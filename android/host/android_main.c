@@ -388,10 +388,10 @@ JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeConfigure(JNIEnv *en
     return 0;
 }
 
-JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeStart(JNIEnv *env, jclass type, jstring data, jstring renderer, jboolean fixed_seed, jint render_width, jint render_height)
+JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeStart(JNIEnv *env, jclass type, jstring data, jstring renderer, jboolean fixed_seed, jint render_width, jint render_height, jint execution_mode)
 {
     (void)type;
-    if (!renderer || !data || render_width < 8 || render_width > 8192 || render_height < 8 || render_height > 8192 || render_width < render_height) return EINVAL;
+    if (!renderer || !data || render_width < 8 || render_width > 8192 || render_height < 8 || render_height > 8192 || render_width < render_height || execution_mode < 0 || execution_mode > 1) return EINVAL;
     if (!game_started) { int identity_error = crypto_set_adapter_identity(env); if (identity_error) return identity_error; }
     const char *mode = (*env)->GetStringUTFChars(env, renderer, NULL);
     if (!mode) return ENOMEM;
@@ -406,6 +406,7 @@ JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeStart(JNIEnv *env, j
     if (!valid) return EINVAL;
     if (mode_error) return mode_error;
     if (game_started) return 0;
+    if (setenv("UT3_EXECUTION_MODE", execution_mode ? "exact" : "optimal", 1)) return errno;
     /* Keep the serialized guest on the strongest-core policy to avoid
      * migration/lower-capacity placement; native workers retain Android's mask. */
     if (setenv("VOID_BIG_CORES", "1", 1)) return errno;
@@ -421,7 +422,7 @@ JNIEXPORT jint JNICALL Java_org_ut3_port_GameActivity_nativeStart(JNIEnv *env, j
     char command_line[256];
     int command_size = snprintf(command_line, sizeof command_line,
         "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" %s -nosplash%s -forcelogflush -onethread -ResX=%d -ResY=%d%s",
-        benchmark_start ? "DM-Deck" : "UTFrontEnd", benchmark_start ? " -nomovie" : skip_intro() ? " -nostartupmovies" : "",
+        benchmark_start ? "WAR-Torlan?NumPlay=32?SpectatorOnly=1?QuickStart=1" : "UTFrontEnd", benchmark_start ? " -nomovie" : skip_intro() ? " -nostartupmovies" : "",
         render_width, render_height, fixed_seed ? " -fixedseed" : "");
     if (command_size < 0 || command_size >= (int)sizeof command_line) return EOVERFLOW;
     if (setenv("UT3_COMMAND_LINE", command_line, 1)) return errno;

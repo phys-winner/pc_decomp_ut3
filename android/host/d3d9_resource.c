@@ -1477,6 +1477,7 @@ static uint32_t query_pending_result(uint32_t flags)
     return S_FALSE_D3D;
 }
 
+void d3d_rhi_log(uint32_t frames);   /* d3d9_device.c, rhi_native.inc */
 void d3d_query_log(uint32_t frames);
 void d3d_query_log(uint32_t frames)
 {
@@ -1491,6 +1492,7 @@ void d3d_query_log(uint32_t frames)
                  (double)(now[6] - last[6]) / frames, (double)(now[8] - last[8]) / frames,
                  (double)(now[7] - last[7]) / 1e6 / frames);
     memcpy(last, now, sizeof last);
+    if (frames) d3d_rhi_log(frames);
 }
 
 typedef struct { d3d_query *q; uint32_t flags, serial; } issue_args;

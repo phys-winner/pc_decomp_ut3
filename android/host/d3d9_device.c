@@ -385,6 +385,7 @@ static void make_backbuffer(d3d_device *dev)
 
 /* ======================================================= device methods */
 #define DEV ((d3d_device *)void_com_host(THIS_))
+static void bound_clear(void);
 
 COM_METHOD(dev, QueryInterface, 3)
 {
@@ -453,6 +454,7 @@ COM_METHOD(dev, Reset, 2)
     for (int i = 0; i < 14; ++i) MEM32(pp + 4u * (uint32_t)i) = d->pp[i];
     d3d_state_release(&d->st);
     default_state(d, &d->st);
+    bound_clear();
     set_default_viewport(d, d->backbuffer);
     d3d_rt_device_reset(d);
     void_log("[d3d9] Reset %ux%u format %u depth %u/%u", d->pp[0], d->pp[1], d->pp[2], d->pp[9], d->pp[10]);
@@ -463,6 +465,8 @@ COM_METHOD(dev, Present, 5)
 {
     d3d_device *d = DEV;
     extern void void_postfx_present(uint32_t);
+    extern void d3d_rhi_present(void);
+    d3d_rhi_present();
     void_postfx_present(THIS_);
     { extern void ut3_adpf_work_end(void); ut3_adpf_work_end(); }
     d3d_gl_present(d);
@@ -825,22 +829,222 @@ COM_METHOD(dev, GetClipPlane, 3)
     return D3D_OK;
 }
 
-COM_METHOD(dev, SetRenderState, 3)
+/* ------------------------------------------------ the device API without COM
+ * One definition of each state change, shared by the COM methods below and the
+ * native FD3D9DynamicRHI methods (rhi_native.inc): both paths leave the same state
+ * for the render thread. A setter marks a piece only when its value changes, so an
+ * unchanged value costs a compare and nothing is sent (d3d_rt_sync_state no longer
+ * compares what it sends); objects come as guest COM pointers, as UE3 holds them,
+ * and a slot already holding that guest object is known by the pointer alone: a
+ * bind of the bound vertex buffer reads neither the guest object nor the host
+ * object (those two loads were 90% of void_com_host, an L3 line each).
+ * bound_* follow the slots of d->st and are forgotten where another path changes one. */
+static int sampler_slot(uint32_t sampler)
 {
-    d3d_device *d = DEV;
-    uint32_t state = ARG(1);
+    if (sampler < 16) return (int)sampler;
+    if (sampler >= 256 && sampler <= 260) return 16 + (int)(sampler - 257 < 4 ? sampler - 257 : 0);
+    return -1;
+}
+
+static uint32_t bound_texture[20], bound_stream[16], bound_indices, bound_decl, bound_vs, bound_ps;
+#define BOUND_UNKNOWN UINT32_MAX    /* never a guest object: the next bind of the slot takes the full path */
+static void bound_clear(void)       /* every slot NULL (device created or reset) */
+{
+    memset(bound_texture, 0, sizeof bound_texture);
+    memset(bound_stream, 0, sizeof bound_stream);
+    bound_indices = bound_decl = bound_vs = bound_ps = 0;
+}
+
+/* A large constant array can change only a few pieces: mark those in the copy's existing pass. */
+static inline void constants_copy(d3d_device *d, void *state, const void *guest, size_t bytes)
+{
+    uint8_t *x = (uint8_t *)state;
+    const uint8_t *y = (const uint8_t *)guest;
+    while (bytes) {
+        size_t n = 64u - (((uintptr_t)x - (uintptr_t)&d->st) & 63u);
+        if (n > bytes) n = bytes;
+        uint64_t differs = 0;
+        for (size_t i = 0; i < n; i += 8) {
+            uint64_t u, v;
+            memcpy(&u, x + i, 8);
+            memcpy(&v, y + i, 8);
+            differs |= u ^ v;
+            memcpy(x + i, &v, 8);
+        }
+        if (differs) d3d_rt_dirty(d, x, 1);    /* the whole chunk stays in this piece */
+        x += n; y += n; bytes -= n;
+    }
+}
+
+static inline uint32_t api_set_render_state(d3d_device *d, uint32_t state, uint32_t value)
+{
     if (state >= 256) return D3D_OK;
-    target_state(d)->rs[state] = ARG(2);
-    DIRTY(d, target_state(d)->rs[state]);
-    if (d->recording) d->recording->rec_rs[state] = 1;
+    if (d->recording) {
+        d->recording->state.rs[state] = value;
+        d->recording->rec_rs[state] = 1;
+        return D3D_OK;
+    }
+    if (d->st.rs[state] != value) {
+        d->st.rs[state] = value;
+        DIRTY(d, d->st.rs[state]);
+    }
     return D3D_OK;
 }
+
+static inline uint32_t api_set_texture(d3d_device *d, uint32_t sampler, uint32_t texture)
+{
+    int slot = sampler_slot(sampler);
+    if (slot < 0) return D3DERR_INVALIDCALL;
+    if (d->recording) {
+        d3d_ref_set(&d->recording->state.textures[slot], host_or_null(texture));
+        d->recording->rec_tex[slot] = 1;
+        return D3D_OK;
+    }
+    if (bound_texture[slot] == texture) return D3D_OK;
+    bind_ref(&d->st.textures[slot], host_or_null(texture));
+    bound_texture[slot] = texture;
+    DIRTY(d, d->st.textures[slot]);
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_sampler_state(d3d_device *d, uint32_t sampler, uint32_t type, uint32_t value)
+{
+    int slot = sampler_slot(sampler);
+    if (slot < 0 || type >= 14) return D3D_OK;
+    if (d->recording) {
+        d->recording->state.ss[slot][type] = value;
+        d->recording->rec_ss[slot][type] = 1;
+        return D3D_OK;
+    }
+    if (d->st.ss[slot][type] != value) {
+        d->st.ss[slot][type] = value;
+        DIRTY(d, d->st.ss[slot][type]);
+    }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_vertex_declaration(d3d_device *d, uint32_t decl)
+{
+    if (d->recording) { d3d_ref_set(&d->recording->state.decl, host_or_null(decl)); d->recording->rec_decl = 1; return D3D_OK; }
+    if (bound_decl != decl) {
+        bind_ref(&d->st.decl, host_or_null(decl));
+        bound_decl = decl;
+        DIRTY(d, d->st.decl);
+    }
+    if (d->st.fvf) { d->st.fvf = 0; DIRTY(d, d->st.fvf); }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_vertex_shader(d3d_device *d, uint32_t shader)
+{
+    if (d->recording) { d3d_ref_set(&d->recording->state.vs, host_or_null(shader)); d->recording->rec_vs = 1; return D3D_OK; }
+    if (bound_vs != shader) {
+        bind_ref(&d->st.vs, host_or_null(shader));
+        bound_vs = shader;
+        DIRTY(d, d->st.vs);
+    }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_pixel_shader(d3d_device *d, uint32_t shader)
+{
+    if (d->recording) { d3d_ref_set(&d->recording->state.ps, host_or_null(shader)); d->recording->rec_ps = 1; return D3D_OK; }
+    if (bound_ps != shader) {
+        bind_ref(&d->st.ps, host_or_null(shader));
+        bound_ps = shader;
+        DIRTY(d, d->st.ps);
+    }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_stream_source(d3d_device *d, uint32_t n, uint32_t buffer, uint32_t offset, uint32_t stride)
+{
+    if (n >= 16) return D3DERR_INVALIDCALL;
+    if (d->recording) {
+        d3d_ref_set(&d->recording->state.streams[n], host_or_null(buffer));
+        d->recording->state.stream_offset[n] = offset;
+        d->recording->state.stream_stride[n] = stride;
+        d->recording->rec_stream[n] = 1;
+        return D3D_OK;
+    }
+    if (bound_stream[n] != buffer) {
+        bind_ref(&d->st.streams[n], host_or_null(buffer));
+        bound_stream[n] = buffer;
+        DIRTY(d, d->st.streams[n]);
+    }
+    if (d->st.stream_offset[n] != offset) { d->st.stream_offset[n] = offset; DIRTY(d, d->st.stream_offset[n]); }
+    if (d->st.stream_stride[n] != stride) { d->st.stream_stride[n] = stride; DIRTY(d, d->st.stream_stride[n]); }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_stream_source_freq(d3d_device *d, uint32_t n, uint32_t divider)
+{
+    if (n >= 16) return D3DERR_INVALIDCALL;
+    if (d->recording) { d->recording->state.stream_freq[n] = divider; return D3D_OK; }
+    if (d->st.stream_freq[n] != divider) { d->st.stream_freq[n] = divider; DIRTY(d, d->st.stream_freq[n]); }
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_indices(d3d_device *d, uint32_t buffer)
+{
+    if (d->recording) { d3d_ref_set(&d->recording->state.indices, host_or_null(buffer)); d->recording->rec_indices = 1; return D3D_OK; }
+    if (bound_indices != buffer) {
+        bind_ref(&d->st.indices, host_or_null(buffer));
+        bound_indices = buffer;
+        DIRTY(d, d->st.indices);
+    }
+    return D3D_OK;
+}
+
+/* Set*ShaderConstantF: start + count is checked in 32 bits, as before. */
+static inline uint32_t api_set_vs_constants(d3d_device *d, uint32_t start, uint32_t data, uint32_t count)
+{
+    d3d_state *s = target_state(d);
+    if (start + count > 256) return D3DERR_INVALIDCALL;
+    if (d->recording) {
+        memcpy(&s->vs_f[start], GPTR(data), (size_t)count * 16);
+        for (uint32_t i = 0; i < count; ++i) d->recording->rec_vs_f[start + i] = 1;
+    } else constants_copy(d, &s->vs_f[start], GPTR(data), (size_t)count * 16);
+    d->constants_dirty = 1;
+    return D3D_OK;
+}
+
+static inline uint32_t api_set_ps_constants(d3d_device *d, uint32_t start, uint32_t data, uint32_t count)
+{
+    d3d_state *s = target_state(d);
+    if (start + count > 224) return D3DERR_INVALIDCALL;
+    if (d->recording) {
+        memcpy(&s->ps_f[start], GPTR(data), (size_t)count * 16);
+        for (uint32_t i = 0; i < count; ++i) d->recording->rec_ps_f[start + i] = 1;
+    } else constants_copy(d, &s->ps_f[start], GPTR(data), (size_t)count * 16);
+    d->constants_dirty = 1;
+    return D3D_OK;
+}
+
+COM_METHOD(dev, SetRenderState, 3) { return api_set_render_state(DEV, ARG(1), ARG(2)); }
 
 COM_METHOD(dev, GetRenderState, 3)
 {
     uint32_t state = ARG(1);
     MEM32(ARG(2)) = state < 256 ? DEV->st.rs[state] : 0;
     return D3D_OK;
+}
+
+/* userdata/rt-state-check (d3d9_thread.c): every slot's host object has the guest pointer the binds compare. */
+void d3d_bound_check(d3d_device *d);
+void d3d_bound_check(d3d_device *d)
+{
+    static uint32_t reported;
+    const uint32_t *const guests[] = { bound_texture, bound_stream, &bound_indices, &bound_decl, &bound_vs, &bound_ps };
+    static const uint8_t counts[] = { 20, 16, 1, 1, 1, 1 };
+    void *const *const slots[] = { d->st.textures, d->st.streams, &d->st.indices, &d->st.decl, &d->st.vs, &d->st.ps };
+    for (unsigned kind = 0; kind < 6; ++kind)
+        for (unsigned i = 0; i < counts[kind]; ++i) {
+            const void_com_object *o = (const void_com_object *)slots[kind][i];
+            const uint32_t guest = o ? o->guest : 0, known = guests[kind][i];
+            if (known != BOUND_UNKNOWN && known != guest && reported++ < 16)
+                void_log("[rt] bound check: slot kind %u index %u holds guest %08X, the setter compares %08X", kind, i, guest, known);
+        }
 }
 
 /* ---------------------------------------------------------- state blocks */
@@ -883,13 +1087,6 @@ COM_METHOD(dev, EndStateBlock, 2)
 COM_METHOD(dev, SetClipStatus, 2) { return D3D_OK; }
 COM_METHOD(dev, GetClipStatus, 2) { MEM32(ARG(1)) = 0; MEM32(ARG(1) + 4) = 0; return D3D_OK; }
 
-static int sampler_slot(uint32_t sampler)
-{
-    if (sampler < 16) return (int)sampler;
-    if (sampler >= 256 && sampler <= 260) return 16 + (int)(sampler - 257 < 4 ? sampler - 257 : 0);
-    return -1;
-}
-
 COM_METHOD(dev, GetTexture, 3)
 {
     d3d_device *d = DEV;
@@ -903,21 +1100,13 @@ COM_METHOD(dev, GetTexture, 3)
 COM_METHOD(dev, SetTexture, 3)
 {
     d3d_device *d = DEV;
-    int slot = sampler_slot(ARG(1));
     if (d3d_trace_active()) {
+        int slot = sampler_slot(ARG(1));
         d3d_texture *t = (d3d_texture *)host_or_null(ARG(2));
         void_log("[trace] SetTexture(%u -> slot %d, %08X: %ux%u fmt %u)%s", ARG(1), slot, ARG(2), t ? t->width : 0,
             t ? t->height : 0, t ? t->format : 0, d->recording ? " recording" : "");
     }
-    if (slot < 0) return D3DERR_INVALIDCALL;
-    if (d->recording) {
-        d3d_ref_set(&d->recording->state.textures[slot], host_or_null(ARG(2)));
-        d->recording->rec_tex[slot] = 1;
-        return D3D_OK;
-    }
-    bind_ref(&d->st.textures[slot], host_or_null(ARG(2)));
-    DIRTY(d, d->st.textures[slot]);
-    return D3D_OK;
+    return api_set_texture(d, ARG(1), ARG(2));
 }
 
 COM_METHOD(dev, GetTextureStageState, 4)
@@ -943,16 +1132,7 @@ COM_METHOD(dev, GetSamplerState, 4)
     return D3D_OK;
 }
 
-COM_METHOD(dev, SetSamplerState, 4)
-{
-    d3d_device *d = DEV;
-    int slot = sampler_slot(ARG(1));
-    if (slot < 0 || ARG(2) >= 14) return D3D_OK;
-    target_state(d)->ss[slot][ARG(2)] = ARG(3);
-    DIRTY(d, target_state(d)->ss[slot][ARG(2)]);
-    if (d->recording) d->recording->rec_ss[slot][ARG(2)] = 1;
-    return D3D_OK;
-}
+COM_METHOD(dev, SetSamplerState, 4) { return api_set_sampler_state(DEV, ARG(1), ARG(2), ARG(3)); }
 
 COM_METHOD(dev, ValidateDevice, 2) { if (ARG(1)) MEM32(ARG(1)) = 1; return D3D_OK; }
 COM_METHOD(dev, SetPaletteEntries, 3) { return D3D_OK; }
@@ -988,6 +1168,11 @@ COM_METHOD(dev, SetNPatchMode, 2) { return D3D_OK; }
 static void dev_GetNPatchMode(void) { g_st[0] = 0.0; fp_push_impl(g_st, &g_fp_top, 0.0); g_esp += 8; }
 
 /* ----------------------------------------------------------------- draws */
+/* The native RHI's mode (rhi_native.inc) and, for its check, what the COM draw methods last did. */
+static int rhi_mode;
+typedef struct { uint32_t primitive, base, min_index, start, count, indexed, hits; } rhi_draw_seen;
+static rhi_draw_seen rhi_seen_draw;
+
 static uint32_t vertex_count_for(uint32_t primitive, uint32_t count)
 {
     switch (primitive) {
@@ -1005,6 +1190,7 @@ COM_METHOD(dev, DrawPrimitive, 4)
 {
     d3d_device *d = DEV;
     uint32_t primitive = ARG(1), start = ARG(2), count = ARG(3);
+    if (__builtin_expect(rhi_mode == 2, 0)) rhi_seen_draw = (rhi_draw_seen){ primitive, 0, 0, start, count, 0, rhi_seen_draw.hits + 1 };
     if (!count) return D3D_OK;
     d3d_gl_draw(d, primitive, start, vertex_count_for(primitive, count), count, 0, 0, 0, 0, NULL, 0, NULL, 0);
     return D3D_OK;
@@ -1014,9 +1200,48 @@ COM_METHOD(dev, DrawIndexedPrimitive, 7)
 {
     d3d_device *d = DEV;
     uint32_t primitive = ARG(1), base = ARG(2), min_index = ARG(3), vertices = ARG(4), start_index = ARG(5), count = ARG(6);
+    if (__builtin_expect(rhi_mode == 2, 0))
+        rhi_seen_draw = (rhi_draw_seen){ primitive, base, min_index, start_index, count, 1, rhi_seen_draw.hits + 1 };
     if (!count) return D3D_OK;
     (void)vertices;
     d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 1, base, start_index, min_index, NULL, 0, NULL, 0);
+    return D3D_OK;
+}
+
+/* UP resets the actual bindings even while a state block is being recorded. */
+static inline void unbind_up_stream(d3d_device *d)
+{
+    if (d->st.streams[0]) { bind_ref(&d->st.streams[0], NULL); DIRTY(d, d->st.streams[0]); }
+    bound_stream[0] = 0;
+    if (d->st.stream_offset[0]) { d->st.stream_offset[0] = 0; DIRTY(d, d->st.stream_offset[0]); }
+    if (d->st.stream_stride[0]) { d->st.stream_stride[0] = 0; DIRTY(d, d->st.stream_stride[0]); }
+}
+
+/* The UP draws, shared with the native RHI methods; `device` is the guest device (the post effects' hook). */
+static inline uint32_t api_draw_primitive_up(d3d_device *d, uint32_t device, uint32_t primitive, uint32_t count, uint32_t data, uint32_t stride)
+{
+    if (!count) return D3D_OK;
+    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
+    uint32_t filtered,args[]={primitive,count,data,stride};
+    if(!void_postfx_draw(device,83,args,&filtered))
+        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 0, 0, 0, 0, GPTR(data), stride, NULL, 0);
+    unbind_up_stream(d);
+    return D3D_OK;
+}
+
+static inline uint32_t api_draw_indexed_primitive_up(d3d_device *d, uint32_t device, uint32_t primitive, uint32_t min_index, uint32_t vertices,
+    uint32_t count, uint32_t indices, uint32_t index_format, uint32_t data, uint32_t stride)
+{
+    if (!count) return D3D_OK;
+    (void)vertices;
+    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
+    uint32_t filtered,args[]={primitive,min_index,vertices,count,indices,index_format,data,stride};
+    if(!void_postfx_draw(device,84,args,&filtered))
+        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 1, 0, 0, min_index, GPTR(data), stride,
+            GPTR(indices), index_format == 102);
+    unbind_up_stream(d);
+    if (d->st.indices) { bind_ref(&d->st.indices, NULL); DIRTY(d, d->st.indices); }
+    bound_indices = 0;
     return D3D_OK;
 }
 
@@ -1024,16 +1249,8 @@ COM_METHOD(dev, DrawPrimitiveUP, 5)
 {
     d3d_device *d = DEV;
     uint32_t primitive = ARG(1), count = ARG(2), data = ARG(3), stride = ARG(4);
-    if (!count) return D3D_OK;
-    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
-    uint32_t filtered,args[]={primitive,count,data,stride};
-    if(!void_postfx_draw(THIS_,83,args,&filtered))
-        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 0, 0, 0, 0, GPTR(data), stride, NULL, 0);
-    /* D3D unbinds stream 0 and the index buffer after a UP draw. */
-    bind_ref(&d->st.streams[0], NULL);
-    d->st.stream_offset[0] = d->st.stream_stride[0] = 0;
-    DIRTY(d, d->st.streams[0]); DIRTY(d, d->st.stream_offset[0]); DIRTY(d, d->st.stream_stride[0]);
-    return D3D_OK;
+    if (__builtin_expect(rhi_mode == 2, 0)) rhi_seen_draw = (rhi_draw_seen){ primitive, 0, 0, 0, count, 0, rhi_seen_draw.hits + 1 };
+    return api_draw_primitive_up(d, THIS_, primitive, count, data, stride);
 }
 
 COM_METHOD(dev, DrawIndexedPrimitiveUP, 9)
@@ -1041,19 +1258,8 @@ COM_METHOD(dev, DrawIndexedPrimitiveUP, 9)
     d3d_device *d = DEV;
     uint32_t primitive = ARG(1), min_index = ARG(2), vertices = ARG(3), count = ARG(4), indices = ARG(5);
     uint32_t index_format = ARG(6), data = ARG(7), stride = ARG(8);
-    if (!count) return D3D_OK;
-    (void)vertices;
-    extern int void_postfx_draw(uint32_t,unsigned,const uint32_t*,uint32_t*);
-    uint32_t filtered,args[]={primitive,min_index,vertices,count,indices,index_format,data,stride};
-    if(!void_postfx_draw(THIS_,84,args,&filtered))
-        d3d_gl_draw(d, primitive, 0, vertex_count_for(primitive, count), count, 1, 0, 0, min_index, GPTR(data), stride,
-            GPTR(indices), index_format == 102);
-    bind_ref(&d->st.streams[0], NULL);
-    bind_ref(&d->st.indices, NULL);
-    d->st.stream_offset[0] = d->st.stream_stride[0] = 0;
-    DIRTY(d, d->st.streams[0]); DIRTY(d, d->st.stream_offset[0]); DIRTY(d, d->st.stream_stride[0]);
-    DIRTY(d, d->st.indices);
-    return D3D_OK;
+    if (__builtin_expect(rhi_mode == 2, 0)) rhi_seen_draw = (rhi_draw_seen){ primitive, 0, min_index, 0, count, 1, rhi_seen_draw.hits + 1 };
+    return api_draw_indexed_primitive_up(d, THIS_, primitive, min_index, vertices, count, indices, index_format, data, stride);
 }
 
 COM_METHOD(dev, ProcessVertices, 7) { void_log("[d3d9] ProcessVertices unsupported"); return D3DERR_INVALIDCALL; }
@@ -1066,15 +1272,7 @@ COM_METHOD(dev, CreateVertexDeclaration, 3)
     return decl ? D3D_OK : D3DERR_INVALIDCALL;
 }
 
-COM_METHOD(dev, SetVertexDeclaration, 2)
-{
-    d3d_device *d = DEV;
-    if (d->recording) { d3d_ref_set(&d->recording->state.decl, host_or_null(ARG(1))); d->recording->rec_decl = 1; return D3D_OK; }
-    bind_ref(&d->st.decl, host_or_null(ARG(1)));
-    d->st.fvf = 0;
-    DIRTY(d, d->st.decl); DIRTY(d, d->st.fvf);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetVertexDeclaration, 2) { return api_set_vertex_declaration(DEV, ARG(1)); }
 
 COM_METHOD(dev, GetVertexDeclaration, 2)
 {
@@ -1123,6 +1321,7 @@ COM_METHOD(dev, SetFVF, 2)
     DIRTY(d, d->st.fvf);
     if (!fvf) return D3D_OK;
     bind_ref(&d->st.decl, fvf_declaration(d, fvf));
+    bound_decl = BOUND_UNKNOWN;
     DIRTY(d, d->st.decl);
     return D3D_OK;
 }
@@ -1137,14 +1336,7 @@ COM_METHOD(dev, CreateVertexShader, 3)
     return D3D_OK;
 }
 
-COM_METHOD(dev, SetVertexShader, 2)
-{
-    d3d_device *d = DEV;
-    if (d->recording) { d3d_ref_set(&d->recording->state.vs, host_or_null(ARG(1))); d->recording->rec_vs = 1; return D3D_OK; }
-    bind_ref(&d->st.vs, host_or_null(ARG(1)));
-    DIRTY(d, d->st.vs);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetVertexShader, 2) { return api_set_vertex_shader(DEV, ARG(1)); }
 
 COM_METHOD(dev, GetVertexShader, 2)
 {
@@ -1168,31 +1360,14 @@ extern uint32_t d3d_constant_generation;
     if (start + count > (limit)) return D3DERR_INVALIDCALL; \
     memcpy(GPTR(data), &d->st.field[start], (size_t)count * (width)); return D3D_OK; } while (0)
 
-COM_METHOD(dev, SetVertexShaderConstantF, 4) { CONST_SET(vs_f, rec_vs_f, 256, 16); }
+COM_METHOD(dev, SetVertexShaderConstantF, 4) { return api_set_vs_constants(DEV, ARG(1), ARG(2), ARG(3)); }
 COM_METHOD(dev, GetVertexShaderConstantF, 4) { CONST_GET(vs_f, 256, 16); }
 COM_METHOD(dev, SetVertexShaderConstantI, 4) { CONST_SET(vs_i, rec_vs_i, 16, 16); }
 COM_METHOD(dev, GetVertexShaderConstantI, 4) { CONST_GET(vs_i, 16, 16); }
 COM_METHOD(dev, SetVertexShaderConstantB, 4) { CONST_SET(vs_b, rec_vs_b, 16, 4); }
 COM_METHOD(dev, GetVertexShaderConstantB, 4) { CONST_GET(vs_b, 16, 4); }
 
-COM_METHOD(dev, SetStreamSource, 5)
-{
-    d3d_device *d = DEV;
-    uint32_t n = ARG(1);
-    if (n >= 16) return D3DERR_INVALIDCALL;
-    if (d->recording) {
-        d3d_ref_set(&d->recording->state.streams[n], host_or_null(ARG(2)));
-        d->recording->state.stream_offset[n] = ARG(3);
-        d->recording->state.stream_stride[n] = ARG(4);
-        d->recording->rec_stream[n] = 1;
-        return D3D_OK;
-    }
-    bind_ref(&d->st.streams[n], host_or_null(ARG(2)));
-    d->st.stream_offset[n] = ARG(3);
-    d->st.stream_stride[n] = ARG(4);
-    DIRTY(d, d->st.streams[n]); DIRTY(d, d->st.stream_offset[n]); DIRTY(d, d->st.stream_stride[n]);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetStreamSource, 5) { return api_set_stream_source(DEV, ARG(1), ARG(2), ARG(3), ARG(4)); }
 
 COM_METHOD(dev, GetStreamSource, 5)
 {
@@ -1207,24 +1382,10 @@ COM_METHOD(dev, GetStreamSource, 5)
     return D3D_OK;
 }
 
-COM_METHOD(dev, SetStreamSourceFreq, 3)
-{
-    d3d_device *d = DEV;
-    if (ARG(1) >= 16) return D3DERR_INVALIDCALL;
-    target_state(d)->stream_freq[ARG(1)] = ARG(2);
-    DIRTY(d, target_state(d)->stream_freq[ARG(1)]);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetStreamSourceFreq, 3) { return api_set_stream_source_freq(DEV, ARG(1), ARG(2)); }
 COM_METHOD(dev, GetStreamSourceFreq, 3) { MEM32(ARG(2)) = ARG(1) < 16 ? DEV->st.stream_freq[ARG(1)] : 1; return D3D_OK; }
 
-COM_METHOD(dev, SetIndices, 2)
-{
-    d3d_device *d = DEV;
-    if (d->recording) { d3d_ref_set(&d->recording->state.indices, host_or_null(ARG(1))); d->recording->rec_indices = 1; return D3D_OK; }
-    bind_ref(&d->st.indices, host_or_null(ARG(1)));
-    DIRTY(d, d->st.indices);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetIndices, 2) { return api_set_indices(DEV, ARG(1)); }
 
 COM_METHOD(dev, GetIndices, 2)
 {
@@ -1248,14 +1409,7 @@ COM_METHOD(dev, CreatePixelShader, 3)
     return D3D_OK;
 }
 
-COM_METHOD(dev, SetPixelShader, 2)
-{
-    d3d_device *d = DEV;
-    if (d->recording) { d3d_ref_set(&d->recording->state.ps, host_or_null(ARG(1))); d->recording->rec_ps = 1; return D3D_OK; }
-    bind_ref(&d->st.ps, host_or_null(ARG(1)));
-    DIRTY(d, d->st.ps);
-    return D3D_OK;
-}
+COM_METHOD(dev, SetPixelShader, 2) { return api_set_pixel_shader(DEV, ARG(1)); }
 
 COM_METHOD(dev, GetPixelShader, 2)
 {
@@ -1273,7 +1427,7 @@ COM_METHOD(dev, SetPixelShaderConstantF, 4)
         void_log("[trace] SetPixelShaderConstantF(c%u x%u) = (%g %g %g %g) from %08X", ARG(1), ARG(3),
             f[0], f[1], f[2], f[3], g_icall_from[k]);
     }
-    CONST_SET(ps_f, rec_ps_f, 224, 16);
+    return api_set_ps_constants(DEV, ARG(1), ARG(2), ARG(3));
 }
 COM_METHOD(dev, GetPixelShaderConstantF, 4) { CONST_GET(ps_f, 224, 16); }
 COM_METHOD(dev, SetPixelShaderConstantI, 4) { CONST_SET(ps_i, rec_ps_i, 16, 16); }
@@ -1387,6 +1541,7 @@ uint32_t d3d_device_create(uint32_t d3d9, uint32_t window, uint32_t behavior, ui
     make_backbuffer(dev);
     for (int i = 0; i < 14; ++i) MEM32(pp + 4u * (uint32_t)i) = dev->pp[i];
     default_state(dev, &dev->st);
+    bound_clear();
     set_default_viewport(dev, dev->backbuffer);
     d3d_rt_device_reset(dev);
     dev->swapchain = d3d_swapchain_create(dev);
@@ -1467,9 +1622,10 @@ void d3d_stateblock_apply(d3d_stateblock *sb)
     FOR_FLAGS(i, sb->rec_rs, 256) { d->st.rs[i] = s->rs[i]; DIRTY(d, d->st.rs[i]); }
     FOR_FLAGS(i, &sb->rec_ss[0][0], 20 * 14) { d->st.ss[i / 14][i % 14] = s->ss[i / 14][i % 14]; DIRTY(d, d->st.ss[i / 14][i % 14]); }
     FOR_FLAGS(i, &sb->rec_tss[0][0], 8 * 33) { d->st.tss[i / 33][i % 33] = s->tss[i / 33][i % 33]; DIRTY(d, d->st.tss[i / 33][i % 33]); }
-    FOR_FLAGS(i, sb->rec_tex, 20) { bind_ref(&d->st.textures[i], s->textures[i]); DIRTY(d, d->st.textures[i]); }
+    FOR_FLAGS(i, sb->rec_tex, 20) { bind_ref(&d->st.textures[i], s->textures[i]); bound_texture[i] = BOUND_UNKNOWN; DIRTY(d, d->st.textures[i]); }
     FOR_FLAGS(i, sb->rec_stream, 16) {
         bind_ref(&d->st.streams[i], s->streams[i]);
+        bound_stream[i] = BOUND_UNKNOWN;
         d->st.stream_offset[i] = s->stream_offset[i];
         d->st.stream_stride[i] = s->stream_stride[i];
         d->st.stream_freq[i] = s->stream_freq[i];
@@ -1491,11 +1647,11 @@ void d3d_stateblock_apply(d3d_stateblock *sb)
         DIRTY(d, d->st.viewport); DIRTY(d, d->st.viewport_z);
     }
     if (sb->rec_scissor) { memcpy(d->st.scissor, s->scissor, 16); DIRTY(d, d->st.scissor); }
-    if (sb->rec_indices) { bind_ref(&d->st.indices, s->indices); DIRTY(d, d->st.indices); }
-    if (sb->rec_decl) { bind_ref(&d->st.decl, s->decl); DIRTY(d, d->st.decl); }
+    if (sb->rec_indices) { bind_ref(&d->st.indices, s->indices); bound_indices = BOUND_UNKNOWN; DIRTY(d, d->st.indices); }
+    if (sb->rec_decl) { bind_ref(&d->st.decl, s->decl); bound_decl = BOUND_UNKNOWN; DIRTY(d, d->st.decl); }
     if (sb->rec_fvf) { d->st.fvf = s->fvf; DIRTY(d, d->st.fvf); }
-    if (sb->rec_vs) { bind_ref(&d->st.vs, s->vs); DIRTY(d, d->st.vs); }
-    if (sb->rec_ps) { bind_ref(&d->st.ps, s->ps); DIRTY(d, d->st.ps); }
+    if (sb->rec_vs) { bind_ref(&d->st.vs, s->vs); bound_vs = BOUND_UNKNOWN; DIRTY(d, d->st.vs); }
+    if (sb->rec_ps) { bind_ref(&d->st.ps, s->ps); bound_ps = BOUND_UNKNOWN; DIRTY(d, d->st.ps); }
     if (sb->rec_material) { memcpy(d->st.material, s->material, 68); DIRTY(d, d->st.material); }
     for (int i = 0; i < 8; ++i) if (sb->rec_light[i]) {
         memcpy(d->st.lights[i], s->lights[i], 104); d->st.light_enable[i] = s->light_enable[i];
@@ -1505,4 +1661,44 @@ void d3d_stateblock_apply(d3d_stateblock *sb)
     /* Constants reach the programs through the render thread's copy (it counts
      * d3d_constant_generation as their pieces arrive). */
     if (constants) d->constants_dirty = 1;
+}
+
+/* ======================================== native FD3D9DynamicRHI state methods */
+#include "rhi_native.inc"
+
+/* Read once before guest code runs (features.c). The literal VAs let tools/build_android.py's
+ * host_overrides() keep the replaced bodies on the full call protocol. Mode 1 is the default;
+ * Exact mode registers nothing: the RHI's vtable reaches the lifted bodies directly. */
+void void_rhi_native_init(void);
+void void_rhi_native_init(void)
+{
+    char path[1100];
+    snprintf(path, sizeof path, "%s/rhi-native", void_data_dir());
+    FILE *file = fopen(path, "rb");
+    const int value = file ? fgetc(file) : '1';
+    if (file) fclose(file);
+    rhi_mode = void_native_mode(value == '0' ? 0 : value == '2' ? 2 : 1);
+    if (rhi_mode == 1) {
+        snprintf(path, sizeof path, "%s/rhi-flip", void_data_dir());
+        FILE *flip = fopen(path, "rb");
+        if (flip) { fclose(flip); rhi_flip = 1; void_log("[native-rhi] flip file present: path switchable at run time"); }
+    }
+    void_log("[native-rhi] D3D9 RHI state methods: mode %d", rhi_mode);
+    if (!rhi_mode) return;
+    void_dispatch_add(0x01596C80u, rhi_set_sampler_state);
+    void_dispatch_add(0x01596FD0u, rhi_set_blend_state);
+    void_dispatch_add(0x01596EA0u, rhi_set_stencil_state);
+    void_dispatch_add(0x01596E40u, rhi_set_depth_state);
+    void_dispatch_add(0x01596900u, rhi_set_rasterizer_state);
+    void_dispatch_add(0x01597200u, rhi_set_color_write_enable);
+    void_dispatch_add(0x01597230u, rhi_set_color_write_mask);
+    void_dispatch_add(0x01596890u, rhi_set_stream_source);
+    void_dispatch_add(0x01597E70u, rhi_set_bound_shader_state);
+    void_dispatch_add(0x01596D70u, rhi_set_vertex_shader_parameter);
+    void_dispatch_add(0x01596DA0u, rhi_set_pixel_shader_parameter);
+    void_dispatch_add(0x01596DD0u, rhi_set_view_parameters);
+    void_dispatch_add(0x015979B0u, rhi_draw_indexed_primitive);
+    void_dispatch_add(0x01597840u, rhi_draw_primitive);
+    void_dispatch_add(0x01597B50u, rhi_draw_primitive_up);
+    void_dispatch_add(0x01597CD0u, rhi_draw_indexed_primitive_up);
 }

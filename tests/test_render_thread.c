@@ -133,6 +133,47 @@ void void_blocking_end(void) { assert(!"no machine here"); }
 static void slow(void *ms) { struct timespec t = { 0, *(int *)ms * 1000000L }; nanosleep(&t, NULL); put(0x10000000u); }
 static void frame_done(void *unused) { (void)unused; d3d_rt_frame_done(); }
 
+typedef struct { _Atomic int entered, released; } test_gate;
+static void run_gate(void *p)
+{
+    test_gate *g = *(test_gate **)p;
+    atomic_store(&g->entered, 1);
+    uint64_t deadline = void_monotonic_ns() + 5000000000ull;
+    while (!atomic_load(&g->released) && void_monotonic_ns() < deadline) usleep(1000);
+    assert(atomic_load(&g->released));
+}
+
+static void bounded_retirement(void)
+{
+    test_gate first = { 0 }, later = { 0 }, *gate = &first;
+    d3d_rt_call(run_gate, &gate, sizeof gate);
+    d3d_rt_flush();
+    for (int wait = 0; wait < 5000 && !atomic_load(&first.entered); ++wait) usleep(1000);
+    assert(atomic_load(&first.entered));
+    uint32_t before = atomic_load(&trace_count);
+    uint64_t position = 0;
+    for (uint32_t i = 0; i < PUBLISH_RECORDS; ++i) {
+        record(0x02000000u + i, 0);
+        if (!i) position = d3d_rt_position();
+    }
+    gate = &later;
+    d3d_rt_call(run_gate, &gate, sizeof gate);
+    for (uint32_t i = 0; i < PUBLISH_RECORDS; ++i) record(0x03000000u + i, 0);
+    d3d_rt_flush();
+    atomic_store(&first.released, 1);
+    /* A position inside the batch must retire before its later record needs the producer. */
+    d3d_rt_wait_for(position);
+    assert(d3d_rt_reached(position) && atomic_load(&trace_count) >= before + 1);
+    atomic_store(&later.released, 1);
+    d3d_rt_finish();
+    assert(atomic_load(&trace_count) == before + 2 * PUBLISH_RECORDS);
+    for (uint32_t i = 0; i < PUBLISH_RECORDS; ++i) {
+        assert(trace[before + i] == 0x02000000u + i);
+        assert(trace[before + PUBLISH_RECORDS + i] == 0x03000000u + i);
+    }
+    puts("PASS bounded retirement: a position wait completes before a later record needs the producer");
+}
+
 int main(void)
 {
     enum { RECORDS = 6000 };
@@ -184,6 +225,7 @@ int main(void)
     d3d_rt_wait_for(at);
     assert(d3d_rt_reached(at) && void_monotonic_ns() - t0 > 50000000ull);
     puts("PASS positions: not reached while the render thread is behind, wait_for returns once it ran");
+    bounded_retirement();
 
     /* Frames: the game runs at most one present ahead. */
     for (int f = 0; f < 3; ++f) {

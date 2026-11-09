@@ -34,8 +34,10 @@ public final class LauncherSelfcheck {
         paths();
         texts();
         sizes();
+        workProgress();
         versions();
         launches(new File(fixtures, "state"));
+        memoryDefaults();
         probe();
         List<Spec.Distribution> dists = Collections.singletonList(ut3());
         archive(new File(fixtures, "game.zip"), dists, new File(fixtures, "work"));
@@ -68,6 +70,16 @@ public final class LauncherSelfcheck {
         d.parts.add(game);
         d.parts.add(images);
         return d;
+    }
+
+    static void memoryDefaults() {
+        Spec.Option option = new Spec.Option();
+        option.defaultMinRamGiB = 5;
+        long minimum = 5L << 30;
+        check("0".equals(Launch.memoryDefault(option, minimum - 1)), "4 GB mode defaults off below 5 GiB RAM");
+        check("1".equals(Launch.memoryDefault(option, minimum)), "4 GB mode defaults on at 5 GiB RAM");
+        check("1".equals(Launch.memoryDefault(option, 12L << 30)), "RAM threshold uses 64-bit arithmetic");
+        check("0".equals(Launch.memoryDefault(option, 0)), "unavailable RAM information defaults off");
     }
 
     /** The player's own Turnip driver: packages with and without meta.json, a bare library, refusals. */
@@ -129,6 +141,28 @@ public final class LauncherSelfcheck {
             }
         }
         return file;
+    }
+
+    static void workProgress() {
+        WorkProgress progress = new WorkProgress();
+        progress.update(0, 0, 10000);
+        check(progress.percent == 0 && progress.remainingSeconds < 0, "ETA waits for meaningful samples");
+        for (int i = 1; i <= 6; ++i) progress.update(i * 1000L, i * 1000L, 10000);
+        check(progress.percent == 60 && progress.bytesPerSecond == 1000 && progress.remainingSeconds == 4,
+            "steady byte progress has an accurate rate and remaining time");
+        progress.update(10000, 6000, 10000);
+        check(progress.bytesPerSecond == 0 && progress.remainingSeconds < 0, "a stalled operation has no invented ETA");
+        progress.update(11000, 7000, 0);
+        check(progress.percent < 0 && progress.remainingSeconds < 0, "unknown totals have neither percentage nor ETA");
+        progress.update(12000, 100, 10000);
+        check(progress.remainingSeconds < 0, "a reset counter discards the old rate");
+        progress.update(13000, Long.MAX_VALUE, Long.MAX_VALUE);
+        check(progress.percent == 100 && progress.remainingSeconds < 0, "large counters do not overflow percentage");
+        check("1:01".equals(WorkProgress.duration(61)) && "1:00:01".equals(WorkProgress.duration(3601)), "progress durations");
+        String line = new WorkProgress().describe("ru", true, 1000, 2000, 5, 10);
+        check(line.contains("50%") && line.contains("текстуры: 5 / 10") && line.contains("прошло"), "texture progress includes counts and elapsed time");
+        String space = Texts.failure(null, new Failure(Failure.FULL, null, 200000000, 100000000));
+        check(space.contains("200") && space.contains("100"), "disk-space failures retain required and available sizes");
     }
 
     static void globs() {

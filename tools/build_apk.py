@@ -25,6 +25,12 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], cwd=ROOT, check=True)
 
 
+def strip_for_apk(source, target, strip):
+    if source.resolve() == target.resolve():
+        raise ValueError("Keep the unstripped library for offline symbols")
+    run(strip, "--strip-unneeded", "-o", target, source)
+
+
 # The launcher lists assets/native-licenses by file name: name each text after its component.
 LICENSE_TITLES = {
     "LICENSE": "DXVK.txt",
@@ -53,6 +59,8 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "build/apk/ut3.apk")
     args = parser.parse_args()
     sdk = Path(os.environ.get("ANDROID_SDK_ROOT", Path.home() / "AppData/Local/Android/Sdk"))
+    ndk = Path(os.environ.get("ANDROID_NDK_HOME", sdk / "ndk/27.2.12479018"))
+    strip = ndk / "toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe"
     tools = sdk / "build-tools/36.0.0"
     android = sdk / "platforms/android-37.0/android.jar"
     java = Path(os.environ["JAVA_HOME"]) / "bin"
@@ -109,6 +117,12 @@ def main():
         parser.error("AndroidPort script package or sources changed during compilation")
     with tempfile.TemporaryDirectory(prefix="ut3-apk-", dir=out.parent) as temporary:
         stage = Path(temporary)
+        packaged_library = stage / "libut3.so"
+        strip_for_apk(library, packaged_library, strip)
+        packaged_library_sha = sha(packaged_library)
+        packaged_library_size = packaged_library.stat().st_size
+        if sha(library) != built["sha256"]:
+            raise ValueError("Game library changed while preparing the APK")
         classes, dex, assets = stage / "classes", stage / "dex", stage / "assets"
         for directory in (classes, dex, assets):
             directory.mkdir()
@@ -154,7 +168,7 @@ def main():
         shutil.copy2(stage / "base.apk", unsigned)
         with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as apk:
             apk.write(dex / "classes.dex", "classes.dex")
-            apk.write(library, "lib/arm64-v8a/libut3.so")
+            apk.write(packaged_library, "lib/arm64-v8a/libut3.so")
             for name, source in sorted(runtime.items()):
                 apk.write(source, "lib/arm64-v8a/" + name)
             if probe is not None:
@@ -168,6 +182,9 @@ def main():
         raise ValueError("Native dependencies changed during APK packaging")
     receipt = {"apk": str(out), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
                "library": str(library), "library_sha256": hashlib.sha256(data).hexdigest(),
+               "packaged_library_sha256": packaged_library_sha,
+               "library_bytes": len(data), "packaged_library_bytes": packaged_library_size,
+               "strip_tool_sha256": sha(strip),
                "package": "org.ut3.port", "native_dependencies": native_pins,
                "signer_certificate_sha256": certificate_sha or "debug keystore build/android/debug.keystore",
                "native_settings_package_sha256": script_receipt["sha256"],

@@ -18,14 +18,17 @@ public class PreferencesCheck {
         File root=new File(args[0]);
         PortPreferences p=new PortPreferences(root);
         assert p.getInt("missing",60)==60;
+        assert p.getInt("executionMode",0)==0;
         assert p.getFloat("missing",.22f)==.22f;
         p.put("fpsLimit",45); p.put("language","RUS");
+        p.put("executionMode",1);
         p.put("touchLeftHanded",true); p.put("touchSensitivity",.35f);
         p.put("invalidInt","junk"); p.put("invalidFloat","NaN");
         p.put("infinity","Infinity"); p.put("invalidBoolean","yes");
         p.save();
         PortPreferences loaded=new PortPreferences(root);
         assert loaded.getInt("fpsLimit",60)==45;
+        assert loaded.getInt("executionMode",0)==1;
         assert loaded.getString("language","").equals("RUS");
         assert loaded.getBoolean("touchLeftHanded",false);
         assert loaded.getFloat("touchSensitivity",0)==.35f;
@@ -49,14 +52,18 @@ public class PreferencesCheck {
         assert withLayout.getInt("lastLayoutRevision",0)==3;
         assert withLayout.getInt("touchSizeFire",0)==96 && withLayout.getBoolean("touchHiddenJump",false);
         assert withLayout.getBoolean("touchInputPromptDisabled",false);
-        String changed=GameSettings.read(ini).replace("language=FRA","Language=RUS").replace("touchlefthanded=true","TouchLeftHanded=True");
+        assert nativeBefore[0]==(byte)0xff && nativeBefore[1]==(byte)0xfe;
+        String changed=GameSettings.read(ini).replace("language=FRA","Language=RUS").replace("touchlefthanded=true","TouchLeftHanded=True")
+            .replace("executionmode=1","ExecutionMode=0");
         GameSettings.write(ini,changed+"\r\n[Other]\r\nPreserve=1\r\n");
         assert withLayout.reloadIfChanged();
         assert withLayout.getString("language","").equals("RUS");
+        assert withLayout.getInt("executionMode",1)==0;
         assert withLayout.getBoolean("touchLeftHanded",false);
         assert withLayout.getFloat("touchX0",0)==.5f;
         withLayout.put("fpsLimit",60);withLayout.save();
         assert GameSettings.read(ini).contains("Preserve=1");
+        assert new PortPreferences(root).getInt("executionMode",1)==0;
         GameSettings.write(ini,"[AndroidPort.AndroidPortSettings]\ntouchWeaponSwipe=False\n");
         PortPreferences migrated=new PortPreferences(root);
         assert !migrated.getBoolean("touchWeaponSwipe",true)&&!migrated.getBoolean("touchWeaponButtonSwipe",true);

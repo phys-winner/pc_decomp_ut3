@@ -11,14 +11,16 @@ static int test_setenv(const char *, const char *, int);
 #undef pthread_create
 #include <assert.h>
 
-static int create_calls, fail_profile_env, fail_command_env;
+static int create_calls, fail_profile_env, fail_command_env, fail_execution_env;
 static const char *expected_command_line;
-static const char *normal_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" DM-Deck -nosplash -nomovie -forcelogflush -onethread -ResX=1056 -ResY=480";
-static const char *fixed_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" DM-Deck -nosplash -nomovie -forcelogflush -onethread -ResX=1056 -ResY=480 -fixedseed";
-static const char *front_end_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" UTFrontEnd -nosplash -nomovie -forcelogflush -onethread -ResX=1056 -ResY=480";
+static const char *expected_execution_mode = "optimal";
+static const char *normal_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" WAR-Torlan?NumPlay=32?SpectatorOnly=1?QuickStart=1 -nosplash -nomovie -forcelogflush -onethread -ResX=1056 -ResY=480";
+static const char *fixed_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" WAR-Torlan?NumPlay=32?SpectatorOnly=1?QuickStart=1 -nosplash -nomovie -forcelogflush -onethread -ResX=1056 -ResY=480 -fixedseed";
+static const char *front_end_command_line = "\"C:\\Games\\UT3\\Binaries\\UT3.exe\" UTFrontEnd -nosplash -nostartupmovies -forcelogflush -onethread -ResX=1056 -ResY=480";
 static int test_setenv(const char *name, const char *value, int overwrite)
 {
     if ((fail_profile_env && !strcmp(name, "VOID_BIG_CORES")) ||
+        (fail_execution_env && !strcmp(name, "UT3_EXECUTION_MODE")) ||
         (fail_command_env && !strcmp(name, "UT3_COMMAND_LINE"))) { errno = ENOMEM; return -1; }
     return setenv(name, value, overwrite);
 }
@@ -26,6 +28,7 @@ static int test_pthread_create(pthread_t *thread, const pthread_attr_t *attribut
 {
     (void)thread; (void)attributes; (void)entry; (void)argument;
     assert(!strcmp(getenv("VOID_BIG_CORES"), "1"));
+    assert(!strcmp(getenv("UT3_EXECUTION_MODE"), expected_execution_mode));
     assert(!strcmp(getenv("UT3_FPS_LIMIT"), "60"));
     assert(!strcmp(getenv("UT3_RENDER_WIDTH"), "1056"));
     assert(!strcmp(getenv("UT3_RENDER_HEIGHT"), "480"));
@@ -87,49 +90,58 @@ static void test_renderer_arguments(void)
     JNIEnv env = &functions;
     crypto_class=(jclass)(uintptr_t)1;crypto_adapter_mac=(jmethodID)(uintptr_t)2;
     jstring data = (jstring)"/unused";
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, NULL, (jstring)"gles", JNI_FALSE, 1056, 480) == EINVAL);
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, NULL, JNI_FALSE, 1056, 480) == EINVAL);
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 0, 480) == EINVAL);
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 8193) == EINVAL);
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 224, 480) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, NULL, (jstring)"gles", JNI_FALSE, 1056, 480, 0) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, NULL, JNI_FALSE, 1056, 480, 0) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 0, 480, 0) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 8193, 0) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 224, 480, 0) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, -1) == EINVAL);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 2) == EINVAL);
     const char *invalid[] = {"", "vulkan", "GLES", "dxvk/../gles"};
     for (unsigned i = 0; i < sizeof invalid / sizeof *invalid; ++i)
-        assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)invalid[i], JNI_FALSE, 1056, 480) == EINVAL);
+        assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)invalid[i], JNI_FALSE, 1056, 480, 0) == EINVAL);
     game_started = 1;
     assert(!setenv("UT3_RENDERER", "gles", 1));
     assert(!setenv("VOID_BIG_CORES", "0", 1));
     assert(!setenv("UT3_COMMAND_LINE", "live-command-line", 1));
-    assert(!Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480));
-    assert(!Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"dxvk", JNI_TRUE, 1056, 480));
+    assert(!setenv("UT3_EXECUTION_MODE", "optimal", 1));
+    assert(!Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 0));
+    assert(!Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"dxvk", JNI_TRUE, 1056, 480, 1));
+    assert(!strcmp(getenv("UT3_EXECUTION_MODE"), "optimal"));
     assert(!strcmp(getenv("UT3_RENDERER"), "gles"));
     assert(!strcmp(getenv("VOID_BIG_CORES"), "0") && !create_calls);
     assert(!strcmp(getenv("UT3_COMMAND_LINE"), "live-command-line"));
     game_started = 0;
     unsetenv("UT3_RENDERER");
     fail_profile_env = 1;
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480) == ENOMEM);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 0) == ENOMEM);
     assert(!strcmp(getenv("VOID_BIG_CORES"), "0") && !game_started && !create_calls);
     fail_profile_env = 0;
+    fail_execution_env = 1;
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 1) == ENOMEM);
+    assert(!game_started && !create_calls && !strcmp(getenv("UT3_EXECUTION_MODE"), "optimal"));
+    fail_execution_env = 0;
     fail_command_env = 1;
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480) == ENOMEM);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 0) == ENOMEM);
     assert(!game_started && !create_calls && !strcmp(getenv("UT3_COMMAND_LINE"), "live-command-line"));
     fail_command_env = 0;
     expected_command_line = fixed_command_line;
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_TRUE, 1056, 480) == EAGAIN);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_TRUE, 1056, 480, 0) == EAGAIN);
     assert(!strcmp(getenv("VOID_BIG_CORES"), "1") && !game_started && create_calls == 1);
     expected_command_line = normal_command_line;
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480) == EAGAIN);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 0) == EAGAIN);
     assert(!game_started && create_calls == 2 && !strstr(getenv("UT3_COMMAND_LINE"), "fixedseed"));
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"dxvk-turnip", JNI_FALSE, 1056, 480) == EAGAIN);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"dxvk-turnip", JNI_FALSE, 1056, 480, 0) == EAGAIN);
     assert(!strcmp(getenv("UT3_RENDERER"), "dxvk") && !strcmp(getenv("UT3_VULKAN_DRIVER"), "turnip"));
     assert(!strcmp(getenv("UT3_DXVK_TURNIP"), "1") && create_calls == 3);
     assert(!strcmp(getenv("TU_DEBUG_FILE"), "/unused/tu-debug.txt"));
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480) == EAGAIN);
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 0) == EAGAIN);
     assert(!strcmp(getenv("UT3_VULKAN_DRIVER"), "system") && !strcmp(getenv("UT3_DXVK_TURNIP"), "0") && create_calls == 4);
     assert(!getenv("TU_DEBUG_FILE"));
     assert(!Java_org_ut3_port_GameActivity_nativeConfigure(NULL, NULL, 60, 50, 50, JNI_FALSE));
     expected_command_line = front_end_command_line;
-    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480) == EAGAIN);
+    expected_execution_mode = "exact";
+    assert(Java_org_ut3_port_GameActivity_nativeStart(&env, NULL, data, (jstring)"gles", JNI_FALSE, 1056, 480, 1) == EAGAIN);
     assert(!benchmark_start && create_calls == 5);
     game_started = 1;
     assert(Java_org_ut3_port_GameActivity_nativeConfigure(NULL, NULL, 45, 0, 50, JNI_TRUE) == EBUSY);
@@ -139,6 +151,7 @@ static void test_renderer_arguments(void)
     game_started = 0;
     unsetenv("UT3_RENDERER");
     unsetenv("UT3_COMMAND_LINE");
+    unsetenv("UT3_EXECUTION_MODE");
 }
 
 int main(void)

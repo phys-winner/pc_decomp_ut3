@@ -37,9 +37,11 @@ final class Texts {
         R_CHECKING = 141, R_CRASH = 142, R_ERROR = 143, R_BC = 144, R_ROBUSTNESS = 145, R_PRESENT = 146, R_FEATURES = 147,
         R_NOT_TURNIP = 148, R_VULKAN13 = 149, R_UNFIT = 150, N_UNCHECKED = 151, TEX_REMOVE = 152, TEX_REMOVE_ASK = 153,
         TEX_GONE = 154, TURNIP_DRIVER = 155, TURNIP_BUILTIN = 156, TURNIP_CHOOSE = 157, TURNIP_RESET = 158,
-        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161, TEX_SCANNING = 162, TEX_RESCAN = 163, TEX_ESTIMATE = 164;
+        TURNIP_COPYING = 159, TURNIP_HINT = 160, E_TURNIP = 161, TEX_SCANNING = 162, TEX_RESCAN = 163, TEX_ESTIMATE = 164,
+        TEX_DXT_YES = 165, TEX_DXT_NO = 166, TEX_DXT_UNKNOWN = 167,
+        TEX_ORIGINALS = 168, TEX_STATUS = 169, TEX_CHECK_FAILED = 170, COPY_DIAGNOSTICS = 171, DIAGNOSTICS_COPIED = 172, E_CLIPBOARD = 173, RETRY_CHECK = 174, OTHER_ARCHIVE = 175;
     /** The last id: the table has one row per id (the selfcheck verifies it). */
-    static final int LAST = TEX_ESTIMATE;
+    static final int LAST = OTHER_ARCHIVE;
 
     private static final String[][] TEXTS = {
         {"Play", "Играть", "Spielen", "Graj"},
@@ -327,6 +329,18 @@ final class Texts {
         {"Try again", "Повторить", "Erneut versuchen", "Spróbuj ponownie"},
         {"Original game: about %1$d textures, %2$s to convert.", "Оригинальная игра: примерно %1$d текстур, %2$s для конвертации.",
          "Originalspiel: etwa %1$d Texturen, %2$s zum Konvertieren.", "Oryginalna gra: około %1$d tekstur, %2$s do konwersji."},
+        {"Full support", "Полная поддержка", "Volle Unterstützung", "Pełna obsługa"},
+        {"Conversion recommended", "Рекомендуется конвертация", "Konvertierung empfohlen", "Zalecana konwersja"},
+        {"DXT support could not be checked.", "Не удалось проверить поддержку DXT.",
+         "Die DXT-Unterstützung konnte nicht geprüft werden.", "Nie udało się sprawdzić obsługi DXT."},
+        {"Original textures", "Оригинальные текстуры", "Originaltexturen", "Oryginalne tekstury"},
+        {"Converted to %s", "Конвертировано в %s", "In %s konvertiert", "Przekonwertowano do %s"},
+        {"Texture check failed", "Не удалось проверить текстуры", "Texturprüfung fehlgeschlagen", "Nie udało się sprawdzić tekstur"},
+        {"Copy diagnostic report", "Скопировать отчёт диагностики", "Diagnosebericht kopieren", "Kopiuj raport diagnostyczny"},
+        {"Diagnostic report copied", "Отчёт диагностики скопирован", "Diagnosebericht kopiert", "Raport diagnostyczny skopiowany"},
+        {"Could not copy the report", "Не удалось скопировать отчёт", "Bericht konnte nicht kopiert werden", "Nie udało się skopiować raportu"},
+        {"Check again", "Повторить проверку", "Erneut prüfen", "Sprawdź ponownie"},
+        {"Choose another archive…", "Выбрать другой архив…", "Anderes Archiv wählen…", "Wybierz inne archiwum…"},
     };
 
     private static int column = -1;
@@ -394,7 +408,8 @@ final class Texts {
         case Failure.METHOD: return fmt(context, E_METHOD, f.detail);
         case Failure.ENCRYPTED: return t(context, E_ENCRYPTED);
         case Failure.CORRUPT: return fmt(context, E_CORRUPT, f.detail);
-        case Failure.FULL: return t(context, E_FULL);
+        case Failure.FULL: return f.required >= 0 && f.available >= 0
+            ? fmt(context, E_SPACE, size(context, f.required), size(context, f.available)) : t(context, E_FULL);
         case Failure.READ_ONLY: return fmt(context, E_READ_ONLY, f.detail);
         case Failure.CANCELLED: return t(context, E_CANCELLED);
         case Failure.REMOTE: return t(context, E_REMOTE);

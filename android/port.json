@@ -37,6 +37,8 @@
     "accent": "#E8742A",
     "accentDark": "#9A4A16",
     "primaryFill": "#3A2414",
+    "playGlow": "#E8742A",
+    "playParticles": "#FFD6A0",
     "text": "#F3EDE4",
     "muted": "#A3ABB7",
     "error": "#FF8C7A",
@@ -115,7 +117,26 @@
                                 "ru": "Частота и время кадров, а также система: процессор и его частоты, нагрузка игры, видеоускоритель и драйвер, память, тепловое состояние, батарея, экран",
                                 "de": "Bildrate, Bildzeiten und das System: CPU und Takte, Last des Spiels, GPU und Treiber, Speicher, thermischer Zustand, Akku, Bildschirm",
                                 "pl": "Liczba i czasy klatek oraz system: procesor i jego taktowanie, obciążenie gry, GPU i sterownik, pamięć, stan termiczny, bateria, ekran"}}
-     ]}
+     ]},
+    {
+      "key": "large_address_aware",
+      "type": "bool",
+      "default": "0",
+      "defaultMinRamGiB": 5,
+      "arm64Only": true,
+      "title": {
+        "en": "4 GB address space",
+        "ru": "Адресное пространство 4 ГБ",
+        "de": "4 GB Adressraum",
+        "pl": "Przestrzeń adresowa 4 GB"
+      },
+      "hint": {
+        "en": "Allows the 32-bit game to use more than 2 GB. Applied at the next game start.",
+        "ru": "Позволяет 32-битной игре использовать более 2 ГБ. Применяется при следующем запуске игры.",
+        "de": "Erlaubt dem 32-Bit-Spiel mehr als 2 GB. Gilt ab dem nächsten Spielstart.",
+        "pl": "Pozwala 32-bitowej grze używać ponad 2 GB. Zacznie działać po ponownym uruchomieniu gry."
+      }
+    }
   ],
   "textures": {"backend": "org.ut3.port.TextureConverter"},
   "cleanup": {

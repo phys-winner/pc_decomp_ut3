@@ -83,6 +83,124 @@ static void run_draw(void *hidden)
     d3d_rt_device()->fbo_dirty = 1;
 }
 
+static void compare_constants(void *p)
+{
+    const d3d_device *d = (const d3d_device *)p;
+    assert(!memcmp(d3d_rt_device()->st.vs_f, d->st.vs_f, sizeof d->st.vs_f));
+    assert(!memcmp(d3d_rt_device()->st.ps_f, d->st.ps_f, sizeof d->st.ps_f));
+}
+
+static void up_resets(uint32_t guest, d3d_device *d, uint32_t data, uint32_t out)
+{
+    uint32_t vb = d3d_buffer_create(d, 0, 128, 0, 0, D3DPOOL_DEFAULT);
+    uint32_t ib = d3d_buffer_create(d, 1, 16, 0, 101, D3DPOOL_DEFAULT);
+    uint32_t args[9] = { 0 };
+    const float vertices[12] = { 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0 };
+    const uint16_t indices[3] = { 0, 1, 2 };
+    memcpy(GPTR(data), vertices, sizeof vertices);
+    memcpy(GPTR(data + 64), indices, sizeof indices);
+    args[1] = 2; assert(call(guest, 89, 2, args) == D3D_OK);    /* XYZ */
+    for (unsigned indexed = 0; indexed < 2; ++indexed) {
+        args[1] = 0; args[2] = vb; args[3] = 16; args[4] = 16;
+        assert(call(guest, 100, 5, args) == D3D_OK);
+        args[1] = ib; assert(call(guest, 104, 2, args) == D3D_OK);
+        d3d_rt_sync_state(d); d3d_rt_finish();
+        assert(call(guest, 60, 1, args) == D3D_OK);             /* BeginStateBlock */
+        args[1] = 0; args[2] = vb; args[3] = 32; args[4] = 24;
+        assert(call(guest, 100, 5, args) == D3D_OK);
+        args[1] = ib; assert(call(guest, 104, 2, args) == D3D_OK);
+        uint32_t draw[9] = { guest, 4, 0, 3, 1, data + 64, 101, data, 16 };
+        if (!indexed) { draw[2] = 1; draw[3] = data; draw[4] = 16; }
+        assert(call(guest, indexed ? 84 : 83, indexed ? 9 : 5, draw) == D3D_OK);
+        assert(!d->st.streams[0] && !d->st.stream_offset[0] && !d->st.stream_stride[0]);
+        assert(d->st.indices == (indexed ? NULL : void_com_host(ib)));
+        assert(d3d_rt_dirty_summary);                        /* the first reset changed real bindings */
+        d3d_stateblock *sb = d->recording;
+        assert(sb->state.streams[0] == void_com_host(vb) && sb->state.stream_offset[0] == 32 && sb->state.stream_stride[0] == 24);
+        assert(sb->state.indices == void_com_host(ib) && sb->rec_stream[0] && sb->rec_indices);
+        d3d_rt_sync_state(d); d3d_rt_finish();
+        d3d_rt_stats_t before, after;
+        d3d_rt_stats(&before);
+        assert(call(guest, indexed ? 84 : 83, indexed ? 9 : 5, draw) == D3D_OK);
+        assert(!d3d_rt_dirty_summary);
+        d3d_rt_sync_state(d);
+        d3d_rt_stats(&after);
+        assert(after.records - before.records == 1);         /* draw only, no redundant state packet */
+        args[1] = out; assert(call(guest, 61, 2, args) == D3D_OK);
+        assert(call(MEM32(out), 2, 1, args) == 0);
+        args[1] = 0; args[2] = vb; args[3] = 16; args[4] = 16;
+        assert(call(guest, 100, 5, args) == D3D_OK && d->st.streams[0] == void_com_host(vb));
+        args[1] = ib;
+        assert(call(guest, 104, 2, args) == D3D_OK && d->st.indices == void_com_host(ib));
+    }
+    args[1] = args[2] = args[3] = args[4] = 0;
+    assert(call(guest, 100, 5, args) == D3D_OK);
+    assert(call(guest, 104, 2, args) == D3D_OK);
+    assert(call(vb, 2, 1, args) == 0 && call(ib, 2, 1, args) == 0);
+    puts("PASS UP resets: changed bindings cleared, repeated draws send no state packet, state-block recording preserved");
+}
+
+static void shader_constants(void)
+{
+    const void_shim *factory = void_shim_find("d3d9.dll", "Direct3DCreate9", 0);
+    assert(factory);
+    uint32_t create = void_thunk(factory->fn, factory->name), sdk = 32;
+    uint32_t parent = void_call_guest(create, 1, &sdk, 1);
+    assert(parent);
+    uint32_t pp = void_galloc(56), out = void_galloc(4), data = void_galloc(256 * 16);
+    memset(GPTR(pp), 0, 56);
+    MEM32(pp) = MEM32(pp + 4) = 32; MEM32(pp + 8) = 22;
+    MEM32(pp + 12) = MEM32(pp + 24) = MEM32(pp + 32) = 1;
+    uint32_t args[7] = { parent, 0, 1, 0, 0x50, pp, out };
+    assert(call(parent, 16, 7, args) == D3D_OK);
+    uint32_t guest = MEM32(out);
+    d3d_device *d = (d3d_device *)void_com_host(guest);
+    assert(d);
+    d3d_rt_sync_state(d);
+    d3d_rt_finish();
+    for (unsigned pixel = 0; pixel < 2; ++pixel) {
+        uint32_t limit = pixel ? 224 : 256, slot = pixel ? 109 : 94;
+        for (uint32_t i = 0; i < 256 * 4; ++i) MEM32(data + 4 * i) = 0x3F000000u + i;
+        args[1] = 0; args[2] = data; args[3] = limit;
+        assert(call(guest, slot, 4, args) == D3D_OK);
+        d3d_rt_sync_state(d);
+        d3d_rt_finish();
+        uint32_t changed[] = { 1, 4, limit - 1 };
+        uint32_t expected[D3D_RT_DIRTY_WORDS] = { 0 }, summary = 0;
+        size_t base = pixel ? offsetof(d3d_state, ps_f) : offsetof(d3d_state, vs_f);
+        for (unsigned i = 0; i < sizeof changed / sizeof changed[0]; ++i) {
+            /* Bitwise values include a NaN payload and negative zero. */
+            MEM32(data + 16 * changed[i]) = i == 1 ? 0x7FC00001u : 0x80000000u;
+            uint32_t piece = (uint32_t)(base + 16 * changed[i]) / 64u;
+            expected[piece >> 5] |= 1u << (piece & 31u);
+            summary |= 1u << (piece >> 5);
+        }
+        args[1] = 1; args[2] = data + 16; args[3] = limit - 1;
+        assert(call(guest, slot, 4, args) == D3D_OK);
+        assert(!memcmp(expected, d3d_rt_dirty_bits, sizeof expected));
+        assert(d3d_rt_dirty_summary == summary);
+        d3d_rt_stats_t before, after;
+        d3d_rt_stats(&before);
+        d3d_rt_sync_state(d);
+        d3d_rt_stats(&after);
+        assert(after.bytes - before.bytes <= 256);    /* three pieces, rather than the full register file */
+        d3d_rt_sync(compare_constants, d);
+        assert(call(guest, slot, 4, args) == D3D_OK);
+        assert(!d3d_rt_dirty_summary);                /* an identical large upload sends nothing */
+        args[1] = limit; args[2] = data; args[3] = 0;
+        assert(call(guest, slot, 4, args) == D3D_OK && !d3d_rt_dirty_summary);
+        args[3] = 1;
+        assert(call(guest, slot, 4, args) == D3DERR_INVALIDCALL && !d3d_rt_dirty_summary);
+    }
+    up_resets(guest, d, data, out);
+    args[1] = 0;
+    assert(call(guest, 2, 1, args) == 0);
+    assert(call(parent, 2, 1, args) == 0);
+    d3d_rt_finish();
+    void_gfree(data); void_gfree(out); void_gfree(pp);
+    puts("PASS sparse VS/PS arrays: only changed pieces sent, exact mirror including edges, identical/empty/invalid ranges");
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -190,5 +308,6 @@ int main(void)
     }
     d3d_rt_finish();
     puts("PASS occlusion: visible and hidden results of the GPU published unasked, first GetData answers");
+    shader_constants();
     return 0;
 }

@@ -35,7 +35,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     private boolean nativeLoaded;
     private static boolean crashHandlerInstalled;
     static native void nativeSurface(Surface surface);
-    static native int nativeStart(String userdata, String renderer, boolean fixedSeed, int renderWidth, int renderHeight);
+    static native int nativeStart(String userdata, String renderer, boolean fixedSeed, int renderWidth, int renderHeight, int executionMode);
     static native int nativePostfx(boolean fsr1, boolean antialias);
     static native int nativeStatus();
     static native void nativePause(boolean paused);
@@ -510,7 +510,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         int error = nativePostfx(portPreferences.getBoolean("fsr1",false),portPreferences.getBoolean("antialias",false));
         if (error == 0) error = nativeConfigure(fpsLimit(), getIntent().getIntExtra("queryWaitUs", 0),
             getIntent().getIntExtra("precacheWaitUs", 50), getIntent().getBooleanExtra("benchmark", false));
-        if (error == 0) error = nativeStart(userdata.getAbsolutePath(), renderer, getIntent().getBooleanExtra("fixedSeed", false), renderWidth, renderHeight);
+        if (error == 0) error = nativeStart(userdata.getAbsolutePath(), renderer, getIntent().getBooleanExtra("fixedSeed", false), renderWidth, renderHeight,
+            portPreferences.getInt("executionMode", 0) == 1 ? 1 : 0);
         if (error != 0) {
             refuse(say("Could not start the game thread: ", "Не удалось запустить игровой поток: ",
                 "Der Spiel-Thread konnte nicht gestartet werden: ", "Nie udało się uruchomić wątku gry: ") + error);

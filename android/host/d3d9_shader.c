@@ -617,6 +617,21 @@ static program_t *programs[1024];
 static program_t *current_program;
 uint32_t d3d_constant_generation = 1;
 
+static uint32_t program_hash(const d3d_shader *vs, const d3d_shader *ps, uint32_t bgra, uint32_t ff_id, int alpha)
+{
+    /* Mix above the allocator alignment: low pointer bits collapsed 1024 buckets to 8 for 128-byte objects. */
+    uint64_t h = ((uint64_t)(uintptr_t)vs >> 4) * 31u + ((uint64_t)(uintptr_t)ps >> 4) * 17u +
+        bgra + (uint64_t)ff_id * 7u + (uint64_t)(uint32_t)alpha * 13u;
+    h ^= h >> 32;
+    return (uint32_t)((h * 0x9E3779B97F4A7C15ull) >> 54);
+}
+
+static int program_matches(const program_t *p, const d3d_shader *vs, const d3d_shader *ps,
+    uint32_t bgra, uint32_t ff_id, int alpha)
+{
+    return p && p->vs == vs && p->ps == ps && p->bgra_mask == bgra && p->ff_id == ff_id && p->alpha_mode == alpha;
+}
+
 static void destroy_program(program_t *p)
 {
     if (current_program == p) { glUseProgram(0); current_program = NULL; }
@@ -1156,8 +1171,16 @@ static void upload_vec4(GLuint prog, const char *name, GLint base, GLint *locs, 
     int count)
 {
     int first = 0, last = count - 1;
-    while (first < count && !memcmp(held + 4 * first, fresh + 4 * first, 16)) ++first;
-    if (first == count) return;
+    if (count >= 16) {
+        /* Skip equal cache lines before refining the changed range. */
+        while (first + 4 <= count && !memcmp(held + 4 * first, fresh + 4 * first, 64)) first += 4;
+        while (first < count && !memcmp(held + 4 * first, fresh + 4 * first, 16)) ++first;
+        if (first == count) return;
+        while (last - first >= 4 && !memcmp(held + 4 * (last - 3), fresh + 4 * (last - 3), 64)) last -= 4;
+    } else {
+        while (first < count && !memcmp(held + 4 * first, fresh + 4 * first, 16)) ++first;
+        if (first == count) return;
+    }
     while (last > first && !memcmp(held + 4 * last, fresh + 4 * last, 16)) --last;
     memcpy(held + 4 * first, fresh + 4 * first, 16u * (uint32_t)(last - first + 1));
     if (first && locs[first] == -2) {
@@ -1345,9 +1368,9 @@ static void prelink_created(d3d_shader *s)
         if ((s->pixel ? e->ps : e->vs) != h) continue;
         d3d_shader *vs = s->pixel ? live_find(e->vs, 0) : s, *ps = s->pixel ? s : live_find(e->ps, 1);
         if (!vs || !ps || !vs->parse || !ps->parse) continue;
-        uintptr_t slot = ((uintptr_t)vs * 31u + (uintptr_t)ps * 17u + e->bgra + (uint32_t)e->alpha * 13u) % 1024u;
+        uint32_t slot = program_hash(vs, ps, e->bgra, 0, e->alpha);
         program_t *p = programs[slot];
-        while (p && !(p->vs == vs && p->ps == ps && p->bgra_mask == e->bgra && p->ff_id == 0 && p->alpha_mode == e->alpha))
+        while (p && !program_matches(p, vs, ps, e->bgra, 0, e->alpha))
             p = p->next;
         if (p) continue;
         p = link_program(vs, ps, e->bgra, 0, 0, 0, e->alpha);
@@ -1383,15 +1406,18 @@ int d3d_shader_bind2(d3d_device *dev, d3d_shader *vs, d3d_shader *ps, int (*bgra
     else if (!ps) ff_gl = d3d_ff_pixel_stage(dev, vs->source, &ff_id, &ff_samplers);
     if ((!vs || !ps) && !ff_gl) return 0;
     int alpha_mode = ps ? alpha_test_mode(dev->st.rs) : 9;
-    uintptr_t h = ((uintptr_t)vs * 31u + (uintptr_t)ps * 17u + mask + ff_id * 7u + (uint32_t)alpha_mode * 13u) % 1024u;
-    program_t *p = programs[h];
-    while (p && !(p->vs == vs && p->ps == ps && p->bgra_mask == mask && p->ff_id == ff_id && p->alpha_mode == alpha_mode)) p = p->next;
-    if (!p) {
-        p = link_program(vs, ps, mask, ff_gl, ff_id, ff_samplers, alpha_mode);
-        if (!p) return 0;
-        p->next = programs[h];
-        programs[h] = p;
-        if (vs && ps && !ff_id) prelink_record(vs, ps, mask, alpha_mode);
+    program_t *p = current_program;
+    if (!program_matches(p, vs, ps, mask, ff_id, alpha_mode)) {
+        uint32_t h = program_hash(vs, ps, mask, ff_id, alpha_mode);
+        p = programs[h];
+        while (p && !program_matches(p, vs, ps, mask, ff_id, alpha_mode)) p = p->next;
+        if (!p) {
+            p = link_program(vs, ps, mask, ff_gl, ff_id, ff_samplers, alpha_mode);
+            if (!p) return 0;
+            p->next = programs[h];
+            programs[h] = p;
+            if (vs && ps && !ff_id) prelink_record(vs, ps, mask, alpha_mode);
+        }
     }
     if (current_program != p) glUseProgram(p->gl);
     current_program = p;

@@ -16,6 +16,7 @@ package (`<application id>.launcher`) at build time; a game describes itself in 
 | [docs/INTEGRATION.md](docs/INTEGRATION.md) | Adding the base to a game; port.json reference; the UT3 example (Russian) |
 | [docs/UPDATES.md](docs/UPDATES.md) | Update checks through GitHub releases (Russian) |
 | [docs/ICONS.md](docs/ICONS.md) | Icon requirements and checks (Russian) |
+| [docs/PLAY_BUTTON.md](docs/PLAY_BUTTON.md) | Play button colours, particles and per-edition palettes (Russian) |
 | `android/src/port/launcher/` | The launcher (Java 8 language level, no Gradle, no AndroidX) |
 | `native/` | `port_env.h` (what the launcher passes to native code), `zipmount.c` (stored-ZIP file layer), `vulkan_probe.c` (the Vulkan driver probe run in `:probe`) |
 | `tools/launcher.py` | Renders the sources, expands the manifest markers, writes assets, builds the probe library |

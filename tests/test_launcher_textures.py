@@ -14,7 +14,7 @@ class LauncherTexturesTest(unittest.TestCase):
         methods = '\n'.join(touch_checks.TouchControlsTest._method(source, name) for name in (
             'private File textureRoot()', 'private String textureSourceKey()',
             'private void textureScanFinished(', 'private boolean convertedTextures()',
-            'private void refreshTextures(', 'private void placeWork('))
+            'private void refreshTextures(', 'private void rescanTextures('))
         program = r'''
 import java.io.File;
 import java.util.*;
@@ -54,7 +54,7 @@ class Gpu {boolean astc=true;}
 class Work {static class Job {String title;Job(String t){title=t;}}static Job current;static boolean busy(){return false;}}
 class Texts {
     static final int TEXTURES=1,TEX_SCANNING=2,TEX_RESCAN=3,TEX_DONE=4,TEX_GONE=5,TEX_REMOVE=6,
-        TEX_REMOVE_ASK=7,DELETE=8,CANCEL=9,TEX_UNDO=10,TEX_WHY=11,TEX_FOUND=12,TEX_CONVERT=13,TEX_ESTIMATE=14,JOB_TEXTURES=15;
+        TEX_REMOVE_ASK=7,DELETE=8,CANCEL=9,TEX_UNDO=10,TEX_WHY=11,TEX_FOUND=12,TEX_CONVERT=13,TEX_ESTIMATE=14,JOB_TEXTURES=15,TEX_NOTHING=16,RENDERER=17;
     static String t(Object c,int id){return "text:"+id;}static String fmt(Object c,int id,Object...v){return t(c,id);}
     static String size(Object c,long b){return "bytes";}
 }
@@ -70,10 +70,10 @@ class Backend implements TextureBackend {
 public class ScanCheck {
     interface Done<T>{void accept(T result);}interface Operation<T>{T run(File index,int fd);}
     Spec spec=new Spec();Spec.Distribution selected=new Spec.Distribution();TextureBackend textures;
-    TextureBackend.Scan textureScan;String textureSource,busy,textureMessage;boolean textureScanning,textureError;Gpu gpu=new Gpu();Ui ui=new Ui();
+    TextureBackend.Scan textureScan;String textureSource,busy,textureMessage;boolean textureScanning,textureError,initializing;Gpu gpu=new Gpu();Ui ui=new Ui();
     LinearLayout texturesBox=new LinearLayout();static final int TEX_REMOVE_ORIGINALS=3;
     LinearLayout workHome=new LinearLayout(),work=ui.card(workHome);
-    Runnable pending;int jobs,refreshes;boolean failOpen;
+    Runnable pending;int jobs,refreshes;boolean failOpen;long textureEpoch;
     <T>T withTextureArchive(Spec.Distribution d,Operation<T> op){
         if(failOpen)throw new RuntimeException("Cannot open game archive");
         return op.run(new File("index.zmi"),17);
@@ -81,13 +81,16 @@ public class ScanCheck {
     <T>void background(Callable<T> work,Done<T> done,Done<Throwable> failed){
         assert pending==null;pending=()->{pending=null;try{done.accept(work.call());}catch(Throwable t){failed.accept(t);}};
     }
-    void refresh(){++refreshes;refreshTextures(true);placeWork();}void startTextures(int format){++jobs;}
+    LinearLayout section(LinearLayout holder,int title){LinearLayout card=ui.card(holder);card.addView(ui.heading(Texts.t(this,title)));return card;}
+    void note(int section,String text,boolean error){if(text!=null)((LinearLayout)texturesBox.getChildAt(0)).addView(ui.label(text,13,ui.error));}
+    Boolean dxtSupport(){return false;}
+    boolean idle(){return true;}
+    void refresh(int...sections){++refreshes;refreshTextures(true);}void startTextures(int format){++jobs;}
 ''' + methods.replace('android.util.Log.w', 'Log.w').replace('android.view.ViewGroup', 'LinearLayout') + r'''
     Label label(){return (Label)((LinearLayout)texturesBox.children.get(0)).children.get(1);}
-    TextView button(){return (TextView)((LinearLayout)((LinearLayout)texturesBox.children.get(0)).children.get(2)).children.get(0);}
     public static void main(String[] args){
         ScanCheck c=new ScanCheck();c.failOpen=true;c.textures=new Backend();c.refresh();
-        assert c.textureScanning&&c.textureScan==null&&c.label().text.equals("text:2");
+        assert c.textureScanning&&c.textureScan==null;
         Runnable first=c.pending;c.refresh();assert c.pending==first&&Backend.scans==0;
         Install.mount="different.zip";c.refresh();String newer=c.textureSource;
         first.run();assert c.textureScan==null&&c.textureScanning&&c.pending!=null&&c.textureSource.equals(newer);
@@ -96,16 +99,12 @@ public class ScanCheck {
         Backend.fail=true;c.refresh();c.pending.run();
         assert !c.textureScanning&&c.label().text.equals("Cache probe failed");
         Backend.fail=false;
-        c.button().click.run();assert c.textureScanning&&c.textureScan==null&&c.pending!=null;
+        c.rescanTextures();assert c.textureScanning&&c.textureScan==null&&c.pending!=null;
         c.pending.run();assert c.textureScan.failure==null&&c.textureScan.textures>0;
-        Work.current=new Work.Job(Texts.t(c,Texts.JOB_TEXTURES));c.placeWork();
-        Object firstCard=c.texturesBox.getChildAt(0);assert c.work.getParent()==firstCard;
-        c.refresh();assert c.work.getParent()==c.texturesBox.getChildAt(0)&&c.work.getParent()!=firstCard;
-        Work.current=null;c.placeWork();assert c.work.getParent()==c.workHome;
-        Work.current=new Work.Job("Other operation");c.placeWork();assert c.work.getParent()==c.workHome;
-        c.texturesBox.removeAllViews();Work.current=new Work.Job(Texts.t(c,Texts.JOB_TEXTURES));c.placeWork();
-        assert c.work.getParent()==c.texturesBox.getChildAt(0);
-        System.out.println("PASS texture card: pending/stale/retry, quick probe without archive, progress stays in rebuilt texture card, other jobs retain their home");
+        TextureBackend.Scan valid=c.textureScan;int refreshes=c.refreshes;long old=c.textureEpoch++;
+        c.textureScanFinished(c.textureSource,old,new TextureBackend.Scan());
+        assert c.textureScan==valid&&c.refreshes==refreshes : "an invalidated scan must not overwrite the current result";
+        System.out.println("PASS texture card: pending/stale/retry and quick probe without opening the archive");
     }
 }
 '''
@@ -118,3 +117,10 @@ public class ScanCheck {
             result = subprocess.run(list(map(str, command)), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         print(result.stdout.strip())
+
+    def test_group_progress_and_folding(self):
+        import runpy
+        checks = runpy.run_path(str(ROOT / 'android/launcher/tests/test_group_ui.py'))
+        out = ROOT / 'build/launcher-group-ui-test'
+        out.mkdir(parents=True, exist_ok=True)
+        checks['check'](ROOT / 'android/launcher', out)

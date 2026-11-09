@@ -31,6 +31,7 @@ final class Spec {
     static final class Distribution {
         String id, version, activity;
         Object title;
+        JSONObject theme;
         List<Part> parts = new ArrayList<>();
         List<String> renderers = new ArrayList<>();
         boolean intro, introDefault;
@@ -67,6 +68,8 @@ final class Spec {
 
     static final class Option {
         String key, type, value, extra;
+        int defaultMinRamGiB;
+        boolean arm64Only;
         Object title, hint;
         List<String> only = new ArrayList<>();
         List<String> choices = new ArrayList<>();
@@ -171,6 +174,7 @@ final class Spec {
             dist.title = d.opt("title") != null ? d.opt("title") : label;
             dist.version = d.optString("version", "");
             dist.activity = d.getString("activity");
+            dist.theme = d.optJSONObject("theme");
             JSONObject intro = d.optJSONObject("intro");
             dist.intro = intro != null;
             dist.introDefault = intro != null && intro.optBoolean("default", true);
@@ -205,6 +209,8 @@ final class Spec {
             option.key = o.getString("key");
             option.type = o.optString("type", "bool");
             option.value = String.valueOf(o.opt("default") != null ? o.opt("default") : "");
+            option.defaultMinRamGiB = o.optInt("defaultMinRamGiB", 0);
+            option.arm64Only = o.optBoolean("arm64Only", false);
             option.extra = o.optString("extra", "");
             option.title = o.opt("title") != null ? o.opt("title") : option.key;
             option.hint = o.opt("hint");

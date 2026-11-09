@@ -1521,6 +1521,11 @@ final class GameControls extends View implements SensorEventListener {
         for(int id:InputDevice.getDeviceIds()) {
             InputDevice device=InputDevice.getDevice(id);
             if(device==null||device.isVirtual())continue;
+            /* Fingerprint sensors can report joystick sources (uinput-fpc, uinput-goodix and the like): not a controller.
+               Other uinput devices stay, they may be real virtual gamepads. */
+            String name=device.getName();
+            name=name==null?"":name.toLowerCase(java.util.Locale.ROOT);
+            if(name.contains("fingerprint")||name.startsWith("uinput-fpc")||name.startsWith("uinput-goodix"))continue;
             int sources=device.getSources();
             if((sources&InputDevice.SOURCE_GAMEPAD)==InputDevice.SOURCE_GAMEPAD||
                (sources&InputDevice.SOURCE_JOYSTICK)==InputDevice.SOURCE_JOYSTICK)return true;

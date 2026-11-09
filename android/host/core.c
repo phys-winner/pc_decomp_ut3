@@ -151,10 +151,248 @@ static void table_grow(void)
 /* A direct-mapped cache in front of the table for void_resolve. Indirect
  * calls (C++ virtual calls above all) hit the same few thousand targets over
  * and over, and the table (megabytes) misses the data cache on nearly every
- * probe. Only the thread holding the machine resolves, so plain stores do. */
-#define RESOLVE_CACHE_BITS 12
+ * probe. Only the thread holding the machine resolves, so plain stores do.
+ * 16K entries: with 4K, a WAR-Torlan bot match missed into the 8 MiB table
+ * (void_dispatch_find + module scan) thousands of times per frame. */
+#define RESOLVE_CACHE_BITS 14
 static struct { uint32_t va; void_fn fn; } resolve_cache[1u << RESOLVE_CACHE_BITS];
 static inline uint32_t resolve_slot(uint32_t va) { return (va * 0x9E3779B1u) >> (32 - RESOLVE_CACHE_BITS); }
+
+/* Every per-site indirect-call cache (recomp_types.h) that was ever filled.
+ * A site registers on its first fill; a flush clears the keys and keeps the
+ * fill counts, so the list holds each site once. */
+static recomp_icache_t **icache_sites;
+static size_t icache_count, icache_capacity;
+
+/* Polymorphic sites (site-cache absent or 1). The inline entry keeps the first
+ * target a site saw; its second distinct target gives it a 64-byte extension
+ * with four more (round-robin), named by the fill word (SITE_EXT | index). In a
+ * WAR-Torlan bot match (2026-11-08) the misses of the single-entry caches were
+ * spread over hundreds of virtual-call sites, and 70% of void_resolve_site's
+ * samples waited on the shared 256 KiB resolve cache; an extension stays in L1
+ * with its site. A site whose extension keeps missing (more misses than hits
+ * after SITE_BIG_AFTER misses: the UnrealScript native dispatch) gets its own
+ * 256-entry direct-mapped table (SITE_BIG | index). The pools are reserved
+ * address space; only touched pages become resident. site-cache = 0 keeps the
+ * single-entry caches (64 fills, then the shared cache); 2 adds a statistics
+ * line per frame-statistics interval. Only the machine holder runs lifted code,
+ * so nothing here needs synchronisation. */
+#define SITE_EXT 0x80000000u
+#define SITE_BIG 0x40000000u
+#define SITE_INDEX 0x3FFFFFFFu
+#define SITE_EXT_SLOTS 4u
+#define SITE_EXT_MAX 65536u
+#define SITE_BIG_BITS 8u
+#define SITE_BIG_MAX 512u
+#define SITE_BIG_AFTER 512u
+typedef struct {
+    uint32_t key[SITE_EXT_SLOTS];      /* ~VA as the inline key: 0 matches no target */
+    uint32_t next, misses;
+    uint64_t hits;
+    recomp_func_t fn[SITE_EXT_SLOTS];
+} site_ext;
+typedef struct { uint32_t key, unused; recomp_func_t fn; } site_big_entry;
+typedef struct { site_big_entry e[1u << SITE_BIG_BITS]; } site_big;
+_Static_assert(sizeof(site_ext) == 64, "an extension is one cache line");
+static site_ext *site_exts;
+static site_big *site_bigs;
+static recomp_icache_t **site_ext_owner;   /* for the statistics */
+static uint32_t site_ext_used, site_big_used;
+static recomp_icache_t *site_big_owner[SITE_BIG_MAX];
+static uint64_t site_big_hits[SITE_BIG_MAX], site_big_misses[SITE_BIG_MAX];
+static uint64_t site_slow_calls;
+static int site_cache_mode;            /* void_site_cache_init sets it before guest code runs */
+
+static void icache_flush(void)
+{
+    for (size_t i = 0; i < icache_count; ++i) icache_sites[i]->key = 0;
+    for (uint32_t i = 0; i < site_ext_used; ++i) memset(site_exts[i].key, 0, sizeof site_exts[i].key);
+    for (uint32_t i = 0; i < site_big_used; ++i)
+        for (uint32_t k = 0; k < (1u << SITE_BIG_BITS); ++k) site_bigs[i].e[k].key = 0;
+}
+
+static inline uint32_t site_big_slot(uint32_t va) { return (va * 0x9E3779B1u) >> (32 - SITE_BIG_BITS); }
+
+/* The first fill: the site joins the flush list. */
+static __attribute__((noinline)) recomp_func_t site_first(recomp_icache_t *site, uint32_t va)
+{
+    recomp_func_t fn = void_resolve(va);
+    if (icache_count == icache_capacity) {
+        size_t capacity = icache_capacity ? icache_capacity * 2 : 65536;
+        recomp_icache_t **grown = (recomp_icache_t **)realloc(icache_sites, capacity * sizeof *grown);
+        if (!grown) return fn;                 /* uncached: still correct */
+        icache_sites = grown;
+        icache_capacity = capacity;
+    }
+    icache_sites[icache_count++] = site;
+    site->fills = 1;
+    site->fn = fn;
+    site->key = ~va;
+    return fn;
+}
+
+/* A filled single-entry site missed: refill (after a flush, in mode 0, or with
+ * the pool used up) or move the new target into an extension. */
+static __attribute__((noinline)) recomp_func_t site_second(recomp_icache_t *site, uint32_t va)
+{
+    recomp_func_t fn = void_resolve(va);
+    if (site_cache_mode && site->key && site_ext_used < SITE_EXT_MAX) {
+        const uint32_t index = site_ext_used++;
+        site_ext *x = &site_exts[index];
+        x->key[0] = ~va;
+        x->fn[0] = fn;
+        x->next = 1;
+        site_ext_owner[index] = site;
+        site->fills = SITE_EXT | index;
+        return fn;
+    }
+    if (site->fills >= RECOMP_ICACHE_FILLS) return fn;
+    ++site->fills;
+    site->fn = fn;
+    site->key = ~va;
+    return fn;
+}
+
+static __attribute__((noinline)) recomp_func_t site_ext_miss(recomp_icache_t *site, site_ext *x, uint32_t va)
+{
+    recomp_func_t fn = void_resolve(va);
+    if (!site->key) {                          /* flushed: the inline entry first */
+        site->fn = fn;
+        site->key = ~va;
+        return fn;
+    }
+    ++x->misses;
+    if (x->misses >= SITE_BIG_AFTER && x->misses > x->hits && site_big_used < SITE_BIG_MAX) {
+        const uint32_t index = site_big_used++;
+        site_big *t = &site_bigs[index];
+        for (uint32_t i = 0; i < SITE_EXT_SLOTS; ++i) {
+            if (!x->key[i]) continue;
+            site_big_entry *e = &t->e[site_big_slot(~x->key[i])];
+            e->key = x->key[i];
+            e->fn = x->fn[i];
+        }
+        site_big_entry *e = &t->e[site_big_slot(va)];
+        e->key = ~va;
+        e->fn = fn;
+        site_big_owner[index] = site;
+        site_big_misses[index] = x->misses;
+        site_big_hits[index] = x->hits;
+        site->fills = SITE_BIG | index;
+        return fn;
+    }
+    const uint32_t slot = x->next;
+    x->next = (slot + 1) & (SITE_EXT_SLOTS - 1);
+    x->key[slot] = ~va;
+    x->fn[slot] = fn;
+    return fn;
+}
+
+static __attribute__((noinline)) recomp_func_t site_big_miss(recomp_icache_t *site, uint32_t index, uint32_t va)
+{
+    recomp_func_t fn = void_resolve(va);
+    if (!site->key) {
+        site->fn = fn;
+        site->key = ~va;
+        return fn;
+    }
+    ++site_big_misses[index];
+    site_big_entry *e = &site_bigs[index].e[site_big_slot(va)];
+    e->key = ~va;
+    e->fn = fn;
+    return fn;
+}
+
+recomp_func_t void_resolve_site(recomp_icache_t *site, uint32_t va)
+{
+    const uint32_t fills = site->fills, key = ~va;
+    ++site_slow_calls;
+    if (fills & SITE_EXT) {
+        site_ext *x = &site_exts[fills & SITE_INDEX];
+        for (uint32_t i = 0; i < SITE_EXT_SLOTS; ++i)
+            if (x->key[i] == key) { ++x->hits; return x->fn[i]; }
+        return site_ext_miss(site, x, va);
+    }
+    if (fills & SITE_BIG) {
+        const uint32_t index = fills & SITE_INDEX;
+        const site_big_entry *e = &site_bigs[index].e[site_big_slot(va)];
+        if (e->key == key) { ++site_big_hits[index]; return e->fn; }
+        return site_big_miss(site, index, va);
+    }
+    if (!fills) return site_first(site, va);
+    return site_second(site, va);
+}
+
+/* Read once before guest code runs (features.c). */
+void void_site_cache_init(void);
+void void_site_cache_init(void)
+{
+    char path[1100];
+    snprintf(path, sizeof path, "%s/site-cache", void_data_dir());
+    FILE *file = fopen(path, "rb");
+    const int value = file ? fgetc(file) : '1';
+    if (file) fclose(file);
+    site_cache_mode = value == '0' ? 0 : value == '2' ? 2 : 1;
+    if (site_cache_mode) {
+        void *exts = mmap(NULL, (size_t)SITE_EXT_MAX * sizeof(site_ext), PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        void *bigs = mmap(NULL, (size_t)SITE_BIG_MAX * sizeof(site_big), PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        void *owners = mmap(NULL, (size_t)SITE_EXT_MAX * sizeof *site_ext_owner, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if (exts == MAP_FAILED || bigs == MAP_FAILED || owners == MAP_FAILED) {
+            if (exts != MAP_FAILED) munmap(exts, (size_t)SITE_EXT_MAX * sizeof(site_ext));
+            if (bigs != MAP_FAILED) munmap(bigs, (size_t)SITE_BIG_MAX * sizeof(site_big));
+            if (owners != MAP_FAILED) munmap(owners, (size_t)SITE_EXT_MAX * sizeof *site_ext_owner);
+            site_cache_mode = 0;
+        } else {
+            site_exts = (site_ext *)exts;
+            site_bigs = (site_big *)bigs;
+            site_ext_owner = (recomp_icache_t **)owners;
+        }
+    }
+    void_log("[void] call-site caches: %s", site_cache_mode == 0 ? "single entry (site-cache 0)" :
+             site_cache_mode == 2 ? "polymorphic extensions, statistics (site-cache 2)" : "polymorphic extensions");
+}
+
+static void site_cache_stats(uint32_t frames)
+{
+    static uint64_t last_calls, last_ext_hits, last_ext_misses, last_big_hits, last_big_misses;
+    if (site_cache_mode != 2 || !frames) return;
+    uint64_t ext_hits = 0, ext_misses = 0, big_hits = 0, big_misses = 0;
+    for (uint32_t i = 0; i < site_ext_used; ++i) { ext_hits += site_exts[i].hits; ext_misses += site_exts[i].misses; }
+    for (uint32_t i = 0; i < site_big_used; ++i) { big_hits += site_big_hits[i]; big_misses += site_big_misses[i]; }
+    void_log("[sites] per frame: %.0f slow calls, extensions %.0f hits %.0f misses, tables %.0f hits %.0f misses; "
+             "%zu sites, %u extensions, %u tables",
+             (double)(site_slow_calls - last_calls) / frames, (double)(ext_hits - last_ext_hits) / frames,
+             (double)(ext_misses - last_ext_misses) / frames, (double)(big_hits - last_big_hits) / frames,
+             (double)(big_misses - last_big_misses) / frames, icache_count, site_ext_used, site_big_used);
+    last_calls = site_slow_calls; last_ext_hits = ext_hits; last_ext_misses = ext_misses;
+    last_big_hits = big_hits; last_big_misses = big_misses;
+    /* The extensions with the most misses so far, by the site's offset in libut3.so (nm names
+     * the site caches <function>._ic.N), and every table's owner. */
+    Dl_info info;
+    const uintptr_t base = dladdr((void *)site_cache_stats, &info) ? (uintptr_t)info.dli_fbase : 0;
+    uint32_t best[8];
+    int found = 0;
+    for (uint32_t i = 0; i < site_ext_used; ++i) {
+        const uint32_t misses = site_exts[i].misses;
+        if (found == 8 && misses <= site_exts[best[7]].misses) continue;
+        int k = found < 8 ? found++ : 7;
+        while (k > 0 && site_exts[best[k - 1]].misses < misses) { best[k] = best[k - 1]; --k; }
+        best[k] = i;
+    }
+    char line[1024];
+    size_t used = (size_t)snprintf(line, sizeof line, "[sites] top extension misses (site:misses/hits):");
+    for (int k = 0; k < found && used < sizeof line - 64; ++k)
+        used += (size_t)snprintf(line + used, sizeof line - used, " +%#llx:%u/%llu",
+                                 (unsigned long long)((uintptr_t)site_ext_owner[best[k]] - base),
+                                 site_exts[best[k]].misses, (unsigned long long)site_exts[best[k]].hits);
+    if (found) void_log("%s", line);
+    for (uint32_t i = 0; i < site_big_used; ++i)
+        void_log("[sites] table %u: site +%#llx, %llu hits, %llu misses", i,
+                 (unsigned long long)((uintptr_t)site_big_owner[i] - base), (unsigned long long)site_big_hits[i],
+                 (unsigned long long)site_big_misses[i]);
+}
 
 void void_dispatch_add(uint32_t va, void_fn fn)
 {
@@ -162,7 +400,11 @@ void void_dispatch_add(uint32_t va, void_fn fn)
     resolve_cache[resolve_slot(va)].va = 0;   /* a re-registered VA must not keep its old target */
     if (!table || (table_used + 1) * 2 > table_mask + 1) table_grow();
     for (uint32_t i = hash_va(va) & table_mask;; i = (i + 1) & table_mask) {
-        if (table[i].va == va) { table[i].fn = fn; return; }
+        if (table[i].va == va) {
+            if (table[i].fn != fn) icache_flush();   /* call sites may hold the old target */
+            table[i].fn = fn;
+            return;
+        }
         if (!table[i].va) { table[i].va = va; table[i].fn = fn; ++table_used; return; }
     }
 }
@@ -243,6 +485,7 @@ static uint32_t *thunk_calls;
 
 void void_thunk_stats(uint32_t frames)
 {
+    site_cache_stats(frames);
     if (count_thunks <= 0 || !thunk_calls || !frames) return;
     for (int rank = 0; rank < 12; ++rank) {
         uint32_t best = 0, best_i = 0;

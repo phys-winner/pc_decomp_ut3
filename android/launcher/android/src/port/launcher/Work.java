@@ -24,15 +24,23 @@ final class Work {
     static volatile Job current;
 
     abstract static class Job implements Runnable {
+        final int section;
         final String title;
         final File target;
         final long started = System.currentTimeMillis();
         volatile long done, total;
+        volatile long itemsDone, itemsTotal;
+        final WorkProgress meter = new WorkProgress();
         volatile String file = "";
         volatile boolean cancelled, finished;
         volatile Failure failure;
 
         Job(String title, File target) {
+            this(Texts.GAME_FILES, title, target);
+        }
+
+        Job(int section, String title, File target) {
+            this.section = section;
             this.title = title;
             this.target = target;
         }
@@ -55,6 +63,10 @@ final class Work {
         }
 
         int permille() { return (int) (total > 0 ? Math.min(1000, done * 1000 / total) : 0); }
+
+        String progressText(Context context) {
+            return meter.describe(Texts.language(context), section == Texts.TEXTURES, done, total, itemsDone, itemsTotal);
+        }
     }
 
     /** Starts a job unless one runs; the service keeps the process (and the CPU) up. */
@@ -149,7 +161,7 @@ final class Work {
             if (job == null) return b.setContentTitle(Spec.get(this).label).build();
             b.setContentTitle(job.title);
             if (ongoing) {
-                b.setContentText(Texts.fmt(this, Texts.PROGRESS, Texts.size(this, job.done), Texts.size(this, job.total)))
+                b.setContentText(job.progressText(this).replace('\n', ' '))
                     .setProgress(1000, job.permille(), job.total <= 0);
             } else {
                 b.setContentText(Texts.t(this, Texts.DONE)).setAutoCancel(true);

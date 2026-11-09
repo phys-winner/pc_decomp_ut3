@@ -11,14 +11,11 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from build_android import WRAPS
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK = Path(os.environ.get("ANDROID_SDK_ROOT", Path.home() / "AppData/Local/Android/Sdk"))
 NDK = Path(os.environ.get("ANDROID_NDK_HOME", SDK / "ndk/27.2.12479018"))
-
-
-# The link of libut3.so (tools/build_android.py) wraps these lifted functions.
-WRAPS = ["sub_00F75DB0", "sub_00486270", "sub_00C85710", "sub_00C12290", "sub_00B6AF10", "sub_010FC820"]
 
 
 def main():
@@ -35,7 +32,10 @@ def main():
     included = {Path(m).name for m in re.findall(r'#include "\.\./android/host/([a-z0-9_]+\.c)"', text)}
     included |= {Path(m).name for m in re.findall(r'#include "\.\./reference/mojoshader/([a-z0-9_]+\.c)"', text)}
     skip = {Path(n).stem for n in included} | set(a.exclude)
-    objects = [o for o in sorted(a.objects.rglob("*.o")) if o.stem not in skip]
+    # Cached originals can coexist with rewritten units; use the production link's exact object list.
+    link_inputs = a.objects.parent / "link.rsp"
+    objects = [Path(line.strip().strip('"')) for line in link_inputs.read_text().splitlines() if line.strip()]
+    objects = [o for o in objects if o.stem not in skip]
     flags = ["--target=aarch64-linux-android29", "-O1", "-g", "-fno-strict-aliasing", "-fwrapv", "-ffp-contract=off",
              "-DRECOMP_X87_WINDOW", "-Iandroid/runtime", "-Iandroid/host", "-Igenerated", "-Ireference/mojoshader",
              "-DUT3_ANDROID_APP", "-std=gnu11", "-w"] + ["-D" + d for d in a.define]
@@ -45,6 +45,7 @@ def main():
     runtime = ROOT / "build/native-audio/runtime"
     cmd = [str(clang), *flags, str(a.test), "@" + str(rsp), "-o", str(a.output), "-Wl,-z,max-page-size=16384",
            "-Wl,--allow-multiple-definition", *["-Wl,--wrap=" + w for w in WRAPS], str(ROOT / "build/dxvk/libut3_dxvk.a"), "-L" + str(runtime),
+           str(ROOT / "build/vkd3d/libvkd3d_shader.a"), "-Wl,--exclude-libs,libvkd3d_shader.a",
            "-lc++_shared", "-lm", "-ldl", "-llog", "-landroid", "-lEGL", "-lGLESv3", "-laaudio", "-lz"]
     if "android_main" in skip:
         cmd.append("-Wl,--defsym=ut3_dxvk_native_window=0")   # the app entry's window for DXVK; never reached

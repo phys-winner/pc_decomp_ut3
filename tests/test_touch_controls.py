@@ -314,6 +314,8 @@ class InputDevice {
     static InputDevice getDevice(int id){return devices[id];}
     int getSources(){return sources;} int getKeyboardType(){return keyboard;} boolean isVirtual(){return virtual;}
     boolean supportsSource(int source){return (sources&source)==source;}
+    String name=""; String getName(){return name;}
+    InputDevice named(String name){this.name=name;return this;}
 }
 public class DeviceCheck {
 ''' + methods + r'''
@@ -327,7 +329,12 @@ public class DeviceCheck {
         InputDevice.devices=new InputDevice[]{new InputDevice(0x1000010,0,false)};assert externalInputAttached();
         InputDevice.devices=new InputDevice[]{new InputDevice(0x1000411,2,true)};assert !externalInputAttached();
         InputDevice.devices=new InputDevice[]{new InputDevice(0x5103,1,false)};assert !externalInputAttached();
-        System.out.println("PASS production device detection: physical pad/joystick or alphabetic keyboard plus mouse; built-in buttons, keyboard-only, mouse-only and virtual devices excluded");
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x1000411,0,false).named("uinput-fpc")};assert !externalInputAttached()&&!gamepadAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x401,0,false).named("uinput-goodix")};assert !gamepadAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x1000411,0,false).named("gf_input fingerprint")};assert !gamepadAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x1000411,0,false).named("uinput-gamesir")};assert externalInputAttached()&&gamepadAttached();
+        InputDevice.devices=new InputDevice[]{new InputDevice(0x401,0,false).named(null)};assert gamepadAttached();
+        System.out.println("PASS production device detection: physical pad/joystick or alphabetic keyboard plus mouse; built-in buttons, keyboard-only, mouse-only, virtual devices and fingerprint sensors excluded, other uinput pads kept");
     }
 }
 '''

@@ -3,10 +3,14 @@
  * 1251, system and user locale ru-RU (1049). */
 #define _GNU_SOURCE
 #include "host.h"
+
+uint32_t void_vm_user_top(void);
+uint32_t void_vm_available(void);
 #include <ctype.h>
 #include <errno.h>
 #include <strings.h>
 #include <time.h>
+#include <sys/auxv.h>
 #include <unistd.h>
 #include <wctype.h>
 
@@ -41,10 +45,56 @@ WINAPI_EXPORT(K32, QueryPerformanceFrequency, 1)
     MEM32(ARG(0) + 4) = 0;
     return 1;
 }
+/* QueryPerformanceCounter reads the ARM generic timer itself. The vDSO
+ * clock_gettime plus a 64-bit division cost the WAR-Torlan game thread about
+ * 1% (occlusion-query polling asks thousands of times per frame). Same 10 MHz
+ * unit and epoch as before: the first call anchors the counter to
+ * CLOCK_MONOTONIC; afterwards the value is base + ticks * 10^7 / CNTFRQ, in
+ * 32.32 fixed point (monotonic, about 1e-9 relative error). The ISB keeps
+ * counter reads in program order, as the vDSO does. FEAT_ECV cores (HWCAP2_ECV)
+ * read CNTVCTSS_EL0 instead, the self-synchronised view of the same counter:
+ * ordered as after an ISB without draining the pipeline (Linux's arch timer does
+ * the same). On the SM8635 test phone the ISB added 10-29 ns to the ~40 ns
+ * counter read, the more the more cache misses were in flight. */
+static uint64_t qpc_base_ticks, qpc_base_units, qpc_mult;
+static int qpc_self_sync;
+
+static inline uint64_t qpc_counter(void)
+{
+    uint64_t ticks;
+    if (__builtin_expect(qpc_self_sync, 1))
+        __asm__ volatile("mrs %0, S3_3_C14_C0_6" : "=r"(ticks) :: "memory");   /* CNTVCTSS_EL0 */
+    else
+        __asm__ volatile("isb\n\tmrs %0, cntvct_el0" : "=r"(ticks) :: "memory");
+    return ticks;
+}
+
+static __attribute__((noinline, cold)) uint64_t qpc_start(void)
+{
+    uint64_t freq;
+    __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    qpc_self_sync = (getauxval(AT_HWCAP2) & (1ul << 19)) != 0;   /* HWCAP2_ECV */
+    if (!boot_ns) (void)void_tick_ms();
+    const uint64_t units = (void_monotonic_ns() - boot_ns) / 100u;
+    const uint64_t ticks = qpc_counter();
+    if (!freq) return units;   /* no usable counter frequency: stay on the clock below */
+    qpc_base_units = units;
+    qpc_base_ticks = ticks;
+    __atomic_store_n(&qpc_mult, (uint64_t)((((unsigned __int128)10000000u) << 32) / freq), __ATOMIC_RELEASE);
+    return units;
+}
+
+static inline uint64_t qpc_now(void)
+{
+    const uint64_t mult = __atomic_load_n(&qpc_mult, __ATOMIC_ACQUIRE);
+    if (__builtin_expect(!mult, 0)) return qpc_start();
+    const uint64_t delta = qpc_counter() - qpc_base_ticks;
+    return qpc_base_units + (uint64_t)(((unsigned __int128)delta * mult) >> 32);
+}
+
 WINAPI_EXPORT(K32, QueryPerformanceCounter, 1)
 {
-    if (!boot_ns) (void)void_tick_ms();
-    uint64_t ticks = (void_monotonic_ns() - boot_ns) / 100u;
+    uint64_t ticks = qpc_now();
     MEM32(ARG(0)) = (uint32_t)ticks;
     MEM32(ARG(0) + 4) = (uint32_t)(ticks >> 32);
     return 1;
@@ -244,8 +294,8 @@ WINAPI_EXPORT(K32, GlobalMemoryStatus, 1)
     MEM32(out + 12) = 0x60000000u;        /* dwAvailPhys */
     MEM32(out + 16) = 0x7FFFFFFFu;
     MEM32(out + 20) = 0x60000000u;
-    MEM32(out + 24) = 0x7FFE0000u;        /* dwTotalVirtual */
-    MEM32(out + 28) = 0x50000000u;
+    MEM32(out + 24) = void_vm_user_top() - GUEST_GRANULARITY;        /* dwTotalVirtual */
+    MEM32(out + 28) = void_vm_available();
     return 0;
 }
 
@@ -1040,7 +1090,7 @@ WINAPI_EXPORT(K32, GetSystemInfo, 1)
     MEM16(out + 0) = 0;                       /* PROCESSOR_ARCHITECTURE_INTEL */
     MEM32(out + 4) = 0x1000;                  /* dwPageSize */
     MEM32(out + 8) = 0x10000;                 /* lpMinimumApplicationAddress */
-    MEM32(out + 12) = 0x7FFEFFFF;             /* lpMaximumApplicationAddress */
+    MEM32(out + 12) = void_vm_user_top() - 1u;             /* lpMaximumApplicationAddress */
     MEM32(out + 16) = void_guest_cpu_system_mask();
     MEM32(out + 20) = (uint32_t)cpus;
     MEM32(out + 24) = 586;                    /* PROCESSOR_INTEL_PENTIUM */

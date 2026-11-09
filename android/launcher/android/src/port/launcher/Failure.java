@@ -10,11 +10,18 @@ final class Failure extends IOException {
 
     final int code;
     final String detail;
+    final long required, available;
 
     Failure(int code, String detail) {
+        this(code, detail, -1, -1);
+    }
+
+    Failure(int code, String detail, long required, long available) {
         super("launcher failure " + code + (detail != null ? ": " + detail : ""));
         this.code = code;
         this.detail = detail;
+        this.required = required;
+        this.available = available;
     }
 
     static Failure of(Throwable error) {

@@ -19,6 +19,7 @@
  * PHYSX_NATIVE_KERNELS_ONLY leaves only the kernels, for tests/test_physx_box.c. */
 #ifndef PHYSX_NATIVE_KERNELS_ONLY
 #include "host.h"
+#include "native_mode.inc"
 #endif
 #include <float.h>
 #include <stdint.h>
@@ -52,6 +53,7 @@ static __attribute__((noinline, cold)) int physx_native_mode_load(void)
         mode = c == '0' ? 0 : c == '2' ? 2 : 1;
         fclose(f);
     }
+    mode = void_native_mode(mode);
     native_mode = mode;
     void_log("[physx] native fluid collision kernels: %s", mode == 0 ? "off (lifted x87 code)" :
         mode == 2 ? "on, every result checked against the lifted code" : "on");
